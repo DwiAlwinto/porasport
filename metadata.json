@@ -1,0 +1,6 @@
+{
+  "name": "Zagari Sport Center",
+  "description": "Platform booking & marketplace venue olahraga terlengkap (Stadion Wibawa Mukti, Futsal, Badminton, Basket, Mini Soccer) dengan jadwal real-time, tarif dinamis Siang/Malam, dan checkout QRIS.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

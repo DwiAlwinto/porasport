@@ -1,0 +1,329 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  USER
+  MITRA_OWNER
+  ADMIN
+  SUPERADMIN
+}
+
+enum SportCategory {
+  FUTSAL
+  BADMINTON
+  BASKET
+  MINI_SOCCER
+  PADEL
+  TENIS
+  SEPAK_BOLA
+  VOLI
+  MENEMBAK
+  RENANG
+  SKATEPARK
+  STADION
+  ATLETIK
+  ROLLER_SPORT
+}
+
+enum SlotStatus {
+  AVAILABLE
+  BOOKED
+  MAINTENANCE
+}
+
+/// Kategori pengguna penewa yang menentukan besarnya tarif.
+enum UserCategory {
+  PERTANDINGAN // Pertandingan / kompetisi / event
+  PROFESIONAL // Klub profesional
+  AMATIR // Klub amatir
+  LOKAL // Klub / tim lokal
+  SOSIAL // Pertandingan untuk umum
+}
+
+/// Satuan dari sebuah tarif.
+enum RateUnit {
+  PER_JAM
+  PER_HARI
+  PER_PERTANDINGAN
+}
+
+enum BookingStatus {
+  PENDING_PAYMENT
+  MENUNGGU_VALIDASI
+  PAID_SUCCESS
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  email         String    @unique
+  phone         String?   @unique
+  passwordHash  String?
+  avatarUrl     String?
+  role          Role      @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relasi
+  venuesOwned   Venue[]          @relation("OwnerVenues")
+  bookings      Booking[]
+  reviews       Review[]
+  revokedSessions RevokedSession[]
+
+  @@map("users")
+}
+
+/// Sesi yang sudah dicabut.
+///
+/// Token sesi bersifat stateless (HMAC), jadi token yang sudah mengecek out di
+/// browser tidak bisa "dihapus" — salinannya masih valid sampai kedaluwarsa.
+/// Tabel ini menyimpan daftar `sid` yang ditolak, sehingga logout benar-benar
+/// langsung berlaku dan akun bisa dicabut dari sisi server.
+model RevokedSession {
+  id         String   @id @default(uuid())
+  sid        String   @unique
+  userId     String
+  scope      String
+  reason     String?
+  expiresAt  DateTime
+  revokedAt  DateTime @default(now())
+
+  // Relasi
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([userId])
+  @@map("revoked_sessions")
+}
+
+model Venue {
+  id             String          @id @default(uuid())
+  ownerId        String
+  name           String
+  slug           String          @unique
+  city           String
+  address        String
+  lat            Float?
+  lng            Float?
+  description    String?
+  openingHours   String          @default("06:00 - 23:00 WIB")
+  images         String[]        @default([])
+  facilities     String[]        @default([])
+  minPrice       Int
+  maxPrice       Int
+  isPopular      Boolean         @default(false)
+  isPromo        Boolean         @default(false)
+  promoBadge     String?
+  rating         Float           @default(5.0)
+  reviewCount    Int             @default(0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  // Relasi
+  owner          User            @relation("OwnerVenues", fields: [ownerId], references: [id], onDelete: Cascade)
+  fields         VenueField[]
+  bookings       Booking[]
+  reviews        Review[]
+
+  @@index([city])
+  @@map("venues")
+}
+
+model VenueField {
+  id             String        @id @default(uuid())
+  venueId        String
+  name           String
+  sportType      SportCategory
+  type           String        @default("Indoor")
+  floorType      String        @default("Sintetis")
+  priceNonPeak   Int           // Harga pagi-siang (06:00 - 16:00)
+  pricePeak      Int           // Harga malam/weekend (16:00 - 23:00)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Relasi
+  venue          Venue         @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  slots          FieldSlot[]
+  bookingItems   BookingItem[]
+  rates          FieldRate[]
+
+  @@map("venue_fields")
+}
+
+/// Satu baris tarif untuk sebuah lapangan, dikunci oleh kategori pengguna
+/// dan (opsional) rentang waktu. timeStart/timeEnd null berarti "sepanjang hari".
+model FieldRate {
+  id         String       @id @default(uuid())
+  fieldId    String
+  category   UserCategory
+  label      String // label tampilan, mis. "Profesional (Dengan Penonton)"
+  timeStart  String? // format HH:mm, null = sepanjang hari
+  timeEnd    String? // format HH:mm, null = sepanjang hari
+  price      Int
+  unit       RateUnit
+  sortOrder  Int          @default(0)
+  isActive   Boolean      @default(true)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  // Relasi
+  field      VenueField   @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([fieldId, category, timeStart, timeEnd])
+  @@index([fieldId, category, isActive])
+  @@map("field_rates")
+}
+
+model FieldSlot {
+  id             String      @id @default(uuid())
+  fieldId        String
+  date           DateTime    @db.Date
+  timeStart      String      // format HH:mm (contoh: "08:00")
+  timeEnd        String      // format HH:mm (contoh: "09:00")
+  hour           Int         // 0 - 23
+  price          Int
+  isPeakHour     Boolean     @default(false)
+  status         SlotStatus  @default(AVAILABLE)
+  bookedByUserId String?
+  bookingId      String?
+  updatedAt      DateTime    @updatedAt
+
+  // Relasi
+  field          VenueField  @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  booking        Booking?    @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@unique([fieldId, date, hour])
+  @@index([date, status])
+  @@map("field_slots")
+}
+
+model Booking {
+  id               String        @id @default(uuid()) // Contoh: "GLR-20260803-1001"
+  userId           String
+  venueId          String
+  sportCategory    SportCategory
+  totalPrice       Int
+  serviceFee       Int           @default(5000)
+  grandTotal       Int
+  status           BookingStatus @default(PENDING_PAYMENT)
+  paymentMethod    String        // "QRIS" | "VA_BCA" | "EWALLET_GOPAY", dll.
+  qrCodeToken      String        @unique
+  expiresAt        DateTime      // Waktu kedaluwarsa 15 menit
+  nik              String?       // NIK Pemesan (16 digit)
+  npwp             String?       // NPWP Pemesan
+  senderName       String?       // Nama Pengirim Rekening
+  senderPhone      String?       // Nomor Telepon Pengirim
+  paymentProofUrl  String?       // Foto Bukti Transfer / Screenshot QRIS
+  adminNotes       String?       // Catatan Validasi Admin
+  ocrExtractedText String?       @db.Text      // Raw OCR output untuk audit
+  ocrValidationResult Json?      // {amountMatch, dateMatch, keywordMatch, passed: boolean}
+  ocrProcessedAt   DateTime?     // Kapan OCR dijalankan
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  // Relasi
+  user             User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  venue            Venue         @relation(fields: [venueId], references: [id], onDelete: Restrict)
+  items            BookingItem[]
+  bookedSlots      FieldSlot[]
+  payment          Payment?
+  paymentProof     PaymentProof?
+
+  @@index([userId, status])
+  @@map("bookings")
+}
+
+model BookingItem {
+  id          String     @id @default(uuid())
+  bookingId   String
+  fieldId     String
+  date        DateTime   @db.Date
+  timeStart   String
+  timeEnd     String
+  price       Int
+  isPeakHour  Boolean    @default(false)
+
+  // Relasi
+  booking     Booking    @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  field       VenueField @relation(fields: [fieldId], references: [id], onDelete: Restrict)
+
+  @@map("booking_items")
+}
+
+model Payment {
+  id                String    @id @default(uuid())
+  bookingId         String    @unique
+  amount            Int
+  paymentGatewayRef String?   // Kode referensi Midtrans / Xendit
+  paymentMethod     String
+  status            String    // "PENDING" | "PAID" | "EXPIRED"
+  paidAt            DateTime?
+  createdAt         DateTime  @default(now())
+
+  // Relasi
+  booking           Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model Review {
+  id          String   @id @default(uuid())
+  venueId     String
+  userId      String
+  rating      Int
+  comment     String
+  sportType   String
+  createdAt   DateTime @default(now())
+
+  // Relasi
+  venue       Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("reviews")
+}
+
+model SystemSetting {
+  id          String   @id @default(uuid())
+  key         String   @unique  // Contoh: "qris_image_url", "payment_notes"
+  value       String   // Nilai setting, bisa berupa URL atau teks
+  label       String?  // Label deskriptif untuk tampilan admin
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?  // Nama admin yang terakhir update
+
+  @@map("system_settings")
+}
+
+model PromoBanner {
+  id          String   @id @default(uuid())
+  title       String?  // Judul opsional untuk admin
+  imageUrl    String   // URL gambar dari Supabase
+  isActive    Boolean  @default(true) // Status aktif/tidak aktif
+  orderIndex  Int      @default(0) // Urutan tampilan
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("promo_banners")
+}
+
+model PaymentProof {
+  id        String   @id @default(uuid())
+  bookingId String   @unique
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  fileUrl   String
+  fileName  String
+  fileSize  Int
+  mimeType  String
+  ocrStatus String   // "PENDING" | "PASSED" | "FAILED" | "MANUAL_REVIEW"
+  uploadedAt DateTime @default(now())
+
+  @@map("payment_proofs")
+}
