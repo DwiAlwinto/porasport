@@ -34,7 +34,7 @@ const nextConfig = {
 
   ...(isDev ? { allowedDevOrigins: ['192.168.8.101', '192.168.1.101'] } : {}),
 
-  serverExternalPackages: [],
+  serverExternalPackages: ['@google-cloud/vision'],
 
   images: {
     remotePatterns: [
