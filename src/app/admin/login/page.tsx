@@ -56,10 +56,10 @@ export default function AdminLoginPage() {
                 />
               </div>
               <h1 className="text-2xl font-black tracking-tight text-slate-900 sm:text-[28px]">
-                Portal Admin CMS
+                DISBUDPORA SPORT
               </h1>
               <p className="mt-1.5 text-xs font-medium text-slate-500">
-                DISBUDPORA Kabupaten Bekasi &bull; Sistem Manajemen Fasilitas
+                Sistem Manajemen Fasilitas
               </p>
             </div>
 
@@ -73,7 +73,7 @@ export default function AdminLoginPage() {
             <form onSubmit={handleLogin} className="space-y-5 text-xs">
               <div>
                 <label className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wider text-slate-600">
-                  Email Kedinasan / Akun Admin
+                  Email 
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -81,7 +81,7 @@ export default function AdminLoginPage() {
                     type="email"
                     required
                     autoComplete="username"
-                    placeholder="admin@sportbekasi.id"
+                    placeholder="username"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-4 text-xs font-semibold text-slate-900 shadow-sm outline-none transition placeholder:font-medium placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
