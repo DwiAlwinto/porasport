@@ -1,9 +1,4 @@
-import type { NextConfig } from 'next';
-
-/**
- * Host Supabase milik aplikasi ini saja yang boleh dilayani lewat image
- * optimizer. Wildcard `*.supabase.co` juga mengizinkan proyek milik siapa pun.
- */
+/** @type {import('next').NextConfig} */
 const SUPABASE_HOST = process.env.NEXT_PUBLIC_SUPABASE_URL
   ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
   : 'sdovgdwexfaafcncwmmr.supabase.co';
@@ -12,7 +7,6 @@ const isDev = process.env.NODE_ENV !== 'production';
 
 /**
  * Header keamanan statis.
- *
  * Content-Security-Policy TIDAK diatur di sini karena memakai nonce yang
  * dibuat per-request di `src/proxy.ts`.
  */
@@ -35,12 +29,9 @@ const securityHeaders = [
       ]),
 ];
 
-const nextConfig: NextConfig = {
+const nextConfig = {
   poweredByHeader: false,
 
-  // Hanya berlaku di development. Di produksi, menutupinya membiarkan
-  // IP mana pun yang bind ke port 3000 di jaringan lokal itu tidak lagi bisa mengirim
-  // server action seolah-olah same-origin.
   ...(isDev ? { allowedDevOrigins: ['192.168.8.101', '192.168.1.101'] } : {}),
 
   serverExternalPackages: [],
