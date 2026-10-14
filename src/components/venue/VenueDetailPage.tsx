@@ -11,7 +11,7 @@ import {
   generateDaySlotsForField,
 } from '../../lib/slotUtils';
 import { getPublicFieldSlots } from '../../actions/venueActions';
-import { USER_CATEGORY_LABELS } from '../../lib/pricing';
+import { USER_CATEGORY_LABELS, getUserCategoryLabel } from '../../lib/pricing';
 import type { UserCategory } from '@prisma/client';
 import {
   MapPin,
@@ -30,6 +30,8 @@ import {
   ChevronRight,
   Flame,
   Award,
+  MessageCircle,
+  Users,
 } from 'lucide-react';
 
 export const VenueDetailPage: React.FC = () => {
@@ -69,6 +71,9 @@ export const VenueDetailPage: React.FC = () => {
 
   // Kategori pengguna penewa, menentukan tarif mana yang berlaku
   const [userCategory, setUserCategory] = useState<UserCategory | null>(null);
+
+  // Jumlah orang / perenang khusus tarif per orang / jam (Kolam Renang Aquatic)
+  const [swimmerCount, setSwimmerCount] = useState<number>(1);
 
   // Active field object
   const activeField = useMemo(() => {
@@ -184,8 +189,12 @@ export const VenueDetailPage: React.FC = () => {
 
   // Calculate total price of selected slots
   const selectedTotalPrice = useMemo(() => {
-    return selectedSlots.reduce((sum, s) => sum + s.price, 0);
-  }, [selectedSlots]);
+    const base = selectedSlots.reduce((sum, s) => sum + s.price, 0);
+    if (activeField?.sportType === 'RENANG' && userCategory !== 'PERTANDINGAN') {
+      return base * swimmerCount;
+    }
+    return base;
+  }, [selectedSlots, activeField, userCategory, swimmerCount]);
 
   const handleProceedToCheckout = () => {
     if (selectedSlots.length === 0 || !activeField || !selectedVenue) return;
@@ -196,14 +205,17 @@ export const VenueDetailPage: React.FC = () => {
       return;
     }
 
+    const isAquaticPerson = activeField.sportType === 'RENANG' && userCategory !== 'PERTANDINGAN';
     const items: BookingItem[] = selectedSlots.map((s) => ({
       slotId: s.id,
       fieldId: activeField.id,
-      fieldName: activeField.name,
+      fieldName: isAquaticPerson && swimmerCount > 1
+        ? `${activeField.name} (${swimmerCount} Orang)`
+        : activeField.name,
       date: s.date,
       timeStart: s.timeStart,
       timeEnd: s.timeEnd,
-      price: s.price,
+      price: isAquaticPerson ? s.price * swimmerCount : s.price,
       isPeakHour: s.isPeakHour,
     }));
 
@@ -362,60 +374,92 @@ export const VenueDetailPage: React.FC = () => {
             </div>
 
             {/* FIELD SELECTOR */}
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h3 className="text-base font-black text-slate-900">
-                1. Pilih Lapangan / Court
-              </h3>
-              <p className="text-xs text-slate-500">
-                Setiap lapangan memiliki jenis lantai dan tarif sewa yang berbeda
-              </p>
+            {selectedVenue.fields.length > 1 ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h3 className="text-base font-black text-slate-900">
+                  1. Pilih Lapangan / Court
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Setiap lapangan memiliki jenis lantai dan tarif sewa yang berbeda
+                </p>
 
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {selectedVenue.fields.map((f) => {
-                  const isSelected = f.id === selectedFieldId;
-                  return (
-                    <button
-                      key={f.id}
-                      onClick={() => handleFieldChange(f.id)}
-                      className={`flex flex-col items-start rounded-xl border p-4 text-left transition ${
-                        isSelected
-                          ? 'border-emerald-600 bg-emerald-50/70 shadow-sm ring-1 ring-emerald-600'
-                          : 'border-slate-200 bg-white hover:border-slate-300'
-                      }`}
-                    >
-                      <div className="flex w-full items-center justify-between">
-                        <span className="text-xs font-bold uppercase text-emerald-700">
-                          {f.sportType}
-                        </span>
-                        {isSelected && (
-                          <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
-                            Terpilih
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {selectedVenue.fields.map((f) => {
+                    const isSelected = f.id === selectedFieldId;
+                    return (
+                      <button
+                        key={f.id}
+                        onClick={() => handleFieldChange(f.id)}
+                        className={`flex flex-col items-start rounded-xl border p-4 text-left transition ${
+                          isSelected
+                            ? 'border-emerald-600 bg-emerald-50/70 shadow-sm ring-1 ring-emerald-600'
+                            : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex w-full items-center justify-between">
+                          <span className="text-xs font-bold uppercase text-emerald-700">
+                            {f.sportType}
                           </span>
-                        )}
-                      </div>
-                      <h4 className="mt-1 font-black text-slate-900">{f.name}</h4>
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        Lantai: {f.floorType} • {f.type}
-                      </p>
-                      <div className="mt-3 flex items-center justify-between w-full border-t border-slate-200/60 pt-2 text-xs">
-                        <div>
-                          <span className="text-[10px] text-slate-400">Siang (06-16)</span>
-                          <div className="font-bold text-slate-900">
-                            Rp {f.priceNonPeak.toLocaleString('id-ID')}/jam
+                          {isSelected && (
+                            <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                              Terpilih
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="mt-1 font-black text-slate-900">{f.name}</h4>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          Lantai: {f.floorType} • {f.type}
+                        </p>
+                        <div className="mt-3 flex items-center justify-between w-full border-t border-slate-200/60 pt-2 text-xs">
+                          <div>
+                            <span className="text-[10px] text-slate-400">Siang (06-16)</span>
+                            <div className="font-bold text-slate-900">
+                              Rp {f.priceNonPeak.toLocaleString('id-ID')}/jam
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] text-slate-400">Malam/Peak (16-23)</span>
+                            <div className="font-bold text-emerald-700">
+                              Rp {f.pricePeak.toLocaleString('id-ID')}/jam
+                            </div>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <span className="text-[10px] text-slate-400">Malam/Peak (16-23)</span>
-                          <div className="font-bold text-emerald-700">
-                            Rp {f.pricePeak.toLocaleString('id-ID')}/jam
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            ) : activeField ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px] uppercase px-2.5 py-0.5">
+                        {activeField.sportType}
+                      </span>
+                      <span className="text-xs text-slate-400">Fasilitas Utama</span>
+                    </div>
+                    <h3 className="text-base font-black text-slate-900 mt-1">
+                      {activeField.name}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Lantai: {activeField.floorType} • Tipe: {activeField.type}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-2.5 text-left sm:text-right">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      {activeField.sportType === 'RENANG' ? 'Tarif Dasar PERDA' : 'Tarif Dasar'}
+                    </span>
+                    <div className="text-sm font-extrabold text-emerald-700">
+                      Rp {activeField.priceNonPeak.toLocaleString('id-ID')}
+                      <span className="text-xs font-normal text-slate-500">
+                        {activeField.sportType === 'RENANG' ? ' / orang / jam' : ' / jam'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             {/* SISTEM KALENDER & JADWAL (CORE FEATURE) */}
             <div className="rounded-2xl border-2 border-emerald-500/30 bg-white p-6 shadow-md">
@@ -472,7 +516,7 @@ export const VenueDetailPage: React.FC = () => {
                             : 'border-emerald-200 bg-white text-emerald-800 hover:border-emerald-400'
                         }`}
                       >
-                        {USER_CATEGORY_LABELS[c]}
+                        {getUserCategoryLabel(c, activeField?.sportType)}
                       </button>
                     ))}
                   </div>
@@ -498,7 +542,7 @@ export const VenueDetailPage: React.FC = () => {
                               }
                             >
                               <td className="px-3 py-2">
-                                {USER_CATEGORY_LABELS[r.category] ?? r.category}
+                                {r.label || getUserCategoryLabel(r.category, activeField?.sportType)}
                               </td>
                               <td className="px-3 py-2">
                                 {r.timeStart ? `${r.timeStart} - ${r.timeEnd}` : 'Sepanjang hari'}
@@ -507,7 +551,9 @@ export const VenueDetailPage: React.FC = () => {
                                 Rp {r.price.toLocaleString('id-ID')}
                               </td>
                               <td className="px-3 py-2 text-right text-slate-500">
-                                {r.unit === 'PER_HARI'
+                                {activeField?.sportType === 'RENANG' && r.unit === 'PER_JAM'
+                                  ? 'per orang / jam'
+                                  : r.unit === 'PER_HARI'
                                   ? 'per hari'
                                   : r.unit === 'PER_PERTANDINGAN'
                                   ? 'per pertandingan'
@@ -525,6 +571,83 @@ export const VenueDetailPage: React.FC = () => {
                       Pilih kategori di atas agar harga slot dan total tagihan terhitung
                       akurat.
                     </p>
+                  )}
+
+                  {/* Kontrol Jumlah Pengguna / Perenang untuk Kolam Renang */}
+                  {activeField?.sportType === 'RENANG' && userCategory && userCategory !== 'PERTANDINGAN' && (
+                    <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-emerald-300 bg-emerald-100/60 p-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm">
+                          <Users className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h5 className="text-xs font-bold text-emerald-950">
+                            Jumlah Pengguna / Perenang
+                          </h5>
+                          <p className="text-[11px] text-emerald-700">
+                            Tarif resmi PERDA dihitung per orang per jam
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 self-end sm:self-auto">
+                        <button
+                          type="button"
+                          onClick={() => setSwimmerCount(Math.max(1, swimmerCount - 1))}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-300 bg-white font-black text-emerald-800 shadow-sm hover:bg-emerald-50 transition"
+                        >
+                          -
+                        </button>
+                        <span className="min-w-[4.5rem] text-center text-xs font-black text-emerald-950">
+                          {swimmerCount} Orang
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSwimmerCount(swimmerCount + 1)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-300 bg-white font-black text-emerald-800 shadow-sm hover:bg-emerald-50 transition"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Banner Rekomendasi & WhatsApp Khusus Kategori Pertandingan / Kompetisi */}
+                  {userCategory === 'PERTANDINGAN' && (
+                    <div className="mt-4 rounded-2xl border-2 border-amber-400 bg-gradient-to-br from-amber-50 via-white to-amber-50/60 p-4 shadow-sm">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-md">
+                          <Award className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-full bg-amber-200 px-2.5 py-0.5 text-[10px] font-extrabold uppercase text-amber-900">
+                              Khusus Event / Pertandingan
+                            </span>
+                          </div>
+                          <h4 className="mt-1 text-sm font-black text-slate-900">
+                            Pertandingan / Seleksi / Kejuaraan (Rp 3.500.000 / hari)
+                          </h4>
+                          <p className="mt-1 text-xs text-slate-600 leading-relaxed">
+                            Sesuai PERDA, kegiatan pertandingan/kompetisi memerlukan <strong>Surat Rekomendasi Resmi DISBUDPORA</strong>. Silakan hubungi langsung WhatsApp Admin untuk verifikasi rekomendasi dan penjadwalan.
+                          </p>
+                          <div className="mt-3">
+                            <a
+                              href={`https://wa.me/6281234567890?text=${encodeURIComponent(
+                                `Halo Admin DISBUDPORA Sport Bekasi,
+Saya ingin mengajukan permohonan sewa venue ${selectedVenue.name} untuk kegiatan Pertandingan / Seleksi / Kompetisi pada tanggal ${selectedDate}.
+Mohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
+                              )}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-md hover:bg-emerald-700 transition"
+                            >
+                              <MessageCircle className="h-4 w-4" />
+                              <span>Hubungi WhatsApp Admin DISBUDPORA</span>
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}

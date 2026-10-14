@@ -29,6 +29,7 @@ import {
 import { SportCategory, UserCategory, RateUnit } from '@prisma/client';
 import {
   categoriesForSport,
+  getUserCategoryLabel,
   USER_CATEGORY_LABELS,
   RATE_UNIT_LABELS,
   STANDARD_TIME_WINDOWS,
@@ -812,14 +813,13 @@ export default function AdminVenuesPage() {
                                       {f.rates.map((r: any) => (
                                         <li key={r.id} className="text-[10px] text-fg-muted">
                                           <span className="font-bold text-fg-subtle">
-                                            {USER_CATEGORY_LABELS[r.category as UserCategory] ??
-                                              r.category}
+                                            {r.label || getUserCategoryLabel(r.category as UserCategory, f.sportType)}
                                           </span>{' '}
                                           {r.timeStart
                                             ? `${r.timeStart} - ${r.timeEnd}`
                                             : 'sepanjang hari'}{' '}
                                           · {formatRupiah(r.price)} /{' '}
-                                          {RATE_UNIT_LABELS[r.unit as RateUnit] ?? r.unit}
+                                          {f.sportType === 'RENANG' && r.unit === 'PER_JAM' ? 'orang / jam' : (RATE_UNIT_LABELS[r.unit as RateUnit] ?? r.unit)}
                                         </li>
                                       ))}
                                     </ul>

@@ -75,11 +75,32 @@ const AMATEUR_TIER_SPORTS = new Set([
   'ROLLER_SPORT',
 ]);
 
+export function getUserCategoryLabel(category: UserCategory, sportType?: string): string {
+  if (sportType === 'RENANG') {
+    switch (category) {
+      case 'SOSIAL':
+        return 'Latihan Individu / Umum';
+      case 'PROFESIONAL':
+        return 'Latihan Klub / Perusahaan / Organisasi';
+      case 'AMATIR':
+        return 'Latihan Sekolah / Perguruan Tinggi / Institusi';
+      case 'PERTANDINGAN':
+        return 'Pertandingan / Seleksi / Kompetisi';
+      default:
+        return USER_CATEGORY_LABELS[category] ?? category;
+    }
+  }
+  return USER_CATEGORY_LABELS[category] ?? category;
+}
+
 /**
  * Daftar kategori yang relevan untuk sebuah lapangan, supaya admin tidak
  * ditawarin "Profesional" untuk lapangan basket.
  */
 export function categoriesForSport(sportType: string): UserCategory[] {
+  if (sportType === 'RENANG') {
+    return ['SOSIAL', 'PROFESIONAL', 'AMATIR', 'PERTANDINGAN'];
+  }
   if (STADION_TIER_SPORTS.has(sportType)) {
     return ['SOSIAL', 'LOKAL', 'AMATIR', 'PROFESIONAL', 'PERTANDINGAN'];
   }
