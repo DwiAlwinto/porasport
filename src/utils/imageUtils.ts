@@ -41,11 +41,16 @@ export function getFallbackImageForUrl(urlOrName: string = '', sportHint?: strin
   return SPORT_FALLBACK_IMAGES.default;
 }
 
+export const DEFAULT_VENUE_IMAGE = '/images/wibawamukti.png';
+
 export function handleImageError(e: React.SyntheticEvent<HTMLImageElement, Event>) {
   const target = e.currentTarget;
-  // User instruction: Do NOT replace with Unsplash or fake images if error occurs.
   // Prevent infinite error looping
   target.onerror = null;
+  // Fallback ke aset lokal yang dijamin ada (bukan gambar palsu eksternal).
+  if (!target.src.endsWith(DEFAULT_VENUE_IMAGE)) {
+    target.src = DEFAULT_VENUE_IMAGE;
+  }
 }
 
 

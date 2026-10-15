@@ -8,8 +8,9 @@ import { getAdminSession } from './authActions';
 import crypto from 'crypto';
 import { toPublicMessage, UserFacingError } from '../lib/userFacingError';
 import { todayKey, addDaysToKey, dateFromKey } from '../lib/dateKeys';
-import fs from 'fs';
-import path from 'path';
+import { supabase } from '../lib/storage';
+
+const FACILITY_BUCKET = 'facility-images';
 
 const VALID_CATEGORIES: UserCategory[] = [
   'PERTANDINGAN',
@@ -433,10 +434,6 @@ function looksLikeImage(buffer: Buffer): boolean {
 export async function uploadFacilityImageAction(data: { base64: string; fileName: string }) {
   try {
     await requireCmsAccess();
-    const uploadDir = path.join(process.cwd(), 'public', 'images', 'uploads');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
 
     // Ekstrak base64 buffer
     const matches = data.base64.match(/^data:([A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+);base64,(.+)$/);
@@ -463,12 +460,20 @@ export async function uploadFacilityImageAction(data: { base64: string; fileName
     }
 
     const safeName = `facility-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
-    const filePath = path.join(uploadDir, safeName);
+    const contentType =
+      ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
 
-    fs.writeFileSync(filePath, buffer);
+    const { error: uploadError } = await supabase.storage
+      .from(FACILITY_BUCKET)
+      .upload(safeName, buffer, { contentType, upsert: false });
 
-    const publicUrl = `/images/uploads/${safeName}`;
-    return { success: true, url: publicUrl };
+    if (uploadError) {
+      console.error('Supabase facility upload error:', uploadError);
+      throw new UserFacingError('Gagal menyimpan foto ke penyimpanan cloud.');
+    }
+
+    const { data: pub } = supabase.storage.from(FACILITY_BUCKET).getPublicUrl(safeName);
+    return { success: true, url: pub.publicUrl };
   } catch (error: unknown) {
     console.error('Failed to upload facility image:', error);
     return {

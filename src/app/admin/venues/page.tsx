@@ -484,6 +484,10 @@ export default function AdminVenuesPage() {
                   <img
                     src={venue.images?.[0] || '/images/wibawamukti.png'}
                     alt={venue.name}
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = '/images/wibawamukti.png';
+                    }}
                     className="h-full w-full object-cover transition hover:scale-105"
                   />
                   <div className="absolute top-3 left-3 rounded-full bg-surface border border-line-strong/80 px-3 py-1 text-[10px] font-extrabold text-emerald-700 backdrop-blur-md">
@@ -673,14 +677,22 @@ export default function AdminVenuesPage() {
                     <span>Upload Foto Baru</span>
                     <input type="file" accept="image/*" onChange={handleImageFileChange} className="hidden" />
                   </label>
-                  <span className="text-[10px] text-fg-muted">PNG, JPG, atau WebP (Disimpan ke server)</span>
+                  <span className="text-[10px] text-fg-muted">PNG, JPG, atau WebP (Disimpan permanen di cloud storage)</span>
                 </div>
 
                 {venueImages.length > 0 && (
                   <div className="mt-3 flex gap-2 overflow-x-auto py-1">
                     {venueImages.map((img, idx) => (
                       <div key={idx} className="relative h-16 w-24 rounded-lg overflow-hidden border border-line-strong shrink-0">
-                        <img src={img} alt="thumb" className="h-full w-full object-cover" />
+                        <img
+                          src={img}
+                          alt="thumb"
+                          className="h-full w-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = '/images/wibawamukti.png';
+                          }}
+                        />
                         <button
                           type="button"
                           onClick={() => setVenueImages(venueImages.filter((_, i) => i !== idx))}

@@ -58,7 +58,8 @@ export const RecommendedVenues: React.FC = () => {
                   className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                   onError={(e) => {
                     const target = e.currentTarget;
-                    target.src = 'https://images.unsplash.com/photo-1577223625816-7546f13df25d?q=80&w=800&auto=format&fit=crop';
+                    target.onerror = null;
+                    target.src = '/images/wibawamukti.png';
                   }}
                 />
               </div>
