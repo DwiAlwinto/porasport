@@ -39,6 +39,7 @@ import { VENUE_FACILITIES } from '../../../lib/venueConstants';
 /** Satu baris tarif yang sedang diedit di form admin. */
 type RateRow = {
   key: string;
+  label: string;
   category: UserCategory;
   timeStart: string;
   timeEnd: string;
@@ -47,8 +48,13 @@ type RateRow = {
 };
 
 let rateRowSeq = 0;
-const newRateRow = (category: UserCategory, unit: RateUnit = 'PER_JAM'): RateRow => ({
+const newRateRow = (
+  category: UserCategory = 'SOSIAL',
+  unit: RateUnit = 'PER_JAM',
+  label: string = ''
+): RateRow => ({
   key: `rate-${++rateRowSeq}`,
+  label: label || USER_CATEGORY_LABELS[category] || '',
   category,
   timeStart: '',
   timeEnd: '',
@@ -144,8 +150,12 @@ export default function AdminVenuesPage() {
     setFieldRates([]);
   };
 
-  const addRateRow = (category: UserCategory, unit: RateUnit = 'PER_JAM') => {
-    setFieldRates((prev) => [...prev, newRateRow(category, unit)]);
+  const addRateRow = (
+    category: UserCategory = 'SOSIAL',
+    unit: RateUnit = 'PER_JAM',
+    label: string = ''
+  ) => {
+    setFieldRates((prev) => [...prev, newRateRow(category, unit, label)]);
   };
 
   const updateRateRow = (key: string, patch: Partial<RateRow>) => {
@@ -157,20 +167,49 @@ export default function AdminVenuesPage() {
   };
 
   /**
-   * Satu klik mengisi 7 baris tarif paket stadion: Sosial sepanjang hari,
-   * lalu Lokal / Amatir / Profesional masing-masing dua slot waktu.
+   * Preset Kolam Renang PERDA:
+   * 4 kategori: Individu/Umum, Klub, Sekolah, Pertandingan
+   */
+  const applySwimmingPreset = () => {
+    const rows: RateRow[] = [
+      { ...newRateRow('SOSIAL', 'PER_JAM', 'Latihan Individu / Umum'), price: '10000' },
+      { ...newRateRow('PROFESIONAL', 'PER_JAM', 'Latihan Klub / Perusahaan / Organisasi'), price: '15000' },
+      { ...newRateRow('AMATIR', 'PER_JAM', 'Latihan Sekolah / Perguruan Tinggi / Institusi'), price: '10000' },
+      { ...newRateRow('PERTANDINGAN', 'PER_HARI', 'Pertandingan / Seleksi / Kompetisi'), price: '3500000' },
+    ];
+    setFieldRates(rows);
+    showToast('Paket Kolam Renang PERDA dimuat: 4 kategori tarif siap disimpan.');
+  };
+
+  /**
+   * Preset Paket Stadion Wibawa Mukti:
+   * 7 baris tarif PERDA resmi
    */
   const applyStadiumPreset = () => {
-    const rows: RateRow[] = [];
-    const unit: RateUnit = 'PER_PERTANDINGAN';
-    for (const category of ['LOKAL', 'AMATIR', 'PROFESIONAL'] as UserCategory[]) {
-      for (const w of STANDARD_TIME_WINDOWS) {
-        rows.push({ ...newRateRow(category, unit), timeStart: w.timeStart, timeEnd: w.timeEnd });
-      }
-    }
-    rows.push(newRateRow('SOSIAL', unit));
+    const rows: RateRow[] = [
+      { ...newRateRow('LOKAL', 'PER_PERTANDINGAN', 'Lokal (Pagi/Siang)'), timeStart: '08:00', timeEnd: '17:00', price: '5000000' },
+      { ...newRateRow('LOKAL', 'PER_PERTANDINGAN', 'Lokal (Malam)'), timeStart: '18:00', timeEnd: '20:00', price: '7500000' },
+      { ...newRateRow('AMATIR', 'PER_PERTANDINGAN', 'Amatir (Pagi/Siang)'), timeStart: '08:00', timeEnd: '17:00', price: '10000000' },
+      { ...newRateRow('AMATIR', 'PER_PERTANDINGAN', 'Amatir (Malam)'), timeStart: '18:00', timeEnd: '20:00', price: '15000000' },
+      { ...newRateRow('PROFESIONAL', 'PER_PERTANDINGAN', 'Profesional (Pagi/Siang)'), timeStart: '08:00', timeEnd: '17:00', price: '55000000' },
+      { ...newRateRow('PROFESIONAL', 'PER_PERTANDINGAN', 'Profesional (Malam)'), timeStart: '18:00', timeEnd: '20:00', price: '80000000' },
+      { ...newRateRow('SOSIAL', 'PER_PERTANDINGAN', 'Sosial / Umum'), timeStart: '', timeEnd: '', price: '2500000' },
+    ];
     setFieldRates(rows);
-    showToast('Paket Stadion dimuat: 7 baris tarif siap diisi nominalnya.');
+    showToast('Paket Stadion dimuat: 7 baris tarif PERDA siap diisi nominalnya.');
+  };
+
+  /**
+   * Preset Lapangan Reguler (Futsal / Mini Soccer / Basket / Badminton)
+   */
+  const applyRegularPreset = () => {
+    const rows: RateRow[] = [
+      { ...newRateRow('SOSIAL', 'PER_JAM', 'Reguler Pagi-Siang (06:00 - 16:00)'), timeStart: '06:00', timeEnd: '16:00', price: '100000' },
+      { ...newRateRow('SOSIAL', 'PER_JAM', 'Reguler Sore-Malam (16:00 - 23:00)'), timeStart: '16:00', timeEnd: '23:00', price: '150000' },
+      { ...newRateRow('PERTANDINGAN', 'PER_HARI', 'Event / Turnamen'), timeStart: '', timeEnd: '', price: '1500000' },
+    ];
+    setFieldRates(rows);
+    showToast('Paket Lapangan Reguler dimuat: 3 baris tarif siap disimpan.');
   };
 
   const handleOpenEditField = (f: any) => {
@@ -184,6 +223,7 @@ export default function AdminVenuesPage() {
     setFieldRates(
       (f.rates || []).map((r: any) => ({
         key: `rate-${++rateRowSeq}`,
+        label: r.label || getUserCategoryLabel(r.category, f.sportType),
         category: r.category,
         timeStart: r.timeStart || '',
         timeEnd: r.timeEnd || '',
@@ -304,6 +344,7 @@ export default function AdminVenuesPage() {
     const rates = fieldRates
       .filter((r) => r.price !== '' && Number(r.price) > 0)
       .map((r) => ({
+        label: r.label?.trim() || getUserCategoryLabel(r.category, fieldSportType),
         category: r.category,
         timeStart: r.timeStart || null,
         timeEnd: r.timeEnd || null,
@@ -524,7 +565,7 @@ export default function AdminVenuesPage() {
       {/* MODAL: TAMBAH / EDIT VENUE */}
       {isVenueModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm overflow-y-auto">
-          <div className="relative my-6 w-full max-w-2xl rounded-3xl border border-line bg-surface p-6 shadow-xl shadow-slate-200/60">
+          <div className="relative my-6 w-full max-w-4xl rounded-3xl border border-line bg-surface p-6 sm:p-8 shadow-2xl shadow-slate-900/20">
             <div className="flex items-center justify-between border-b border-line pb-4">
               <div className="flex items-center gap-2">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -545,7 +586,7 @@ export default function AdminVenuesPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveVenue} className="mt-5 space-y-4 text-xs max-h-[70vh] overflow-y-auto pr-2">
+            <form onSubmit={handleSaveVenue} className="mt-5 space-y-4 text-xs max-h-[85vh] overflow-y-auto pr-2 sm:pr-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="font-bold text-fg-subtle block mb-1">Nama Gelanggang / Venue</label>
@@ -733,7 +774,7 @@ export default function AdminVenuesPage() {
       {/* MODAL: KELOLA LAPANGAN PADA VENUE */}
       {activeVenueForFields && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm overflow-y-auto">
-          <div className="relative my-6 w-full max-w-3xl rounded-3xl border border-line bg-surface p-6 shadow-xl shadow-slate-200/60">
+          <div className="relative my-6 w-full max-w-5xl xl:max-w-6xl rounded-3xl border border-line bg-surface p-6 sm:p-8 shadow-2xl shadow-slate-900/20">
             <div className="flex items-center justify-between border-b border-line pb-4">
               <div className="flex items-center gap-2">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700 border border-blue-200">
@@ -756,7 +797,7 @@ export default function AdminVenuesPage() {
               </button>
             </div>
 
-            <div className="mt-5 space-y-6 max-h-[70vh] overflow-y-auto pr-2">
+            <div className="mt-5 space-y-6 max-h-[85vh] overflow-y-auto pr-2 sm:pr-4">
               {/* Existing Fields Table */}
               <div>
                 <h4 className="text-xs font-extrabold uppercase text-fg-muted mb-3 tracking-wider">
@@ -974,63 +1015,92 @@ export default function AdminVenuesPage() {
                   <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4">
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <h5 className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-emerald-700">
+                        <h5 className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-emerald-800">
                           <DollarSign className="h-4 w-4" />
-                          Tarif per Kategori Pengguna
+                          CRUD Kategori Penyewa & Tarif
                         </h5>
                         <p className="mt-0.5 text-[10px] text-fg-muted">
-                          Kategori yang tersedia untuk{' '}
-                          <span className="font-bold">{fieldSportType.replace(/_/g, ' ')}</span>:{' '}
-                          {availableCategories.map((c) => USER_CATEGORY_LABELS[c]).join(', ')}
+                          Atur nama label kategori penyewa, tier tarif, jam, dan nominal biaya sewa.
                         </p>
                       </div>
-                      <div className="flex flex-wrap gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <button
                           type="button"
-                          onClick={applyStadiumPreset}
-                          className="rounded-lg border border-emerald-200 bg-surface px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 transition hover:bg-emerald-100"
+                          onClick={applySwimmingPreset}
+                          className="rounded-lg border border-cyan-300 bg-cyan-100/70 px-2.5 py-1.5 text-[11px] font-bold text-cyan-900 transition hover:bg-cyan-200"
                         >
-                          Isi Paket Stadion
+                          🏊 Preset Renang PERDA
                         </button>
                         <button
                           type="button"
-                          onClick={() => addRateRow(availableCategories[0])}
+                          onClick={applyStadiumPreset}
+                          className="rounded-lg border border-emerald-300 bg-emerald-100/70 px-2.5 py-1.5 text-[11px] font-bold text-emerald-900 transition hover:bg-emerald-200"
+                        >
+                          🏟️ Preset Stadion PERDA
+                        </button>
+                        <button
+                          type="button"
+                          onClick={applyRegularPreset}
+                          className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[11px] font-bold text-blue-800 transition hover:bg-blue-100"
+                        >
+                          ⚽ Preset Reguler
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addRateRow('SOSIAL', 'PER_JAM', '')}
                           className="rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-[11px] font-bold text-fg-subtle transition hover:bg-subtle"
                         >
-                          + Tambah Baris
+                          + Tambah Kategori
                         </button>
                       </div>
                     </div>
 
                     {fieldRates.length === 0 ? (
                       <div className="rounded-xl border border-dashed border-line-strong bg-surface p-4 text-center text-[11px] text-fg-muted">
-                        Belum ada tarif kategori. Tekan{' '}
-                        <span className="font-bold text-emerald-700">Isi Paket Stadion</span>{' '}
-                        untuk lapangan stadion, atau{' '}
-                        <span className="font-bold text-fg-subtle">+ Tambah Baris</span> untuk
-                        mengisi manual.
+                        Belum ada kategori penyewa. Pilih tombol{' '}
+                        <span className="font-bold text-cyan-800">Preset Renang</span>,{' '}
+                        <span className="font-bold text-emerald-700">Preset Stadion</span>, atau{' '}
+                        <span className="font-bold text-fg-subtle">+ Tambah Kategori</span> untuk
+                        menentukan kategori & tarif secara manual.
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        {fieldRates.map((row, idx) => (
+                        {fieldRates.map((row) => (
                           <div
                             key={row.key}
-                            className="grid grid-cols-1 gap-2 rounded-xl border border-line bg-surface p-2.5 sm:grid-cols-12 sm:items-end"
+                            className="grid grid-cols-1 gap-2 rounded-xl border border-line bg-surface p-3 sm:grid-cols-12 sm:items-end shadow-xs"
                           >
                             <div className="sm:col-span-3">
                               <label className="mb-1 block text-[10px] font-bold uppercase text-fg-muted">
-                                Kategori
+                                Nama / Label Kategori
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="Contoh: Latihan Individu / Umum"
+                                value={row.label}
+                                onChange={(e) =>
+                                  updateRateRow(row.key, { label: e.target.value })
+                                }
+                                className="w-full rounded-lg border border-line-strong bg-surface p-2 text-[11px] font-semibold text-fg outline-none focus:border-emerald-500"
+                              />
+                            </div>
+
+                            <div className="sm:col-span-2">
+                              <label className="mb-1 block text-[10px] font-bold uppercase text-fg-muted">
+                                Tipe Sistem
                               </label>
                               <select
                                 value={row.category}
-                                onChange={(e) =>
+                                onChange={(e) => {
+                                  const cat = e.target.value as UserCategory;
                                   updateRateRow(row.key, {
-                                    category: e.target.value as UserCategory,
-                                  })
-                                }
+                                    category: cat,
+                                    label: row.label || getUserCategoryLabel(cat, fieldSportType),
+                                  });
+                                }}
                                 className="w-full rounded-lg border border-line-strong bg-surface p-2 text-[11px] font-semibold text-fg outline-none focus:border-emerald-500"
                               >
-                                {availableCategories.map((c) => (
+                                {(['SOSIAL', 'LOKAL', 'AMATIR', 'PROFESIONAL', 'PERTANDINGAN'] as UserCategory[]).map((c) => (
                                   <option key={c} value={c}>
                                     {USER_CATEGORY_LABELS[c]}
                                   </option>
@@ -1038,38 +1108,40 @@ export default function AdminVenuesPage() {
                               </select>
                             </div>
 
-                            <div className="sm:col-span-3">
+                            <div className="sm:col-span-2">
                               <label className="mb-1 block text-[10px] font-bold uppercase text-fg-muted">
-                                Rentang Waktu
+                                Jam Berlaku
                               </label>
                               <div className="flex items-center gap-1">
                                 <input
                                   type="time"
                                   value={row.timeStart}
+                                  placeholder="08:00"
                                   onChange={(e) =>
                                     updateRateRow(row.key, { timeStart: e.target.value })
                                   }
-                                  className="w-full rounded-lg border border-line-strong bg-surface p-2 text-[11px] font-semibold text-fg outline-none focus:border-emerald-500"
+                                  className="w-full rounded-lg border border-line-strong bg-surface p-1.5 text-[11px] font-semibold text-fg outline-none focus:border-emerald-500"
                                 />
                                 <span className="text-[10px] text-fg-muted">-</span>
                                 <input
                                   type="time"
                                   value={row.timeEnd}
+                                  placeholder="17:00"
                                   onChange={(e) =>
                                     updateRateRow(row.key, { timeEnd: e.target.value })
                                   }
-                                  className="w-full rounded-lg border border-line-strong bg-surface p-2 text-[11px] font-semibold text-fg outline-none focus:border-emerald-500"
+                                  className="w-full rounded-lg border border-line-strong bg-surface p-1.5 text-[11px] font-semibold text-fg outline-none focus:border-emerald-500"
                                 />
                               </div>
                             </div>
 
-                            <div className="sm:col-span-3">
+                            <div className="sm:col-span-2">
                               <label className="mb-1 block text-[10px] font-bold uppercase text-fg-muted">
                                 Tarif (Rp)
                               </label>
                               <input
                                 type="number"
-                                placeholder="Contoh: 55000000"
+                                placeholder="Contoh: 10000"
                                 value={row.price}
                                 onChange={(e) =>
                                   updateRateRow(row.key, { price: e.target.value })
@@ -1091,7 +1163,9 @@ export default function AdminVenuesPage() {
                               >
                                 {(Object.keys(RATE_UNIT_LABELS) as RateUnit[]).map((u) => (
                                   <option key={u} value={u}>
-                                    {RATE_UNIT_LABELS[u]}
+                                    {fieldSportType === 'RENANG' && u === 'PER_JAM'
+                                      ? 'orang / jam'
+                                      : RATE_UNIT_LABELS[u]}
                                   </option>
                                 ))}
                               </select>
@@ -1102,9 +1176,9 @@ export default function AdminVenuesPage() {
                                 type="button"
                                 onClick={() => removeRateRow(row.key)}
                                 className="rounded-lg border border-red-200 bg-red-50 p-2 text-red-700 transition hover:bg-red-100"
-                                title="Hapus baris tarif"
+                                title="Hapus kategori tarif"
                               >
-                                <Trash2 className="h-3.5 w-3.5" />
+                                <Trash2 className="h-4 w-4" />
                               </button>
                             </div>
                           </div>
@@ -1112,19 +1186,19 @@ export default function AdminVenuesPage() {
 
                         <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px]">
                           <span className="font-semibold text-fg-muted">
-                            {fieldRates.length} baris tarif
+                            {fieldRates.length} kategori penyewa terdaftar
                             {fieldRates.length > 0 && fieldRates.every((r) => r.price !== '' && Number(r.price) > 0)
-                              ? ` · total ${formatRupiah(
+                              ? ` · total nominal terdaftar ${formatRupiah(
                                   fieldRates.reduce((s, r) => s + Number(r.price || 0), 0)
-                                )} per kategori/waktu`
-                              : ' · lengkapi nominal yang masih kosong'}
+                                )}`
+                              : ' · mohon lengkapi tarif nominal yang masih kosong'}
                           </span>
                           <button
                             type="button"
                             onClick={() => setFieldRates([])}
                             className="rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 font-bold text-fg-subtle transition hover:bg-subtle"
                           >
-                            Kosongkan Tarif
+                            Reset Semua Kategori
                           </button>
                         </div>
                       </div>

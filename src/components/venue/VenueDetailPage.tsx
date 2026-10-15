@@ -81,14 +81,17 @@ export const VenueDetailPage: React.FC = () => {
     return fields.find((f) => f.id === selectedFieldId) || fields[0];
   }, [selectedVenue, selectedFieldId]);
 
-  // Kategori yang punya tarif pada lapangan aktif
-  const availableCategories = useMemo<UserCategory[]>(() => {
+  // Kategori yang punya tarif pada lapangan aktif beserta label dinamisnya
+  const availableCategories = useMemo<{ category: UserCategory; label: string }[]>(() => {
     const rates = activeField?.rates ?? [];
-    const seen: UserCategory[] = [];
+    const map = new Map<UserCategory, string>();
     for (const r of rates) {
-      if (r.isActive !== false && !seen.includes(r.category)) seen.push(r.category);
+      if (r.isActive !== false && !map.has(r.category)) {
+        const displayLabel = r.label?.trim() || getUserCategoryLabel(r.category, activeField?.sportType);
+        map.set(r.category, displayLabel);
+      }
     }
-    return seen;
+    return Array.from(map.entries()).map(([category, label]) => ({ category, label }));
   }, [activeField]);
 
   // Jadwal asli dari tabel `field_slots`, bukan hasil simulasi tanggal.
@@ -505,18 +508,18 @@ export const VenueDetailPage: React.FC = () => {
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    {availableCategories.map((c) => (
+                    {availableCategories.map((item) => (
                       <button
-                        key={c}
+                        key={item.category}
                         type="button"
-                        onClick={() => handleCategoryChange(c)}
+                        onClick={() => handleCategoryChange(item.category)}
                         className={`rounded-xl border px-3 py-2 text-xs font-bold transition ${
-                          userCategory === c
+                          userCategory === item.category
                             ? 'border-emerald-600 bg-emerald-600 text-white shadow-sm'
                             : 'border-emerald-200 bg-white text-emerald-800 hover:border-emerald-400'
                         }`}
                       >
-                        {getUserCategoryLabel(c, activeField?.sportType)}
+                        {item.label}
                       </button>
                     ))}
                   </div>

@@ -65,13 +65,14 @@ function normaliseRateInputs(input?: FieldRateInput[]): NormalisedRate[] {
     seen.add(key);
 
     const unit = VALID_UNITS.includes(r.unit) ? r.unit : 'PER_JAM';
+    const customLabel = r.label?.trim();
     out.push({
       category: r.category,
       timeStart: window.timeStart,
       timeEnd: window.timeEnd,
       price: Math.round(price),
       unit,
-      label: r.label?.trim() || r.category.charAt(0) + r.category.slice(1).toLowerCase(),
+      label: customLabel || r.category.charAt(0) + r.category.slice(1).toLowerCase(),
     });
   }
 
@@ -329,6 +330,17 @@ export async function createOrUpdateField(data: {
 
     revalidatePath('/');
     revalidatePath('/admin/venues');
+    try {
+      const parentVenue = await prisma.venue.findUnique({
+        where: { id: field.venueId },
+        select: { slug: true },
+      });
+      if (parentVenue?.slug) {
+        revalidatePath(`/venues/${parentVenue.slug}`);
+      }
+    } catch (e) {
+      // Non-fatal if revalidation fails
+    }
     return { success: true, field };
   } catch (error: any) {
     console.error("Failed to save field:", error);
