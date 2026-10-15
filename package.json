@@ -11,7 +11,7 @@
     "db:push": "prisma db push",
     "db:seed-rates": "tsx prisma/seed-wibawa-mukti-rates.ts",
     "db:create-admin": "tsx prisma/create-admin.ts",
-    "test": "tsx scripts/test-pricing.ts && tsx scripts/test-explore-filters.ts && tsx scripts/test-filter-url.ts && tsx scripts/test-phase3.ts",
+    "test": "tsx scripts/test-pricing.ts && tsx scripts/test-explore-filters.ts && tsx scripts/test-filter-url.ts && tsx scripts/test-phase3.ts && tsx scripts/test-navigation-url.ts",
     "test:admin-guard": "tsx scripts/test-admin-guard.ts"
   },
   "dependencies": {

@@ -1,5 +1,5 @@
 "use client";
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import {
   Venue,
   Booking,
@@ -17,6 +17,7 @@ import { getVenues, createBooking } from '../actions/venueActions';
 import { getCurrentUserAction, logoutUserAction } from '../actions/userAuthActions';
 import { validateAndProcessPaymentProof } from '../actions/paymentValidationActions';
 import { parseFiltersFromQuery, serialiseFiltersToQuery } from '../lib/filterUrl';
+import { parseRouteFromUrl, buildRouteUrl, type AppView } from '../lib/navigationUrl';
 import { stripPII } from '../lib/sanitize';
 
 interface AppContextType {
@@ -28,7 +29,7 @@ interface AppContextType {
   reviews: VenueReview[];
   searchFilters: SearchFilters;
   selectedVenue: Venue | null;
-  activeView: 'HOME' | 'EXPLORE' | 'VENUE_DETAIL' | 'USER_DASHBOARD' | 'CHECKOUT';
+  activeView: AppView;
   isSchemaModalOpen: boolean;
   isCheckoutModalOpen: boolean;
   activeBookingDraft: {
@@ -42,7 +43,7 @@ interface AppContextType {
   setActiveUser: (user: UserProfile | null) => void;
   setSearchFilters: React.Dispatch<React.SetStateAction<SearchFilters>>;
   setSelectedVenue: (venue: Venue | null) => void;
-  setActiveView: (view: 'HOME' | 'EXPLORE' | 'VENUE_DETAIL' | 'USER_DASHBOARD' | 'CHECKOUT') => void;
+  setActiveView: (view: AppView) => void;
   setIsSchemaModalOpen: (open: boolean) => void;
   setIsCheckoutModalOpen: (open: boolean) => void;
   
@@ -80,6 +81,8 @@ interface AppContextType {
 
   // Real User Session
   isLoggedIn: boolean;
+  isSessionChecking: boolean;
+  isMounted: boolean;
   logoutUser: () => Promise<void>;
   checkUserSession: () => Promise<void>;
 }
@@ -162,9 +165,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [activeUser, setActiveUser] = useState<UserProfile | null>(null);
+  const [isSessionChecking, setIsSessionChecking] = useState(true);
 
   // Load real user session from server cookies if present
   const checkUserSession = async () => {
+    setIsSessionChecking(true);
     try {
       const res = await getCurrentUserAction();
       if (res.success && res.user) {
@@ -185,6 +190,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.error('Failed to load user session:', e);
       setIsLoggedIn(false);
       setActiveUser(null);
+    } finally {
+      setIsSessionChecking(false);
     }
   };
 
@@ -223,44 +230,115 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   });
 
   const [searchFilters, setSearchFilters] = useState<SearchFilters>(defaultSearchFilters);
-
-  // --- Sinkronisasi filter <-> URL ---------------------------------
-  // 1. Saat mount, baca filter dari query string supaya hasil pencarian
-  //    bisa dibagikan lewat link dan tidak hilang saat di-refresh.
-  useEffect(() => {
-    const fromUrl = parseFiltersFromQuery(window.location.search, defaultSearchFilters);
-    setSearchFilters(fromUrl);
-  }, []);
-
-  // 2. Setiap filter berubah, tulis balik ke URL tanpa menambah riwayat,
-  //    supaya tombol "back" browser tidak terisi oleh tiap geseran slider.
-  useEffect(() => {
-    const qs = serialiseFiltersToQuery(searchFilters, defaultSearchFilters);
-    const next = `${window.location.pathname}${qs}`;
-    window.history.replaceState(null, '', next);
-  }, [searchFilters]);
-
-  // 3. Tombol back / forward browser memulihkan filter dari URL.
-  useEffect(() => {
-    const onPopState = () => {
-      setSearchFilters(
-        parseFiltersFromQuery(window.location.search, defaultSearchFilters)
-      );
-    };
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
-  }, []);
+  const [activeView, setActiveView] = useState<AppView>('HOME');
   const [selectedVenueState, setSelectedVenueState] = useState<Venue | null>(null);
+  const [pendingVenueId, setPendingVenueId] = useState<string | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+
   const selectedVenue = selectedVenueState;
   const setSelectedVenue = (venue: Venue | null) => {
     if (venue) {
       const fresh = venues.find((v) => v.id === venue.id) || venue;
       setSelectedVenueState(fresh);
+      setPendingVenueId(fresh.id);
     } else {
       setSelectedVenueState(null);
+      setPendingVenueId(null);
     }
   };
-  const [activeView, setActiveView] = useState<'HOME' | 'EXPLORE' | 'VENUE_DETAIL' | 'USER_DASHBOARD' | 'CHECKOUT'>('HOME');
+
+  const isNavigatingFromPopState = useRef(false);
+  const lastPushedView = useRef<AppView>('HOME');
+  const lastPushedVenueId = useRef<string | null>(null);
+  const isInitialMount = useRef(true);
+
+  // --- 1. Saat pertama mount: baca rute & filter dari URL -----------------
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const { view, venueId } = parseRouteFromUrl(window.location.pathname, window.location.search);
+    const fromUrlFilters = parseFiltersFromQuery(window.location.search, defaultSearchFilters);
+
+    setActiveView(view);
+    setSearchFilters(fromUrlFilters);
+    if (venueId) {
+      setPendingVenueId(venueId);
+    }
+
+    lastPushedView.current = view;
+    lastPushedVenueId.current = venueId;
+    setIsMounted(true);
+  }, []);
+
+  // --- 2. Pasangkan pendingVenueId dengan venues setelah di-fetch ---------
+  useEffect(() => {
+    if (pendingVenueId && venues.length > 0) {
+      const match = venues.find((v) => v.id === pendingVenueId);
+      if (match) {
+        setSelectedVenueState(match);
+      }
+    }
+  }, [pendingVenueId, venues]);
+
+  // --- 3. Sinkronisasi activeView, selectedVenue, searchFilters -> URL ---
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    if (isNavigatingFromPopState.current) {
+      isNavigatingFromPopState.current = false;
+      return;
+    }
+
+    const currentVenueId = activeView === 'VENUE_DETAIL' ? (selectedVenueState?.id || pendingVenueId) : null;
+    const filterQs = serialiseFiltersToQuery(searchFilters, defaultSearchFilters);
+    const targetUrl = buildRouteUrl(activeView, currentVenueId, filterQs);
+    const currentFullUrl = `${window.location.pathname}${window.location.search}`;
+
+    if (targetUrl !== currentFullUrl) {
+      const isViewChanged = lastPushedView.current !== activeView || lastPushedVenueId.current !== currentVenueId;
+      if (isViewChanged) {
+        window.history.pushState(null, '', targetUrl);
+        lastPushedView.current = activeView;
+        lastPushedVenueId.current = currentVenueId;
+      } else {
+        window.history.replaceState(null, '', targetUrl);
+      }
+    }
+  }, [activeView, selectedVenueState, pendingVenueId, searchFilters]);
+
+  // --- 4. Dukungan tombol Back / Forward browser (popstate) ---------------
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const onPopState = () => {
+      isNavigatingFromPopState.current = true;
+      const { view, venueId } = parseRouteFromUrl(window.location.pathname, window.location.search);
+      const fromUrlFilters = parseFiltersFromQuery(window.location.search, defaultSearchFilters);
+
+      setActiveView(view);
+      setSearchFilters(fromUrlFilters);
+
+      if (venueId) {
+        setPendingVenueId(venueId);
+        const match = venues.find((v) => v.id === venueId);
+        setSelectedVenueState(match || null);
+      } else {
+        setSelectedVenueState(null);
+        setPendingVenueId(null);
+      }
+
+      lastPushedView.current = view;
+      lastPushedVenueId.current = venueId;
+    };
+
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [venues]);
+
   const [isSchemaModalOpen, setIsSchemaModalOpen] = useState(false);
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
   const [activeBookingDraft, setActiveBookingDraft] = useState<{
@@ -268,7 +346,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     sportCategory: SportCategory;
     userCategory: UserCategory | null;
     items: BookingItem[];
-  } | null>(null);
+  } | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const saved = sessionStorage.getItem('gelora_checkout_draft_v1');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [activeLang, setActiveLang] = useState<'ID' | 'US'>('ID');
 
   // Clean up legacy localStorage venue keys
@@ -319,7 +405,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     items: BookingItem[],
     userCategory: UserCategory | null = null
   ) => {
-    setActiveBookingDraft({ venueId, sportCategory, userCategory, items });
+    const draft = { venueId, sportCategory, userCategory, items };
+    setActiveBookingDraft(draft);
+    try {
+      sessionStorage.setItem('gelora_checkout_draft_v1', JSON.stringify(draft));
+    } catch {
+      // Penyimpanan dinonaktifkan
+    }
     setIsCheckoutModalOpen(false); // Just in case
     setActiveView('CHECKOUT');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -415,6 +507,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       };
 
       setBookings(prev => [mappedBooking, ...prev]);
+      try {
+        sessionStorage.removeItem('gelora_checkout_draft_v1');
+      } catch {}
       setActiveBookingDraft(null);
       return mappedBooking;
     }
@@ -448,6 +543,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     setBookings(prev => [mappedBooking, ...prev]);
+    try {
+      sessionStorage.removeItem('gelora_checkout_draft_v1');
+    } catch {}
     setActiveBookingDraft(null);
     return mappedBooking;
   }
@@ -539,6 +637,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         activeLang,
         setActiveLang,
         isLoggedIn,
+        isSessionChecking,
+        isMounted,
         logoutUser,
         checkUserSession,
       }}

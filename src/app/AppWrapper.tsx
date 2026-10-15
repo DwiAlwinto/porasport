@@ -20,7 +20,19 @@ import { CheckoutPage } from '../components/checkout/CheckoutPage';
 // dengan data statis, jadi dihapus.
 
 const AppContent: React.FC = () => {
-  const { activeView, isLoggedIn } = useApp();
+  const { activeView, isLoggedIn, isSessionChecking, isMounted } = useApp();
+
+  if (!isMounted) {
+    return (
+      <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 font-sans">
+        <Navbar />
+        <main className="flex-1 flex items-center justify-center min-h-[50vh]">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#05BB75] border-t-transparent" />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 font-sans">
@@ -30,7 +42,17 @@ const AppContent: React.FC = () => {
         {activeView === 'HOME' && <HomeView />}
         {activeView === 'EXPLORE' && <ExplorePage />}
         {activeView === 'VENUE_DETAIL' && <VenueDetailPage />}
-        {activeView === 'USER_DASHBOARD' && (isLoggedIn ? <UserDashboard /> : <HomeView />)}
+        {activeView === 'USER_DASHBOARD' && (
+          isSessionChecking ? (
+            <div className="min-h-[50vh] flex items-center justify-center">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#05BB75] border-t-transparent" />
+            </div>
+          ) : isLoggedIn ? (
+            <UserDashboard />
+          ) : (
+            <HomeView />
+          )
+        )}
         {activeView === 'CHECKOUT' && <CheckoutPage />}
       </main>
 

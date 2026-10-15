@@ -55,6 +55,17 @@ const nextConfig = {
       },
     ];
   },
+
+  async rewrites() {
+    return [
+      { source: '/fasilitas', destination: '/' },
+      { source: '/explore', destination: '/' },
+      { source: '/venue/:id*', destination: '/' },
+      { source: '/dashboard', destination: '/' },
+      { source: '/riwayat', destination: '/' },
+      { source: '/checkout', destination: '/' },
+    ];
+  },
 };
 
 export default nextConfig;

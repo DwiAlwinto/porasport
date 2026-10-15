@@ -89,6 +89,7 @@ const isSlotPast = (slotDate: string, slotHour: number, slotTimeStart?: string):
 export const VenueDetailPage: React.FC = () => {
   const {
     selectedVenue,
+    venuesLoading,
     setActiveView,
     startBookingCheckout,
     reviews,
@@ -281,6 +282,25 @@ export const VenueDetailPage: React.FC = () => {
 
   // Semua hook sudah selesai dipanggil; aman untuk keluar lebih awal di sini.
   if (!selectedVenue) {
+    if (venuesLoading) {
+      return (
+        <div className="min-h-screen bg-slate-50 py-10 px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl animate-pulse space-y-6">
+            <div className="h-4 w-40 rounded bg-slate-200"></div>
+            <div className="h-72 sm:h-96 w-full rounded-3xl bg-slate-200"></div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-2 space-y-4">
+                <div className="h-8 w-2/3 rounded-lg bg-slate-200"></div>
+                <div className="h-4 w-1/3 rounded bg-slate-200"></div>
+                <div className="h-32 w-full rounded-2xl bg-slate-200"></div>
+              </div>
+              <div className="h-64 rounded-2xl bg-slate-200"></div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-6 text-center">
         <AlertCircle className="mb-3 h-12 w-12 text-slate-400" />
