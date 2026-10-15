@@ -276,6 +276,19 @@ export async function createBooking(data: {
       return { success: false, error: 'Pilih minimal satu slot jadwal.' };
     }
 
+    // Validasi waktu: tolak slot yang jam mulainya sudah lewat (WIB / UTC+7)
+    const nowTime = Date.now();
+    for (const item of data.items) {
+      // item.date e.g. "2026-10-15", item.timeStart e.g. "08:00"
+      const slotStartTime = new Date(`${item.date}T${item.timeStart}:00+07:00`);
+      if (!Number.isNaN(slotStartTime.getTime()) && slotStartTime.getTime() <= nowTime) {
+        return {
+          success: false,
+          error: `Slot jam ${item.timeStart} pada tanggal ${item.date} sudah lewat dan tidak dapat dipesan lagi.`,
+        };
+      }
+    }
+
     // Harga SELALU dihitung ulang di server dari tabel field_rates.
     // Nilai price/totalAmount yang dikirim client hanya dipakai sebagai
     // pembanding dan tidak pernah dipercaya.

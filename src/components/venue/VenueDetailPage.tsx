@@ -34,6 +34,58 @@ import {
   Users,
 } from 'lucide-react';
 
+// Helper waktu zona WIB (Asia/Jakarta, UTC+7) untuk mendeteksi slot jam yang sudah lewat
+const getWibDateTime = () => {
+  const now = new Date();
+  try {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Jakarta',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(now);
+    const getPart = (type: string) => parts.find((p) => p.type === type)?.value || '';
+    const y = getPart('year');
+    const m = getPart('month');
+    const d = getPart('day');
+    const hour = parseInt(getPart('hour'), 10) || 0;
+    const minute = parseInt(getPart('minute'), 10) || 0;
+    return {
+      todayKey: `${y}-${m}-${d}`,
+      currentHour: hour,
+      currentMinute: minute,
+    };
+  } catch {
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return {
+      todayKey: `${y}-${m}-${d}`,
+      currentHour: now.getHours(),
+      currentMinute: now.getMinutes(),
+    };
+  }
+};
+
+const isSlotPast = (slotDate: string, slotHour: number, slotTimeStart?: string): boolean => {
+  const { todayKey, currentHour, currentMinute } = getWibDateTime();
+  if (slotDate < todayKey) return true;
+  if (slotDate > todayKey) return false;
+
+  let startH = slotHour;
+  let startM = 0;
+  if (slotTimeStart) {
+    const [h, m] = slotTimeStart.split(':').map((v) => parseInt(v, 10));
+    if (!Number.isNaN(h)) startH = h;
+    if (!Number.isNaN(m)) startM = m;
+  }
+  return currentHour > startH || (currentHour === startH && currentMinute >= startM);
+};
+
 export const VenueDetailPage: React.FC = () => {
   const {
     selectedVenue,
@@ -485,7 +537,7 @@ export const VenueDetailPage: React.FC = () => {
                   <input
                     type="date"
                     value={selectedDate}
-                    min={new Date().toISOString().split('T')[0]}
+                    min={getWibDateTime().todayKey}
                     onChange={(e) => handleDateChange(e.target.value)}
                     className="rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2 text-xs font-bold text-slate-800 shadow-sm outline-none focus:border-emerald-500"
                   />
@@ -699,11 +751,13 @@ Mohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
                       const isSelected = selectedSlots.some((s) => s.id === slot.id);
                       const isBooked = slot.status === 'BOOKED';
                       const isMaintenance = slot.status === 'MAINTENANCE';
+                      const isPast = isSlotPast(selectedDate, slot.hour, slot.timeStart);
+                      const isDisabled = isBooked || isMaintenance || isPast;
 
                       return (
                         <button
                           key={slot.id}
-                          disabled={isBooked || isMaintenance}
+                          disabled={isDisabled}
                           onClick={() => handleSlotToggle(slot)}
                           className={`relative flex flex-col items-center justify-center rounded-xl border p-3 text-center transition ${
                             isSelected
@@ -712,28 +766,34 @@ Mohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
                               ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
                               : isMaintenance
                               ? 'border-amber-200 bg-amber-50 text-amber-700 cursor-not-allowed'
+                              : isPast
+                              ? 'border-slate-200 bg-slate-100/70 text-slate-400 cursor-not-allowed opacity-60'
                               : 'border-emerald-200 bg-emerald-50/50 text-slate-800 hover:bg-emerald-100'
                           }`}
                         >
                           <div className="text-sm font-black">
                             {slot.timeStart} - {slot.timeEnd}
                           </div>
-                          <div
-                            className={`mt-0.5 text-[11px] font-bold ${
-                              isSelected ? 'text-emerald-100' : 'text-emerald-700'
-                            }`}
-                          >
-                            Rp {(slot.price / 1000).toFixed(0)}k
-                          </div>
-                          {isBooked && (
+                          {isBooked ? (
                             <span className="mt-0.5 text-[10px] font-semibold uppercase text-slate-400">
                               Booked
                             </span>
-                          )}
-                          {isMaintenance && (
+                          ) : isMaintenance ? (
                             <span className="mt-0.5 text-[10px] font-semibold uppercase text-amber-600">
                               Turnamen
                             </span>
+                          ) : isPast ? (
+                            <span className="mt-0.5 text-[10px] font-extrabold uppercase tracking-wide text-slate-400">
+                              Lewat
+                            </span>
+                          ) : (
+                            <div
+                              className={`mt-0.5 text-[11px] font-bold ${
+                                isSelected ? 'text-emerald-100' : 'text-emerald-700'
+                              }`}
+                            >
+                              Rp {(slot.price / 1000).toFixed(0)}k
+                            </div>
                           )}
                         </button>
                       );
@@ -750,11 +810,13 @@ Mohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
                       const isSelected = selectedSlots.some((s) => s.id === slot.id);
                       const isBooked = slot.status === 'BOOKED';
                       const isMaintenance = slot.status === 'MAINTENANCE';
+                      const isPast = isSlotPast(selectedDate, slot.hour, slot.timeStart);
+                      const isDisabled = isBooked || isMaintenance || isPast;
 
                       return (
                         <button
                           key={slot.id}
-                          disabled={isBooked || isMaintenance}
+                          disabled={isDisabled}
                           onClick={() => handleSlotToggle(slot)}
                           className={`relative flex flex-col items-center justify-center rounded-xl border p-3 text-center transition ${
                             isSelected
@@ -763,28 +825,34 @@ Mohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
                               ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
                               : isMaintenance
                               ? 'border-amber-200 bg-amber-50 text-amber-700 cursor-not-allowed'
+                              : isPast
+                              ? 'border-slate-200 bg-slate-100/70 text-slate-400 cursor-not-allowed opacity-60'
                               : 'border-emerald-200 bg-emerald-50/50 text-slate-800 hover:bg-emerald-100'
                           }`}
                         >
                           <div className="text-sm font-black">
                             {slot.timeStart} - {slot.timeEnd}
                           </div>
-                          <div
-                            className={`mt-0.5 text-[11px] font-bold ${
-                              isSelected ? 'text-emerald-100' : 'text-emerald-700'
-                            }`}
-                          >
-                            Rp {(slot.price / 1000).toFixed(0)}k
-                          </div>
-                          {isBooked && (
+                          {isBooked ? (
                             <span className="mt-0.5 text-[10px] font-semibold uppercase text-slate-400">
                               Booked
                             </span>
-                          )}
-                          {isMaintenance && (
+                          ) : isMaintenance ? (
                             <span className="mt-0.5 text-[10px] font-semibold uppercase text-amber-600">
                               Turnamen
                             </span>
+                          ) : isPast ? (
+                            <span className="mt-0.5 text-[10px] font-extrabold uppercase tracking-wide text-slate-400">
+                              Lewat
+                            </span>
+                          ) : (
+                            <div
+                              className={`mt-0.5 text-[11px] font-bold ${
+                                isSelected ? 'text-emerald-100' : 'text-emerald-700'
+                              }`}
+                            >
+                              Rp {(slot.price / 1000).toFixed(0)}k
+                            </div>
                           )}
                         </button>
                       );
