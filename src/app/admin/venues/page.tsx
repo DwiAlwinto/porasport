@@ -36,6 +36,12 @@ import {
 } from '../../../lib/pricing';
 import { VENUE_FACILITIES } from '../../../lib/venueConstants';
 
+const HOURS_OPTIONS: string[] = [
+  '06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00',
+  '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00',
+  '20:00', '21:00', '22:00', '23:00',
+];
+
 /** Satu baris tarif yang sedang diedit di form admin. */
 type RateRow = {
   key: string;
@@ -1064,122 +1070,165 @@ export default function AdminVenuesPage() {
                         menentukan kategori & tarif secara manual.
                       </div>
                     ) : (
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         {fieldRates.map((row) => (
                           <div
                             key={row.key}
-                            className="grid grid-cols-1 gap-2 rounded-xl border border-line bg-surface p-3 sm:grid-cols-12 sm:items-end shadow-xs"
+                            className="rounded-2xl border border-line bg-surface p-3.5 shadow-xs transition hover:border-emerald-300"
                           >
-                            <div className="sm:col-span-3">
-                              <label className="mb-1 block text-[10px] font-bold uppercase text-fg-muted">
-                                Nama / Label Kategori
-                              </label>
-                              <input
-                                type="text"
-                                placeholder="Contoh: Latihan Individu / Umum"
-                                value={row.label}
-                                onChange={(e) =>
-                                  updateRateRow(row.key, { label: e.target.value })
-                                }
-                                className="w-full rounded-lg border border-line-strong bg-surface p-2 text-[11px] font-semibold text-fg outline-none focus:border-emerald-500"
-                              />
-                            </div>
-
-                            <div className="sm:col-span-2">
-                              <label className="mb-1 block text-[10px] font-bold uppercase text-fg-muted">
-                                Tipe Sistem
-                              </label>
-                              <select
-                                value={row.category}
-                                onChange={(e) => {
-                                  const cat = e.target.value as UserCategory;
-                                  updateRateRow(row.key, {
-                                    category: cat,
-                                    label: row.label || getUserCategoryLabel(cat, fieldSportType),
-                                  });
-                                }}
-                                className="w-full rounded-lg border border-line-strong bg-surface p-2 text-[11px] font-semibold text-fg outline-none focus:border-emerald-500"
-                              >
-                                {(['SOSIAL', 'LOKAL', 'AMATIR', 'PROFESIONAL', 'PERTANDINGAN'] as UserCategory[]).map((c) => (
-                                  <option key={c} value={c}>
-                                    {USER_CATEGORY_LABELS[c]}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-
-                            <div className="sm:col-span-2">
-                              <label className="mb-1 block text-[10px] font-bold uppercase text-fg-muted">
-                                Jam Berlaku
-                              </label>
-                              <div className="flex items-center gap-1">
+                            {/* Baris 1: Label Kategori, Tipe Sistem, dan Tombol Hapus */}
+                            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+                              <div className="flex-1">
+                                <label className="mb-1 block text-[10px] font-bold uppercase text-fg-muted">
+                                  Nama / Label Kategori Penyewa
+                                </label>
                                 <input
-                                  type="time"
-                                  value={row.timeStart}
-                                  placeholder="08:00"
+                                  type="text"
+                                  placeholder="Contoh: Latihan Individu / Umum, Pelajar & Mahasiswa, Komunitas"
+                                  value={row.label}
                                   onChange={(e) =>
-                                    updateRateRow(row.key, { timeStart: e.target.value })
+                                    updateRateRow(row.key, { label: e.target.value })
                                   }
-                                  className="w-full rounded-lg border border-line-strong bg-surface p-1.5 text-[11px] font-semibold text-fg outline-none focus:border-emerald-500"
+                                  className="w-full rounded-xl border border-line-strong bg-field px-3 py-2 text-xs font-semibold text-fg outline-none focus:border-emerald-500 focus:bg-surface"
                                 />
-                                <span className="text-[10px] text-fg-muted">-</span>
-                                <input
-                                  type="time"
-                                  value={row.timeEnd}
-                                  placeholder="17:00"
-                                  onChange={(e) =>
-                                    updateRateRow(row.key, { timeEnd: e.target.value })
-                                  }
-                                  className="w-full rounded-lg border border-line-strong bg-surface p-1.5 text-[11px] font-semibold text-fg outline-none focus:border-emerald-500"
-                                />
+                              </div>
+
+                              <div className="w-full sm:w-60">
+                                <label className="mb-1 block text-[10px] font-bold uppercase text-fg-muted">
+                                  Tipe Sistem
+                                </label>
+                                <select
+                                  value={row.category}
+                                  onChange={(e) => {
+                                    const cat = e.target.value as UserCategory;
+                                    updateRateRow(row.key, {
+                                      category: cat,
+                                      label: row.label || getUserCategoryLabel(cat, fieldSportType),
+                                    });
+                                  }}
+                                  className="w-full rounded-xl border border-line-strong bg-field px-3 py-2 text-xs font-semibold text-fg outline-none focus:border-emerald-500"
+                                >
+                                  {(['SOSIAL', 'LOKAL', 'AMATIR', 'PROFESIONAL', 'PERTANDINGAN'] as UserCategory[]).map((c) => (
+                                    <option key={c} value={c}>
+                                      {USER_CATEGORY_LABELS[c]}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="self-end sm:self-auto sm:pt-4">
+                                <button
+                                  type="button"
+                                  onClick={() => removeRateRow(row.key)}
+                                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-600 transition hover:bg-red-100 hover:text-red-700"
+                                  title="Hapus baris kategori ini"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
                               </div>
                             </div>
 
-                            <div className="sm:col-span-2">
-                              <label className="mb-1 block text-[10px] font-bold uppercase text-fg-muted">
-                                Tarif (Rp)
-                              </label>
-                              <input
-                                type="number"
-                                placeholder="Contoh: 10000"
-                                value={row.price}
-                                onChange={(e) =>
-                                  updateRateRow(row.key, { price: e.target.value })
-                                }
-                                className="w-full rounded-lg border border-line-strong bg-surface p-2 text-[11px] font-semibold text-fg outline-none focus:border-emerald-500"
-                              />
-                            </div>
+                            {/* Garis Pemisah Halus */}
+                            <div className="my-3 border-t border-dashed border-line" />
 
-                            <div className="sm:col-span-2">
-                              <label className="mb-1 block text-[10px] font-bold uppercase text-fg-muted">
-                                Satuan
-                              </label>
-                              <select
-                                value={row.unit}
-                                onChange={(e) =>
-                                  updateRateRow(row.key, { unit: e.target.value as RateUnit })
-                                }
-                                className="w-full rounded-lg border border-line-strong bg-surface p-2 text-[11px] font-semibold text-fg outline-none focus:border-emerald-500"
-                              >
-                                {(Object.keys(RATE_UNIT_LABELS) as RateUnit[]).map((u) => (
-                                  <option key={u} value={u}>
-                                    {fieldSportType === 'RENANG' && u === 'PER_JAM'
-                                      ? 'orang / jam'
-                                      : RATE_UNIT_LABELS[u]}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
+                            {/* Baris 2: Waktu (Jam), Tarif Rp, dan Satuan */}
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-12 sm:items-center">
+                              {/* Jam Berlaku */}
+                              <div className="sm:col-span-5">
+                                <div className="mb-1 flex items-center justify-between">
+                                  <label className="block text-[10px] font-bold uppercase text-fg-muted">
+                                    Waktu / Jam Berlaku
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (row.timeStart || row.timeEnd) {
+                                        updateRateRow(row.key, { timeStart: '', timeEnd: '' });
+                                      } else {
+                                        updateRateRow(row.key, { timeStart: '06:00', timeEnd: '16:00' });
+                                      }
+                                    }}
+                                    className="text-[10px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                                  >
+                                    {row.timeStart || row.timeEnd ? 'Set Sepanjang Hari' : 'Atur Jam Tertentu'}
+                                  </button>
+                                </div>
 
-                            <div className="flex justify-end sm:col-span-1">
-                              <button
-                                type="button"
-                                onClick={() => removeRateRow(row.key)}
-                                className="rounded-lg border border-red-200 bg-red-50 p-2 text-red-700 transition hover:bg-red-100"
-                                title="Hapus kategori tarif"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
+                                {!row.timeStart && !row.timeEnd ? (
+                                  <div className="flex h-9 items-center rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 text-xs font-bold text-emerald-800">
+                                    ☀️ Sepanjang Hari (06:00 - 23:00)
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <select
+                                      value={row.timeStart || '06:00'}
+                                      onChange={(e) => updateRateRow(row.key, { timeStart: e.target.value })}
+                                      className="w-full rounded-xl border border-line-strong bg-field px-2.5 py-1.5 text-xs font-semibold text-fg outline-none focus:border-emerald-500"
+                                    >
+                                      {HOURS_OPTIONS.map((h) => (
+                                        <option key={h} value={h}>
+                                          {h} WIB
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <span className="text-xs font-bold text-fg-muted">s/d</span>
+                                    <select
+                                      value={row.timeEnd || '16:00'}
+                                      onChange={(e) => updateRateRow(row.key, { timeEnd: e.target.value })}
+                                      className="w-full rounded-xl border border-line-strong bg-field px-2.5 py-1.5 text-xs font-semibold text-fg outline-none focus:border-emerald-500"
+                                    >
+                                      {HOURS_OPTIONS.map((h) => (
+                                        <option key={h} value={h}>
+                                          {h} WIB
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Tarif (Rp) */}
+                              <div className="sm:col-span-4">
+                                <label className="mb-1 block text-[10px] font-bold uppercase text-fg-muted">
+                                  Tarif Retribusi (Rp)
+                                </label>
+                                <div className="relative">
+                                  <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-xs font-bold text-fg-muted">
+                                    Rp
+                                  </span>
+                                  <input
+                                    type="number"
+                                    placeholder="0"
+                                    value={row.price}
+                                    onChange={(e) =>
+                                      updateRateRow(row.key, { price: e.target.value })
+                                    }
+                                    className="w-full rounded-xl border border-line-strong bg-field py-1.5 pl-9 pr-3 text-xs font-bold text-fg outline-none focus:border-emerald-500"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Satuan */}
+                              <div className="sm:col-span-3">
+                                <label className="mb-1 block text-[10px] font-bold uppercase text-fg-muted">
+                                  Satuan Tarif
+                                </label>
+                                <select
+                                  value={row.unit}
+                                  onChange={(e) =>
+                                    updateRateRow(row.key, { unit: e.target.value as RateUnit })
+                                  }
+                                  className="w-full rounded-xl border border-line-strong bg-field px-2.5 py-1.5 text-xs font-semibold text-fg outline-none focus:border-emerald-500"
+                                >
+                                  {(Object.keys(RATE_UNIT_LABELS) as RateUnit[]).map((u) => (
+                                    <option key={u} value={u}>
+                                      {fieldSportType === 'RENANG' && u === 'PER_JAM'
+                                        ? 'orang / jam'
+                                        : RATE_UNIT_LABELS[u]}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
                             </div>
                           </div>
                         ))}
