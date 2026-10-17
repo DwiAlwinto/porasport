@@ -127,11 +127,13 @@ export function hourToHHmm(hour: number): string {
 }
 
 export type ResolvableRate = {
+  id?: string;
   category: UserCategory;
   timeStart: string | null;
   timeEnd: string | null;
   price: number;
   isActive: boolean;
+  unit?: RateUnit;
 };
 
 /**
@@ -156,10 +158,12 @@ export function rateCoversHour(
 /**
  * Pilih tarif yang benar untuk (kategori, jam).
  *
- * Prioritas:
- * 1. tarif berkategori tsb dengan rentang waktu yang mencakup jam tersebut
- * 2. tarif berkategori tsb yang berlaku sepanjang hari
- * 3. null — kategori tsb tidak punya tarif
+ * Prioritas untuk slot 1 jam:
+ * 1. Tarif per jam (PER_JAM) berkategori tsb dengan rentang waktu yang mencakup jam tsb
+ * 2. Tarif timed berkategori tsb yang mencakup jam tsb
+ * 3. Tarif per jam berkategori tsb yang berlaku sepanjang hari
+ * 4. Tarif berkategori tsb yang berlaku sepanjang hari
+ * 5. Tanpa kategori: utamakan tarif per jam yang mencakup jam tsb atau sepanjang hari
  */
 export function pickRateForSlot(
   rates: ResolvableRate[],
@@ -170,12 +174,31 @@ export function pickRateForSlot(
 
   if (category) {
     const forCategory = active.filter((r) => r.category === category);
+    const timedHourly = forCategory.find(
+      (r) => (r.unit === 'PER_JAM' || !r.unit) && r.timeStart && r.timeEnd && rateCoversHour(r, hour)
+    );
+    if (timedHourly) return timedHourly;
+
     const timed = forCategory.find((r) => r.timeStart && r.timeEnd && rateCoversHour(r, hour));
     if (timed) return timed;
+
+    const allDayHourly = forCategory.find(
+      (r) => (r.unit === 'PER_JAM' || !r.unit) && (!r.timeStart || !r.timeEnd)
+    );
+    if (allDayHourly) return allDayHourly;
+
     return forCategory.find((r) => !r.timeStart || !r.timeEnd) ?? null;
   }
 
-  // Tanpa kategori: utamakan tarif sepanjang hari.
+  // Tanpa kategori: utamakan tarif per jam yang mencakup jam ini
+  const timedHourlyNoCat = active.find(
+    (r) => (r.unit === 'PER_JAM' || !r.unit) && r.timeStart && r.timeEnd && rateCoversHour(r, hour)
+  );
+  if (timedHourlyNoCat) return timedHourlyNoCat;
+
+  const allDayHourly = active.find((r) => (r.unit === 'PER_JAM' || !r.unit) && (!r.timeStart || !r.timeEnd));
+  if (allDayHourly) return allDayHourly;
+
   const allDay = active.find((r) => !r.timeStart || !r.timeEnd);
   if (allDay) return allDay;
   return active.find((r) => rateCoversHour(r, hour)) ?? null;

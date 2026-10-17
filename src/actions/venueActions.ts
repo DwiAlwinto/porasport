@@ -238,6 +238,7 @@ export async function createBooking(data: {
   paymentMethod: string;
   sportCategory: SportCategory;
   userCategory?: UserCategory | null;
+  rateId?: string | null;
   nik?: string;
   npwp?: string;
   senderName?: string;
@@ -319,7 +320,20 @@ export async function createBooking(data: {
       return { ...item, price: resolved.price };
     });
 
-    const serverTotal = pricedItems.reduce((sum, i) => sum + i.price, 0);
+    const allRates = fields.flatMap((f) => f.rates);
+    const selectedRate = data.rateId ? allRates.find((r) => r.id === data.rateId) : null;
+
+    let serverTotal: number;
+    if (selectedRate && selectedRate.unit === 'PER_HARI') {
+      serverTotal = selectedRate.price;
+      const perSlot = Math.round(selectedRate.price / pricedItems.length);
+      pricedItems.forEach((i) => {
+        i.price = perSlot;
+      });
+    } else {
+      serverTotal = pricedItems.reduce((sum, i) => sum + i.price, 0);
+    }
+
     const serviceFee = 5000;
     const grandTotal = serverTotal + serviceFee;
 

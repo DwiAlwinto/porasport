@@ -36,6 +36,7 @@ interface AppContextType {
     venueId: string;
     sportCategory: SportCategory;
     userCategory: UserCategory | null;
+    rateId?: string | null;
     items: BookingItem[];
   } | null;
 
@@ -55,7 +56,8 @@ interface AppContextType {
     venueId: string,
     sportCategory: SportCategory,
     items: BookingItem[],
-    userCategory?: UserCategory | null
+    userCategory?: UserCategory | null,
+    rateId?: string | null
   ) => void;
   completePayment: (
     bookingId: string,
@@ -345,6 +347,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     venueId: string;
     sportCategory: SportCategory;
     userCategory: UserCategory | null;
+    rateId?: string | null;
     items: BookingItem[];
   } | null>(() => {
     if (typeof window === 'undefined') return null;
@@ -403,9 +406,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     venueId: string,
     sportCategory: SportCategory,
     items: BookingItem[],
-    userCategory: UserCategory | null = null
+    userCategory: UserCategory | null = null,
+    rateId?: string | null
   ) => {
-    const draft = { venueId, sportCategory, userCategory, items };
+    const draft = { venueId, sportCategory, userCategory, rateId, items };
     setActiveBookingDraft(draft);
     try {
       sessionStorage.setItem('gelora_checkout_draft_v1', JSON.stringify(draft));
@@ -440,6 +444,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       paymentMethod: method,
       sportCategory: activeBookingDraft.sportCategory as any,
       userCategory: activeBookingDraft.userCategory,
+      rateId: activeBookingDraft.rateId || undefined,
       nik: verificationData?.nik,
       npwp: verificationData?.npwp,
       senderName: verificationData?.senderName,

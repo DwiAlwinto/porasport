@@ -6,12 +6,13 @@ import {
   VenueField,
   FieldSlot,
   BookingItem,
+  FieldRate,
 } from '../../types';
 import {
   generateDaySlotsForField,
 } from '../../lib/slotUtils';
 import { getPublicFieldSlots } from '../../actions/venueActions';
-import { USER_CATEGORY_LABELS, getUserCategoryLabel } from '../../lib/pricing';
+import { USER_CATEGORY_LABELS, getUserCategoryLabel, rateCoversHour } from '../../lib/pricing';
 import type { UserCategory } from '@prisma/client';
 import {
   MapPin,
@@ -32,6 +33,10 @@ import {
   Award,
   MessageCircle,
   Users,
+  Sun,
+  Moon,
+  Sparkles,
+  Check,
 } from 'lucide-react';
 
 // Helper waktu zona WIB (Asia/Jakarta, UTC+7) untuk mendeteksi slot jam yang sudah lewat
@@ -122,7 +127,13 @@ export const VenueDetailPage: React.FC = () => {
   // Multi-slot selection state: Array of selected FieldSlot objects
   const [selectedSlots, setSelectedSlots] = useState<FieldSlot[]>([]);
 
-  // Kategori pengguna penewa, menentukan tarif mana yang berlaku
+  // Kategori grup terpilih berdasarkan label tampilan (mis. "Latihan klub Umum /Perusahaan / Organisasi")
+  const [selectedCategoryLabel, setSelectedCategoryLabel] = useState<string | null>(null);
+
+  // ID tarif / jendela waktu spesifik yang dipilih pelanggan (mis. "08:00 - 17:00" atau "Paket Seharian")
+  const [selectedRateId, setSelectedRateId] = useState<string | null>(null);
+
+  // Kategori pengguna penyewa (Prisma enum)
   const [userCategory, setUserCategory] = useState<UserCategory | null>(null);
 
   // Jumlah orang / perenang khusus tarif per orang / jam (Kolam Renang Aquatic)
@@ -134,18 +145,63 @@ export const VenueDetailPage: React.FC = () => {
     return fields.find((f) => f.id === selectedFieldId) || fields[0];
   }, [selectedVenue, selectedFieldId]);
 
-  // Kategori yang punya tarif pada lapangan aktif beserta label dinamisnya
-  const availableCategories = useMemo<{ category: UserCategory; label: string }[]>(() => {
-    const rates = activeField?.rates ?? [];
-    const map = new Map<UserCategory, string>();
+  // Kelompokkan tarif berdasarkan label tampilan kategori yang unik
+  // Mencegah bug duplikat tombol kategori bila dua tarif punya label sama namun enum Prisma beda
+  const categoryGroups = useMemo<
+    { label: string; primaryCategory: UserCategory; rates: FieldRate[] }[]
+  >(() => {
+    const rates = (activeField?.rates ?? []).filter((r) => r.isActive !== false);
+    const map = new Map<
+      string,
+      { label: string; primaryCategory: UserCategory; rates: FieldRate[] }
+    >();
+
     for (const r of rates) {
-      if (r.isActive !== false && !map.has(r.category)) {
-        const displayLabel = r.label?.trim() || getUserCategoryLabel(r.category, activeField?.sportType);
-        map.set(r.category, displayLabel);
+      const displayLabel =
+        r.label?.trim() || getUserCategoryLabel(r.category, activeField?.sportType);
+      const existing = map.get(displayLabel);
+      if (!existing) {
+        map.set(displayLabel, {
+          label: displayLabel,
+          primaryCategory: r.category,
+          rates: [r],
+        });
+      } else {
+        existing.rates.push(r);
       }
     }
-    return Array.from(map.entries()).map(([category, label]) => ({ category, label }));
+
+    return Array.from(map.values());
   }, [activeField]);
+
+  // Sinkronisasi otomatis grup kategori & tarif saat lapangan dibuka atau berganti
+  useEffect(() => {
+    if (categoryGroups.length > 0) {
+      const currentValid = categoryGroups.some((g) => g.label === selectedCategoryLabel);
+      if (!currentValid) {
+        const first = categoryGroups[0];
+        setSelectedCategoryLabel(first.label);
+        setSelectedRateId(first.rates[0]?.id ?? null);
+        setUserCategory(first.rates[0]?.category ?? first.primaryCategory);
+      }
+    } else {
+      setSelectedCategoryLabel(null);
+      setSelectedRateId(null);
+      setUserCategory(null);
+    }
+  }, [categoryGroups, selectedCategoryLabel]);
+
+  // Grup kategori aktif
+  const activeCategoryGroup = useMemo(() => {
+    if (!selectedCategoryLabel) return categoryGroups[0] || null;
+    return categoryGroups.find((g) => g.label === selectedCategoryLabel) || categoryGroups[0] || null;
+  }, [categoryGroups, selectedCategoryLabel]);
+
+  // Tarif / paket aktif yang dipilih pelanggan
+  const selectedRate = useMemo(() => {
+    if (!selectedRateId) return null;
+    return activeField?.rates?.find((r) => r.id === selectedRateId) || null;
+  }, [activeField, selectedRateId]);
 
   // Jadwal asli dari tabel `field_slots`, bukan hasil simulasi tanggal.
   // Saat masih memuat, tampilkan kerangka agar tidak sempat menampilkan slot palsu.
@@ -234,23 +290,73 @@ export const VenueDetailPage: React.FC = () => {
 
   const handleFieldChange = (fieldId: string) => {
     setSelectedFieldId(fieldId);
+    setSelectedCategoryLabel(null);
+    setSelectedRateId(null);
     setSelectedSlots([]); // reset selection when field changes
   };
 
-  // Ganti lapangan atau kategori => pilihan slot lama tidak valid lagi
-  const handleCategoryChange = (category: UserCategory | null) => {
-    setUserCategory(category);
+  const handleCategoryGroupChange = (group: {
+    label: string;
+    primaryCategory: UserCategory;
+    rates: FieldRate[];
+  }) => {
+    setSelectedCategoryLabel(group.label);
+    const initialRate = group.rates[0] ?? null;
+    setSelectedRateId(initialRate?.id ?? null);
+    setUserCategory(initialRate?.category ?? group.primaryCategory);
     setSelectedSlots([]);
+  };
+
+  const handleRateSelect = (rate: FieldRate) => {
+    setSelectedRateId(rate.id);
+    setUserCategory(rate.category);
+    setSelectedSlots([]);
+  };
+
+  const handleSelectAllHourlyWindowSlots = (rate: FieldRate) => {
+    if (!rate.timeStart || !rate.timeEnd) return;
+    const startHour = parseInt(rate.timeStart.split(':')[0], 10);
+    const endHour = parseInt(rate.timeEnd.split(':')[0], 10);
+    const matching = daySlots.filter((s) => {
+      const inRange = s.hour >= startHour && s.hour < endHour;
+      const isPast = isSlotPast(selectedDate, s.hour, s.timeStart);
+      return inRange && s.status === 'AVAILABLE' && !isPast;
+    });
+    setSelectedSlots(matching);
+  };
+
+  const handleSelectAllPackageSlots = (rate: FieldRate) => {
+    if (!rate.timeStart || !rate.timeEnd) {
+      const available = daySlots.filter(
+        (s) => s.status === 'AVAILABLE' && !isSlotPast(selectedDate, s.hour, s.timeStart)
+      );
+      setSelectedSlots(available);
+      return;
+    }
+    const startHour = parseInt(rate.timeStart.split(':')[0], 10);
+    const endHour = parseInt(rate.timeEnd.split(':')[0], 10);
+    const matching = daySlots.filter((s) => {
+      const inRange = s.hour >= startHour && s.hour < endHour;
+      const isPast = isSlotPast(selectedDate, s.hour, s.timeStart);
+      return inRange && s.status === 'AVAILABLE' && !isPast;
+    });
+    setSelectedSlots(matching);
   };
 
   // Calculate total price of selected slots
   const selectedTotalPrice = useMemo(() => {
+    const isDailyPackage =
+      selectedRate && selectedRate.unit === 'PER_HARI' && selectedSlots.length > 0;
+    if (isDailyPackage) {
+      return selectedRate.price;
+    }
+
     const base = selectedSlots.reduce((sum, s) => sum + s.price, 0);
     if (activeField?.sportType === 'RENANG' && userCategory !== 'PERTANDINGAN') {
       return base * swimmerCount;
     }
     return base;
-  }, [selectedSlots, activeField, userCategory, swimmerCount]);
+  }, [selectedSlots, activeField, userCategory, swimmerCount, selectedRate]);
 
   const handleProceedToCheckout = () => {
     if (selectedSlots.length === 0 || !activeField || !selectedVenue) return;
@@ -261,21 +367,41 @@ export const VenueDetailPage: React.FC = () => {
       return;
     }
 
+    const isDailyPackage =
+      selectedRate && selectedRate.unit === 'PER_HARI' && selectedSlots.length > 0;
     const isAquaticPerson = activeField.sportType === 'RENANG' && userCategory !== 'PERTANDINGAN';
-    const items: BookingItem[] = selectedSlots.map((s) => ({
-      slotId: s.id,
-      fieldId: activeField.id,
-      fieldName: isAquaticPerson && swimmerCount > 1
-        ? `${activeField.name} (${swimmerCount} Orang)`
-        : activeField.name,
-      date: s.date,
-      timeStart: s.timeStart,
-      timeEnd: s.timeEnd,
-      price: isAquaticPerson ? s.price * swimmerCount : s.price,
-      isPeakHour: s.isPeakHour,
-    }));
 
-    startBookingCheckout(selectedVenue.id, activeField.sportType, items, userCategory);
+    const items: BookingItem[] = selectedSlots.map((s) => {
+      let itemPrice = s.price;
+      if (isDailyPackage) {
+        itemPrice = Math.round(selectedRate.price / selectedSlots.length);
+      } else if (isAquaticPerson) {
+        itemPrice = s.price * swimmerCount;
+      }
+
+      return {
+        slotId: s.id,
+        fieldId: activeField.id,
+        fieldName: isDailyPackage
+          ? `${activeField.name} (Paket Seharian)`
+          : isAquaticPerson && swimmerCount > 1
+          ? `${activeField.name} (${swimmerCount} Orang)`
+          : activeField.name,
+        date: s.date,
+        timeStart: s.timeStart,
+        timeEnd: s.timeEnd,
+        price: itemPrice,
+        isPeakHour: s.isPeakHour,
+      };
+    });
+
+    startBookingCheckout(
+      selectedVenue.id,
+      activeField.sportType,
+      items,
+      userCategory,
+      selectedRateId
+    );
   };
 
   const venueReviews = reviews.filter((r) => r.venueId === selectedVenue?.id);
@@ -564,88 +690,235 @@ export const VenueDetailPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Pemilih Kategori Pengguna + Tabel Tarif */}
-              {availableCategories.length > 0 && (
-                <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
-                  <div className="mb-3 flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-emerald-700" />
-                    <div>
-                      <h4 className="text-xs font-extrabold uppercase tracking-wider text-emerald-800">
-                        Kategori Penyewa
-                      </h4>
-                      <p className="text-[11px] text-slate-600">
-                        Tarif mengikuti kategori dan jam yang dipilih
-                      </p>
+              {/* Pemilih Kategori Pengguna & Pilihan Waktu / Paket */}
+              {categoryGroups.length > 0 && (
+                <div className="mt-5 rounded-3xl border border-emerald-200/80 bg-gradient-to-b from-emerald-50/70 via-white to-emerald-50/40 p-4 sm:p-5 shadow-sm">
+                  {/* Step 1: Kategori Penyewa */}
+                  <div>
+                    <div className="mb-2.5 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-600 text-[11px] font-black text-white shadow-sm">
+                          1
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-black uppercase tracking-wider text-emerald-950">
+                            Pilih Kategori Penyewa
+                          </h4>
+                        </div>
+                      </div>
+                      <span className="text-[11px] font-bold text-slate-500">
+                        {categoryGroups.length} Kategori Tersedia
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                      {categoryGroups.map((group) => {
+                        const isSelected = selectedCategoryLabel === group.label;
+                        return (
+                          <button
+                            key={group.label}
+                            type="button"
+                            onClick={() => handleCategoryGroupChange(group)}
+                            className={`group relative flex flex-col justify-between rounded-2xl border p-3.5 text-left transition-all duration-200 ${
+                              isSelected
+                                ? 'border-emerald-600 bg-emerald-600 text-white shadow-md shadow-emerald-600/20 ring-2 ring-emerald-500/30 scale-[1.01]'
+                                : 'border-emerald-100 bg-white text-slate-800 hover:border-emerald-300 hover:bg-emerald-50/40 shadow-xs'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <span
+                                className={`text-xs font-extrabold leading-snug line-clamp-2 ${
+                                  isSelected ? 'text-white' : 'text-slate-900 group-hover:text-emerald-700'
+                                }`}
+                              >
+                                {group.label}
+                              </span>
+                              <div
+                                className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition ${
+                                  isSelected
+                                    ? 'border-white bg-white text-emerald-600'
+                                    : 'border-slate-300 bg-slate-50 text-transparent'
+                                }`}
+                              >
+                                <Check className="h-2.5 w-2.5 stroke-[3]" />
+                              </div>
+                            </div>
+                            <div className="mt-2 flex items-center gap-1.5 text-[10px]">
+                              <span
+                                className={`font-semibold ${
+                                  isSelected ? 'text-emerald-100' : 'text-slate-500'
+                                }`}
+                              >
+                                {group.rates.length} pilihan tarif &amp; jam
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
-                    {availableCategories.map((item) => (
-                      <button
-                        key={item.category}
-                        type="button"
-                        onClick={() => handleCategoryChange(item.category)}
-                        className={`rounded-xl border px-3 py-2 text-xs font-bold transition ${
-                          userCategory === item.category
-                            ? 'border-emerald-600 bg-emerald-600 text-white shadow-sm'
-                            : 'border-emerald-200 bg-white text-emerald-800 hover:border-emerald-400'
-                        }`}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
+                  {/* Step 2: Pilihan Waktu & Tarif */}
+                  {activeCategoryGroup && (
+                    <div className="mt-5 border-t border-emerald-100 pt-4">
+                      <div className="mb-2.5 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-600 text-[11px] font-black text-white shadow-sm">
+                            2
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-black uppercase tracking-wider text-emerald-950">
+                              Pilih Waktu &amp; Tarif Yang Diinginkan
+                            </h4>
+                          </div>
+                        </div>
+                        <span className="text-[11px] text-slate-500">
+                          Klik untuk memilih jendela waktu sewa
+                        </span>
+                      </div>
 
-                  <div className="mt-3 overflow-x-auto rounded-xl border border-emerald-200 bg-white">
-                    <table className="w-full text-left text-[11px]">
-                      <thead className="border-b border-emerald-200 bg-emerald-50 text-[10px] font-extrabold uppercase text-emerald-800">
-                        <tr>
-                          <th className="px-3 py-2">Kategori</th>
-                          <th className="px-3 py-2">Waktu</th>
-                          <th className="px-3 py-2 text-right">Tarif</th>
-                          <th className="px-3 py-2 text-right">Satuan</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 font-medium text-slate-700">
-                        {activeField?.rates?.map((r) => {
-                          const isActive = userCategory === r.category;
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                        {activeCategoryGroup.rates.map((rate) => {
+                          const isRateSelected = selectedRateId === rate.id;
+                          const isDaily = rate.unit === 'PER_HARI';
+                          const isNight =
+                            rate.timeStart && parseInt(rate.timeStart.split(':')[0], 10) >= 18;
+
                           return (
-                            <tr
-                              key={r.id}
-                              className={
-                                isActive ? 'bg-emerald-50 font-bold text-emerald-900' : ''
-                              }
+                            <div
+                              key={rate.id}
+                              onClick={() => handleRateSelect(rate)}
+                              className={`group relative flex flex-col justify-between rounded-2xl border p-3.5 cursor-pointer transition-all duration-200 ${
+                                isRateSelected
+                                  ? 'border-emerald-600 bg-emerald-50/90 text-slate-900 shadow-md ring-2 ring-emerald-500/40'
+                                  : 'border-slate-200 bg-white text-slate-800 hover:border-emerald-300 hover:bg-slate-50/80 shadow-xs'
+                              }`}
                             >
-                              <td className="px-3 py-2">
-                                {r.label || getUserCategoryLabel(r.category, activeField?.sportType)}
-                              </td>
-                              <td className="px-3 py-2">
-                                {r.timeStart ? `${r.timeStart} - ${r.timeEnd}` : 'Sepanjang hari'}
-                              </td>
-                              <td className="px-3 py-2 text-right">
-                                Rp {r.price.toLocaleString('id-ID')}
-                              </td>
-                              <td className="px-3 py-2 text-right text-slate-500">
-                                {activeField?.sportType === 'RENANG' && r.unit === 'PER_JAM'
-                                  ? 'per orang / jam'
-                                  : r.unit === 'PER_HARI'
-                                  ? 'per hari'
-                                  : r.unit === 'PER_PERTANDINGAN'
-                                  ? 'per pertandingan'
-                                  : 'per jam'}
-                              </td>
-                            </tr>
+                              <div>
+                                <div className="flex items-center justify-between gap-1.5">
+                                  <span
+                                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                                      isDaily
+                                        ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                        : isNight
+                                        ? 'bg-indigo-100 text-indigo-900 border border-indigo-200'
+                                        : 'bg-emerald-100 text-emerald-900 border border-emerald-200'
+                                    }`}
+                                  >
+                                    {isDaily ? (
+                                      <>
+                                        <Sparkles className="h-3 w-3 text-amber-600" />
+                                        Paket Seharian
+                                      </>
+                                    ) : isNight ? (
+                                      <>
+                                        <Moon className="h-3 w-3 text-indigo-600" />
+                                        Malam / Prime
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Sun className="h-3 w-3 text-emerald-600" />
+                                        Pagi - Siang
+                                      </>
+                                    )}
+                                  </span>
+
+                                  <div
+                                    className={`flex h-4 w-4 items-center justify-center rounded-full border transition ${
+                                      isRateSelected
+                                        ? 'border-emerald-600 bg-emerald-600 text-white'
+                                        : 'border-slate-300 bg-white text-transparent'
+                                    }`}
+                                  >
+                                    <Check className="h-2.5 w-2.5 stroke-[3]" />
+                                  </div>
+                                </div>
+
+                                <div className="mt-2">
+                                  <div className="flex items-center gap-1.5 text-xs font-black text-slate-900">
+                                    <Clock className="h-3.5 w-3.5 text-slate-400" />
+                                    <span>
+                                      {rate.timeStart && rate.timeEnd
+                                        ? `${rate.timeStart} - ${rate.timeEnd} WIB`
+                                        : 'Sepanjang Hari (Bebas)'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-baseline justify-between">
+                                <div className="flex items-baseline gap-1">
+                                  <span className="text-sm font-black text-emerald-700">
+                                    Rp {rate.price.toLocaleString('id-ID')}
+                                  </span>
+                                  <span className="text-[10px] font-bold text-slate-500">
+                                    {activeField?.sportType === 'RENANG' && rate.unit === 'PER_JAM'
+                                      ? '/ orang / jam'
+                                      : rate.unit === 'PER_HARI'
+                                      ? '/ hari (flat)'
+                                      : rate.unit === 'PER_PERTANDINGAN'
+                                      ? '/ event'
+                                      : '/ jam'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Tombol Aksi Cepat Pilih Paket */}
+                              {isRateSelected && isDaily && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSelectAllPackageSlots(rate);
+                                  }}
+                                  className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-3 py-2 text-[11px] font-black text-white shadow-sm hover:from-amber-600 hover:to-amber-700 transition"
+                                >
+                                  <Zap className="h-3.5 w-3.5" />
+                                  <span>
+                                    Pilih Semua Slot Paket ({rate.timeStart || '08:00'} - {rate.timeEnd || '20:00'})
+                                  </span>
+                                </button>
+                              )}
+
+                              {isRateSelected && !isDaily && rate.timeStart && rate.timeEnd && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSelectAllHourlyWindowSlots(rate);
+                                  }}
+                                  className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-1.5 text-[10px] font-bold text-white shadow-xs hover:bg-emerald-700 transition"
+                                >
+                                  <Zap className="h-3 w-3" />
+                                  <span>Pilih Semua Jam di Rentang Ini</span>
+                                </button>
+                              )}
+                            </div>
                           );
                         })}
-                      </tbody>
-                    </table>
-                  </div>
+                      </div>
 
-                  {!userCategory && (
-                    <p className="mt-2 text-[11px] font-semibold text-amber-700">
-                      Pilih kategori di atas agar harga slot dan total tagihan terhitung
-                      akurat.
-                    </p>
+                      {/* Info highlight waktu terpilih */}
+                      {selectedRate && selectedRate.timeStart && selectedRate.timeEnd && (
+                        <div className="mt-3 flex items-center justify-between gap-2 rounded-xl bg-emerald-100/60 px-3.5 py-2 text-xs font-semibold text-emerald-900 border border-emerald-200">
+                          <div className="flex items-center gap-1.5">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                            <span>
+                              Waktu aktif: <strong>{selectedRate.timeStart} - {selectedRate.timeEnd} WIB</strong> (Slot pada jam ini ditandai khusus pada jadwal di bawah).
+                            </span>
+                          </div>
+                          {selectedSlots.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedSlots([])}
+                              className="text-[11px] font-bold text-slate-500 hover:text-rose-600 underline"
+                            >
+                              Reset Slot
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   {/* Kontrol Jumlah Pengguna / Perenang untuk Kolam Renang */}
@@ -701,19 +974,12 @@ export const VenueDetailPage: React.FC = () => {
                           </div>
                           <h4 className="mt-1 text-sm font-black text-slate-900">
                             Pertandingan / Seleksi / Kejuaraan
-                            {(() => {
-                              const matchRate = activeField?.rates?.find(
-                                (r) => r.category === 'PERTANDINGAN'
-                              );
-                              if (!matchRate) return '';
-                              const unitLabel =
-                                matchRate.unit === 'PER_HARI'
-                                  ? 'hari'
-                                  : matchRate.unit === 'PER_PERTANDINGAN'
-                                  ? 'pertandingan'
-                                  : 'jam';
-                              return ` (Rp ${matchRate.price.toLocaleString('id-ID')} / ${unitLabel})`;
-                            })()}
+                            {selectedRate && (
+                              <span className="text-emerald-700 font-extrabold ml-1">
+                                (Rp {selectedRate.price.toLocaleString('id-ID')} /{' '}
+                                {selectedRate.unit === 'PER_HARI' ? 'hari' : 'event'})
+                              </span>
+                            )}
                           </h4>
                           <p className="mt-1 text-xs text-slate-600 leading-relaxed">
                             Kegiatan pertandingan/turnamen memerlukan koordinasi jadwal dan surat rekomendasi resmi DISBUDPORA. Silakan hubungi langsung WhatsApp Admin untuk verifikasi dan penjadwalan.
@@ -721,9 +987,7 @@ export const VenueDetailPage: React.FC = () => {
                           <div className="mt-3">
                             <a
                               href={`https://wa.me/6281234567890?text=${encodeURIComponent(
-                                `Halo Admin DISBUDPORA Sport Bekasi,
-Saya ingin mengajukan permohonan sewa venue ${selectedVenue.name} untuk kegiatan Pertandingan / Seleksi / Kompetisi pada tanggal ${selectedDate}.
-Mohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
+                                `Halo Admin DISBUDPORA Sport Bekasi,\nSaya ingin mengajukan permohonan sewa venue ${selectedVenue.name} untuk kegiatan Pertandingan / Seleksi / Kompetisi pada tanggal ${selectedDate}.\nMohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
                               )}`}
                               target="_blank"
                               rel="noopener noreferrer"
@@ -747,6 +1011,18 @@ Mohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
                 <div className="flex items-center gap-1.5">
                   <div className="h-3 w-3 rounded bg-emerald-600" />
                   <span className="text-slate-900 font-bold">Terpilih ({selectedSlots.length})</span>
+                </div>
+                {selectedRate?.timeStart && selectedRate?.timeEnd && (
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-3 w-3 rounded bg-emerald-100 border-2 border-emerald-500 ring-1 ring-emerald-400/50" />
+                    <span className="text-emerald-900 font-extrabold">
+                      Waktu Pilihan ({selectedRate.timeStart} - {selectedRate.timeEnd})
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center gap-1.5">
+                  <div className="h-3 w-3 rounded bg-slate-100 border border-slate-300" />
+                  <span className="text-slate-600">Tersedia Lainnya</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <div className="h-3 w-3 rounded bg-slate-200" />
@@ -786,6 +1062,16 @@ Mohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
                       const isMaintenance = slot.status === 'MAINTENANCE';
                       const isPast = isSlotPast(selectedDate, slot.hour, slot.timeStart);
                       const isDisabled = isBooked || isMaintenance || isPast;
+                      const isInWindow =
+                        selectedRate?.timeStart && selectedRate?.timeEnd
+                          ? rateCoversHour(
+                              {
+                                timeStart: selectedRate.timeStart,
+                                timeEnd: selectedRate.timeEnd,
+                              },
+                              slot.hour
+                            )
+                          : false;
 
                       return (
                         <button
@@ -794,14 +1080,16 @@ Mohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
                           onClick={() => handleSlotToggle(slot)}
                           className={`relative flex flex-col items-center justify-center rounded-xl border p-3 text-center transition ${
                             isSelected
-                              ? 'border-emerald-600 bg-emerald-600 text-white shadow-md scale-[1.02]'
+                              ? 'border-emerald-600 bg-emerald-600 text-white shadow-md scale-[1.02] ring-2 ring-emerald-500/50'
                               : isBooked
                               ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
                               : isMaintenance
                               ? 'border-amber-200 bg-amber-50 text-amber-700 cursor-not-allowed'
                               : isPast
                               ? 'border-slate-200 bg-slate-100/70 text-slate-400 cursor-not-allowed opacity-60'
-                              : 'border-emerald-200 bg-emerald-50/50 text-slate-800 hover:bg-emerald-100'
+                              : isInWindow
+                              ? 'border-emerald-400 bg-emerald-50/90 text-emerald-950 font-bold hover:bg-emerald-100 shadow-xs ring-2 ring-emerald-400/40'
+                              : 'border-slate-200 bg-white text-slate-800 hover:border-emerald-300 hover:bg-emerald-50/40'
                           }`}
                         >
                           <div className="text-sm font-black">
@@ -819,12 +1107,26 @@ Mohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
                             <span className="mt-0.5 text-[10px] font-extrabold uppercase tracking-wide text-slate-400">
                               Lewat
                             </span>
+                          ) : isSelected ? (
+                            <div className="mt-0.5 flex flex-col items-center">
+                              <span className="text-[11px] font-bold text-emerald-100">
+                                Rp {(slot.price / 1000).toFixed(0)}k
+                              </span>
+                              <span className="rounded-full bg-emerald-700 px-1.5 py-0.2 text-[8px] font-black uppercase text-white">
+                                ✓ Dipilih
+                              </span>
+                            </div>
+                          ) : isInWindow ? (
+                            <div className="mt-0.5 flex flex-col items-center">
+                              <span className="text-[11px] font-black text-emerald-700">
+                                Rp {(slot.price / 1000).toFixed(0)}k
+                              </span>
+                              <span className="rounded-full bg-emerald-200/90 px-1.5 py-0.2 text-[8px] font-black uppercase text-emerald-900">
+                                Waktu Pilihan
+                              </span>
+                            </div>
                           ) : (
-                            <div
-                              className={`mt-0.5 text-[11px] font-bold ${
-                                isSelected ? 'text-emerald-100' : 'text-emerald-700'
-                              }`}
-                            >
+                            <div className="mt-0.5 text-[11px] font-bold text-slate-600">
                               Rp {(slot.price / 1000).toFixed(0)}k
                             </div>
                           )}
@@ -845,6 +1147,16 @@ Mohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
                       const isMaintenance = slot.status === 'MAINTENANCE';
                       const isPast = isSlotPast(selectedDate, slot.hour, slot.timeStart);
                       const isDisabled = isBooked || isMaintenance || isPast;
+                      const isInWindow =
+                        selectedRate?.timeStart && selectedRate?.timeEnd
+                          ? rateCoversHour(
+                              {
+                                timeStart: selectedRate.timeStart,
+                                timeEnd: selectedRate.timeEnd,
+                              },
+                              slot.hour
+                            )
+                          : false;
 
                       return (
                         <button
@@ -853,14 +1165,16 @@ Mohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
                           onClick={() => handleSlotToggle(slot)}
                           className={`relative flex flex-col items-center justify-center rounded-xl border p-3 text-center transition ${
                             isSelected
-                              ? 'border-emerald-600 bg-emerald-600 text-white shadow-md scale-[1.02]'
+                              ? 'border-emerald-600 bg-emerald-600 text-white shadow-md scale-[1.02] ring-2 ring-emerald-500/50'
                               : isBooked
                               ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
                               : isMaintenance
                               ? 'border-amber-200 bg-amber-50 text-amber-700 cursor-not-allowed'
                               : isPast
                               ? 'border-slate-200 bg-slate-100/70 text-slate-400 cursor-not-allowed opacity-60'
-                              : 'border-emerald-200 bg-emerald-50/50 text-slate-800 hover:bg-emerald-100'
+                              : isInWindow
+                              ? 'border-emerald-400 bg-emerald-50/90 text-emerald-950 font-bold hover:bg-emerald-100 shadow-xs ring-2 ring-emerald-400/40'
+                              : 'border-slate-200 bg-white text-slate-800 hover:border-emerald-300 hover:bg-emerald-50/40'
                           }`}
                         >
                           <div className="text-sm font-black">
@@ -878,12 +1192,26 @@ Mohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
                             <span className="mt-0.5 text-[10px] font-extrabold uppercase tracking-wide text-slate-400">
                               Lewat
                             </span>
+                          ) : isSelected ? (
+                            <div className="mt-0.5 flex flex-col items-center">
+                              <span className="text-[11px] font-bold text-emerald-100">
+                                Rp {(slot.price / 1000).toFixed(0)}k
+                              </span>
+                              <span className="rounded-full bg-emerald-700 px-1.5 py-0.2 text-[8px] font-black uppercase text-white">
+                                ✓ Dipilih
+                              </span>
+                            </div>
+                          ) : isInWindow ? (
+                            <div className="mt-0.5 flex flex-col items-center">
+                              <span className="text-[11px] font-black text-emerald-700">
+                                Rp {(slot.price / 1000).toFixed(0)}k
+                              </span>
+                              <span className="rounded-full bg-emerald-200/90 px-1.5 py-0.2 text-[8px] font-black uppercase text-emerald-900">
+                                Waktu Pilihan
+                              </span>
+                            </div>
                           ) : (
-                            <div
-                              className={`mt-0.5 text-[11px] font-bold ${
-                                isSelected ? 'text-emerald-100' : 'text-emerald-700'
-                              }`}
-                            >
+                            <div className="mt-0.5 text-[11px] font-bold text-slate-600">
                               Rp {(slot.price / 1000).toFixed(0)}k
                             </div>
                           )}
@@ -939,7 +1267,7 @@ Mohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
                 Periksa tanggal, lapangan, &amp; jam bermainmu
               </p>
 
-              <div className="mt-4 space-y-3 border-t border-slate-100 pt-4 text-xs">
+              <div className="mt-4 space-y-2.5 border-t border-slate-100 pt-4 text-xs">
                 <div className="flex justify-between">
                   <span className="text-slate-500">Venue:</span>
                   <span className="font-bold text-slate-900">{selectedVenue.name}</span>
@@ -948,6 +1276,25 @@ Mohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
                   <span className="text-slate-500">Lapangan:</span>
                   <span className="font-bold text-emerald-700">{activeField?.name}</span>
                 </div>
+                {selectedCategoryLabel && (
+                  <div className="flex justify-between items-start gap-2">
+                    <span className="text-slate-500 shrink-0">Kategori:</span>
+                    <span className="font-bold text-slate-900 text-right line-clamp-2">
+                      {selectedCategoryLabel}
+                    </span>
+                  </div>
+                )}
+                {selectedRate && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Pilihan Waktu:</span>
+                    <span className="font-bold text-emerald-700">
+                      {selectedRate.timeStart && selectedRate.timeEnd
+                        ? `${selectedRate.timeStart} - ${selectedRate.timeEnd} WIB`
+                        : 'Sepanjang Hari'}
+                      {selectedRate.unit === 'PER_HARI' ? ' (Paket)' : ''}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-slate-500">Tanggal:</span>
                   <span className="font-bold text-slate-900">{selectedDate}</span>
@@ -984,8 +1331,14 @@ Mohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
               {/* Price Calculation */}
               <div className="mt-5 border-t border-slate-200 pt-4">
                 <div className="flex items-center justify-between text-xs text-slate-600">
-                  <span>Subtotal Sewa ({selectedSlots.length} jam)</span>
-                  <span>Rp {selectedTotalPrice.toLocaleString('id-ID')}</span>
+                  <span>
+                    {selectedRate && selectedRate.unit === 'PER_HARI' && selectedSlots.length > 0
+                      ? `Tarif Paket Seharian (${selectedSlots.length} jam)`
+                      : `Subtotal Sewa (${selectedSlots.length} jam)`}
+                  </span>
+                  <span className="font-bold text-slate-900">
+                    Rp {selectedTotalPrice.toLocaleString('id-ID')}
+                  </span>
                 </div>
                 <div className="mt-1 flex items-center justify-between text-xs text-slate-600">
                   <span>Biaya Layanan Wibawa Mukti</span>
