@@ -31,6 +31,7 @@ import {
   categoriesForSport,
   getUserCategoryLabel,
   USER_CATEGORY_LABELS,
+  ALL_USER_CATEGORIES,
   RATE_UNIT_LABELS,
   STANDARD_TIME_WINDOWS,
 } from '../../../lib/pricing';
@@ -142,11 +143,10 @@ export default function AdminVenuesPage() {
   const [fieldRates, setFieldRates] = useState<RateRow[]>([]);
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
 
-  // Kategori yang relevan berubah mengikuti cabang olahraga yang dipilih,
-  // supaya admin tidak ditawarin "Profesional" untuk lapangan basket.
+  // Seluruh 5 kategori sistem tersedia lengkap untuk semua lapangan
   const availableCategories = React.useMemo(
-    () => categoriesForSport(fieldSportType),
-    [fieldSportType]
+    () => ALL_USER_CATEGORIES,
+    []
   );
 
   const resetFieldForm = () => {
@@ -976,15 +976,6 @@ export default function AdminVenuesPage() {
                         onChange={(e) => {
                           const next = e.target.value as SportCategory;
                           setFieldSportType(next);
-                          // Buang baris tarif yang kategorinya tidak lagi relevan
-                          // untuk cabang olahraga yang baru dipilih.
-                          const allowed = categoriesForSport(next);
-                          setFieldRates((prev) => {
-                            const kept = prev.filter((r) => allowed.includes(r.category));
-                            return kept.length === prev.length
-                              ? prev
-                              : kept.map((r) => ({ ...r, category: allowed[0] }));
-                          });
                         }}
                         className="w-full rounded-xl border border-line-strong bg-surface p-2.5 text-xs font-semibold text-fg outline-none focus:border-emerald-500"
                       >
@@ -1182,7 +1173,7 @@ export default function AdminVenuesPage() {
                                   }}
                                   className="w-full rounded-xl border border-line-strong bg-field px-3 py-2 text-xs font-semibold text-fg outline-none focus:border-emerald-500"
                                 >
-                                  {Array.from(new Set([...availableCategories, row.category])).map((c) => (
+                                  {ALL_USER_CATEGORIES.map((c) => (
                                     <option key={c} value={c}>
                                       {USER_CATEGORY_LABELS[c]}
                                     </option>

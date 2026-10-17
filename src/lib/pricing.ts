@@ -99,21 +99,20 @@ export function getUserCategoryLabel(category: UserCategory, sportType?: string)
   return USER_CATEGORY_LABELS[category] ?? category;
 }
 
+export const ALL_USER_CATEGORIES: UserCategory[] = [
+  'SOSIAL',
+  'LOKAL',
+  'AMATIR',
+  'PROFESIONAL',
+  'PERTANDINGAN',
+];
+
 /**
- * Daftar kategori yang relevan untuk sebuah lapangan, supaya admin tidak
- * ditawarin "Profesional" untuk lapangan basket.
+ * Daftar kategori lengkap untuk seluruh lapangan olahraga.
+ * Seluruh 5 tipe kategori sistem selalu tersedia agar admin bebas mengatur tier tarif.
  */
-export function categoriesForSport(sportType: string): UserCategory[] {
-  if (sportType === 'RENANG') {
-    return ['SOSIAL', 'PROFESIONAL', 'AMATIR', 'PERTANDINGAN'];
-  }
-  if (STADION_TIER_SPORTS.has(sportType)) {
-    return ['SOSIAL', 'LOKAL', 'AMATIR', 'PROFESIONAL', 'PERTANDINGAN'];
-  }
-  if (AMATEUR_TIER_SPORTS.has(sportType)) {
-    return ['SOSIAL', 'AMATIR', 'PROFESIONAL', 'PERTANDINGAN'];
-  }
-  return ['SOSIAL', 'PERTANDINGAN'];
+export function categoriesForSport(_sportType?: string): UserCategory[] {
+  return ALL_USER_CATEGORIES;
 }
 
 /** Rentang waktu yang lazim dipakai untuk lapangan stadion. */
