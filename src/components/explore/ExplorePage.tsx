@@ -135,7 +135,8 @@ export const ExplorePage: React.FC = () => {
     'STADION': 'Stadion',
     'ATLETIK': 'Trek Lari / Atletik',
     'ROLLER_SPORT': 'Trek Sepatu Roda',
-    'PADEL': 'Padel Tennis'
+    'PADEL': 'Padel Tennis',
+    'SQUASH': 'Lapangan Squash',
   };
 
   const CITY_LABELS: Record<string, string> = {

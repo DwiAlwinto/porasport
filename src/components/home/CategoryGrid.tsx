@@ -113,6 +113,20 @@ const CATEGORY_CARDS: SportCard[] = [
     desc: 'Sirkuit Grand Wisata',
     gradient: 'from-fuchsia-500/10 to-fuchsia-600/20 border-fuchsia-500/30 text-fuchsia-700',
   },
+  {
+    id: 'SQUASH',
+    name: 'Lapangan Squash',
+    emoji: '🎾',
+    desc: 'Indoor Court Standar',
+    gradient: 'from-amber-500/10 to-amber-600/20 border-amber-500/30 text-amber-700',
+  },
+  {
+    id: 'PADEL',
+    name: 'Padel Tennis',
+    emoji: '🎾',
+    desc: 'Padel Glass Court',
+    gradient: 'from-teal-500/10 to-teal-600/20 border-teal-500/30 text-teal-700',
+  },
 ];
 
 export const CategoryGrid: React.FC = () => {

@@ -32,6 +32,7 @@ const VALID_SPORTS = new Set<string>([
   'ATLETIK',
   'ROLLER_SPORT',
   'PADEL',
+  'SQUASH',
 ]);
 
 const VALID_CITIES = new Set<string>([

@@ -98,6 +98,8 @@ const SPORT_OPTIONS: { label: string; value: SportCategory }[] = [
   { label: 'Stadion Utama', value: 'STADION' },
   { label: 'Trek Lari / Atletik', value: 'ATLETIK' },
   { label: 'Trek Sepatu Roda', value: 'ROLLER_SPORT' },
+  { label: 'Lapangan Squash', value: 'SQUASH' },
+  { label: 'Padel Tennis', value: 'PADEL' },
 ];
 
 // Daftar fasilitas venue memakai satu sumber kebenaran agar nama yang ditulis

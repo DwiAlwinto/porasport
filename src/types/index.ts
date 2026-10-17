@@ -13,7 +13,8 @@ export type SportCategory =
   | 'STADION'
   | 'ATLETIK'
   | 'ROLLER_SPORT'
-  | 'PADEL';
+  | 'PADEL'
+  | 'SQUASH';
 
 export type CityLocation =
   | 'ALL'

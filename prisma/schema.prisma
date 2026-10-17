@@ -21,6 +21,7 @@ enum SportCategory {
   BASKET
   MINI_SOCCER
   PADEL
+  SQUASH
   TENIS
   SEPAK_BOLA
   VOLI
