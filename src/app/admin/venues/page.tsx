@@ -126,7 +126,11 @@ export default function AdminVenuesPage() {
   const [promoBadge, setPromoBadge] = useState('');
 
   // Modal State: Manage Fields
-  const [activeVenueForFields, setActiveVenueForFields] = useState<any | null>(null);
+  const [activeVenueId, setActiveVenueId] = useState<string | null>(null);
+  const activeVenueForFields = React.useMemo(() => {
+    if (!activeVenueId) return null;
+    return venues.find((v: any) => v.id === activeVenueId) || null;
+  }, [venues, activeVenueId]);
   const [fieldName, setFieldName] = useState('');
   const [fieldSportType, setFieldSportType] = useState<SportCategory>('FUTSAL');
   const [fieldType, setFieldType] = useState('Indoor');
@@ -334,6 +338,7 @@ export default function AdminVenuesPage() {
       const res = await deleteVenue(venue.id);
       if (res.success) {
         showToast(`Venue "${venue.name}" berhasil dihapus.`);
+        if (activeVenueId === venue.id) setActiveVenueId(null);
         fetchVenues();
       } else {
         alert(res.error || 'Gagal menghapus venue.');
@@ -393,10 +398,6 @@ export default function AdminVenuesPage() {
       if (res.success) {
         showToast(`Lapangan "${field.name}" berhasil dihapus.`);
         fetchVenues();
-        setActiveVenueForFields((prev: any) => ({
-          ...prev,
-          fields: prev.fields.filter((f: any) => f.id !== field.id),
-        }));
       } else {
         alert(res.error || 'Gagal menghapus lapangan.');
       }
@@ -543,7 +544,7 @@ export default function AdminVenuesPage() {
                 <button
                   onClick={() => {
                     resetFieldForm();
-                    setActiveVenueForFields(venue);
+                    setActiveVenueId(venue.id);
                   }}
                   className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50 transition"
                 >
@@ -808,7 +809,7 @@ export default function AdminVenuesPage() {
                 </div>
               </div>
               <button
-                onClick={() => setActiveVenueForFields(null)}
+                onClick={() => setActiveVenueId(null)}
                 className="rounded-lg p-2 text-fg-muted hover:bg-subtle hover:text-fg"
               >
                 ✕
@@ -1001,8 +1002,19 @@ export default function AdminVenuesPage() {
                         Tarif Siang / Non-Peak (cadangan)
                       </label>
                       <input
-                        type="number"
-                        value={fieldRates.length ? 'Otomatis dari tarif' : priceNonPeak}
+                        type={fieldRates.length ? 'text' : 'number'}
+                        value={
+                          fieldRates.length
+                            ? (() => {
+                                const validPrices = fieldRates
+                                  .map((r) => Number(r.price))
+                                  .filter((p) => !Number.isNaN(p) && p > 0);
+                                return validPrices.length
+                                  ? `Otomatis: ${formatRupiah(Math.min(...validPrices))}`
+                                  : 'Otomatis dari tarif kategori';
+                              })()
+                            : priceNonPeak
+                        }
                         disabled={fieldRates.length > 0}
                         onChange={(e) => setPriceNonPeak(Number(e.target.value))}
                         className="w-full rounded-xl border border-line-strong bg-surface p-2.5 text-xs font-semibold text-fg outline-none focus:border-emerald-500 disabled:bg-subtle disabled:text-fg-muted"
@@ -1014,8 +1026,19 @@ export default function AdminVenuesPage() {
                         Tarif Malam / Peak Hour (cadangan)
                       </label>
                       <input
-                        type="number"
-                        value={fieldRates.length ? 'Otomatis dari tarif' : pricePeak}
+                        type={fieldRates.length ? 'text' : 'number'}
+                        value={
+                          fieldRates.length
+                            ? (() => {
+                                const validPrices = fieldRates
+                                  .map((r) => Number(r.price))
+                                  .filter((p) => !Number.isNaN(p) && p > 0);
+                                return validPrices.length
+                                  ? `Otomatis: ${formatRupiah(Math.max(...validPrices))}`
+                                  : 'Otomatis dari tarif kategori';
+                              })()
+                            : pricePeak
+                        }
                         disabled={fieldRates.length > 0}
                         onChange={(e) => setPricePeak(Number(e.target.value))}
                         className="w-full rounded-xl border border-line-strong bg-surface p-2.5 text-xs font-semibold text-fg outline-none focus:border-emerald-500 disabled:bg-subtle disabled:text-fg-muted"
@@ -1120,7 +1143,7 @@ export default function AdminVenuesPage() {
                                   }}
                                   className="w-full rounded-xl border border-line-strong bg-field px-3 py-2 text-xs font-semibold text-fg outline-none focus:border-emerald-500"
                                 >
-                                  {(['SOSIAL', 'LOKAL', 'AMATIR', 'PROFESIONAL', 'PERTANDINGAN'] as UserCategory[]).map((c) => (
+                                  {Array.from(new Set([...availableCategories, row.category])).map((c) => (
                                     <option key={c} value={c}>
                                       {USER_CATEGORY_LABELS[c]}
                                     </option>
@@ -1292,7 +1315,7 @@ export default function AdminVenuesPage() {
             <div className="mt-5 flex justify-end border-t border-line pt-3">
               <button
                 type="button"
-                onClick={() => setActiveVenueForFields(null)}
+                onClick={() => setActiveVenueId(null)}
                 className="rounded-xl border border-line-strong px-4 py-2 text-xs font-bold text-fg-subtle hover:bg-subtle"
               >
                 Tutup

@@ -105,9 +105,9 @@ export function categoriesForSport(sportType: string): UserCategory[] {
     return ['SOSIAL', 'LOKAL', 'AMATIR', 'PROFESIONAL', 'PERTANDINGAN'];
   }
   if (AMATEUR_TIER_SPORTS.has(sportType)) {
-    return ['PERTANDINGAN', 'PROFESIONAL', 'AMATIR'];
+    return ['SOSIAL', 'AMATIR', 'PROFESIONAL', 'PERTANDINGAN'];
   }
-  return ['PERTANDINGAN'];
+  return ['SOSIAL', 'PERTANDINGAN'];
 }
 
 /** Rentang waktu yang lazim dipakai untuk lapangan stadion. */
@@ -138,7 +138,7 @@ export type ResolvableRate = {
  * Apakah sebuah tarif berlaku pada jam tertentu?
  *
  * - timeStart / timeEnd null → berlaku sepanjang hari
- * - selain itu, jam harus berada di dalam rentang [timeStart, timeEnd]
+ * - selain itu, slot 1 jam [hour, hour + 1] harus berada di dalam rentang [timeStart, timeEnd]
  */
 export function rateCoversHour(
   rate: Pick<ResolvableRate, 'timeStart' | 'timeEnd'>,
@@ -148,8 +148,9 @@ export function rateCoversHour(
   const start = minutesFromHHmm(rate.timeStart);
   const end = minutesFromHHmm(rate.timeEnd);
   if (Number.isNaN(start) || Number.isNaN(end)) return true;
-  const current = hour * 60;
-  return current >= start && current <= end;
+  const slotStart = hour * 60;
+  const slotEnd = (hour + 1) * 60;
+  return slotStart >= start && slotEnd <= end;
 }
 
 /**
