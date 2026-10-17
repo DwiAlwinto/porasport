@@ -539,7 +539,7 @@ export const CheckoutModal: React.FC = () => {
                       Isi Data Verifikasi &amp; Bukti Transfer
                     </h4>
                     <p className="text-[11px] text-slate-500">
-                      Data ini diperlukan untuk validasi penerimaan setoran retribusi daerah.
+                      Data ini diperlukan untuk validasi pemesanan dan bukti transaksi sewa.
                     </p>
                   </div>
                 </div>

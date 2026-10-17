@@ -188,12 +188,12 @@ export default function AdminVenuesPage() {
       { ...newRateRow('PERTANDINGAN', 'PER_HARI', 'Pertandingan / Seleksi / Kompetisi'), price: '3500000' },
     ];
     setFieldRates(rows);
-    showToast('Paket Kolam Renang PERDA dimuat: 4 kategori tarif siap disimpan.');
+    showToast('Template Kolam Renang dimuat: silakan sesuaikan nama kategori, jam, dan harga nominalnya.');
   };
 
   /**
-   * Preset Paket Stadion Wibawa Mukti:
-   * 7 baris tarif PERDA resmi
+   * Template Paket Stadion:
+   * Contoh susunan tarif stadion
    */
   const applyStadiumPreset = () => {
     const rows: RateRow[] = [
@@ -206,11 +206,11 @@ export default function AdminVenuesPage() {
       { ...newRateRow('SOSIAL', 'PER_PERTANDINGAN', 'Sosial / Umum'), timeStart: '', timeEnd: '', price: '2500000' },
     ];
     setFieldRates(rows);
-    showToast('Paket Stadion dimuat: 7 baris tarif PERDA siap diisi nominalnya.');
+    showToast('Template Stadion dimuat: silakan sesuaikan nama kategori, jam, dan harga nominalnya.');
   };
 
   /**
-   * Preset Lapangan Reguler (Futsal / Mini Soccer / Basket / Badminton)
+   * Template Lapangan Reguler (Futsal / Mini Soccer / Basket / Badminton)
    */
   const applyRegularPreset = () => {
     const rows: RateRow[] = [
@@ -219,7 +219,7 @@ export default function AdminVenuesPage() {
       { ...newRateRow('PERTANDINGAN', 'PER_HARI', 'Event / Turnamen'), timeStart: '', timeEnd: '', price: '1500000' },
     ];
     setFieldRates(rows);
-    showToast('Paket Lapangan Reguler dimuat: 3 baris tarif siap disimpan.');
+    showToast('Template Lapangan Reguler dimuat: silakan sesuaikan nama kategori, jam, dan harga nominalnya.');
   };
 
   const handleOpenEditField = (f: any) => {
@@ -346,10 +346,38 @@ export default function AdminVenuesPage() {
     });
   };
 
+  // Baris tarif yang bentrok (Tipe Sistem + jam sama). Server hanya bisa
+  // menyimpan satu tarif per kombinasi ini, jadi tandai sebelum disimpan.
+  const duplicateRateKeys = React.useMemo(() => {
+    const count = new Map<string, number>();
+    const keyOf = (r: RateRow) =>
+      `${r.category}|${r.timeStart && r.timeEnd ? `${r.timeStart}-${r.timeEnd}` : '-'}`;
+    for (const r of fieldRates) count.set(keyOf(r), (count.get(keyOf(r)) ?? 0) + 1);
+    return new Set(fieldRates.filter((r) => (count.get(keyOf(r)) ?? 0) > 1).map((r) => r.key));
+  }, [fieldRates]);
+
   // Save Field
   const handleSaveField = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeVenueForFields || !fieldName.trim()) return;
+
+    if (duplicateRateKeys.size > 0) {
+      alert(
+        'Ada kategori yang bentrok: Tipe Sistem dan jam berlakunya sama persis dengan baris lain.\n\n' +
+          'Ubah Tipe Sistem (mis. Sosial → Amatir untuk Sekolah/Institusi) atau ubah jamnya, lalu simpan lagi.'
+      );
+      return;
+    }
+
+    const emptyPrice = fieldRates.filter((r) => r.price === '' || !(Number(r.price) > 0));
+    if (emptyPrice.length > 0) {
+      alert(
+        `Tarif masih kosong pada: ${emptyPrice
+          .map((r) => r.label || USER_CATEGORY_LABELS[r.category])
+          .join(', ')}.\n\nIsi nominalnya atau hapus barisnya.`
+      );
+      return;
+    }
 
     // Hanya baris yang nominalnya sudah diisi yang dikirim.
     const rates = fieldRates
@@ -1070,21 +1098,21 @@ export default function AdminVenuesPage() {
                           onClick={applySwimmingPreset}
                           className="rounded-lg border border-cyan-300 bg-cyan-100/70 px-2.5 py-1.5 text-[11px] font-bold text-cyan-900 transition hover:bg-cyan-200"
                         >
-                          🏊 Preset Renang PERDA
+                          🏊 Template Renang
                         </button>
                         <button
                           type="button"
                           onClick={applyStadiumPreset}
                           className="rounded-lg border border-emerald-300 bg-emerald-100/70 px-2.5 py-1.5 text-[11px] font-bold text-emerald-900 transition hover:bg-emerald-200"
                         >
-                          🏟️ Preset Stadion PERDA
+                          🏟️ Template Stadion
                         </button>
                         <button
                           type="button"
                           onClick={applyRegularPreset}
                           className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[11px] font-bold text-blue-800 transition hover:bg-blue-100"
                         >
-                          ⚽ Preset Reguler
+                          ⚽ Template Reguler
                         </button>
                         <button
                           type="button"
@@ -1099,18 +1127,29 @@ export default function AdminVenuesPage() {
                     {fieldRates.length === 0 ? (
                       <div className="rounded-xl border border-dashed border-line-strong bg-surface p-4 text-center text-[11px] text-fg-muted">
                         Belum ada kategori penyewa. Pilih tombol{' '}
-                        <span className="font-bold text-cyan-800">Preset Renang</span>,{' '}
-                        <span className="font-bold text-emerald-700">Preset Stadion</span>, atau{' '}
+                        <span className="font-bold text-cyan-800">Template Renang</span>,{' '}
+                        <span className="font-bold text-emerald-700">Template Stadion</span>,{' '}
+                        <span className="font-bold text-blue-700">Template Reguler</span>, atau{' '}
                         <span className="font-bold text-fg-subtle">+ Tambah Kategori</span> untuk
-                        menentukan kategori & tarif secara manual.
+                        menentukan nama kategori, jam, dan harga sewa bebas sesuai kebijakan pengelola.
                       </div>
                     ) : (
                       <div className="space-y-3">
                         {fieldRates.map((row) => (
                           <div
                             key={row.key}
-                            className="rounded-2xl border border-line bg-surface p-3.5 shadow-xs transition hover:border-emerald-300"
+                            className={`rounded-2xl border bg-surface p-3.5 shadow-xs transition ${
+                              duplicateRateKeys.has(row.key)
+                                ? 'border-red-400 ring-2 ring-red-100'
+                                : 'border-line hover:border-emerald-300'
+                            }`}
                           >
+                            {duplicateRateKeys.has(row.key) && (
+                              <div className="mb-2.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] font-bold text-red-700">
+                                ⚠️ Bentrok: Tipe Sistem &amp; jam sama dengan baris lain. Hanya satu yang bisa
+                                disimpan — ganti Tipe Sistem atau jam berlakunya.
+                              </div>
+                            )}
                             {/* Baris 1: Label Kategori, Tipe Sistem, dan Tombol Hapus */}
                             <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
                               <div className="flex-1">
@@ -1225,7 +1264,7 @@ export default function AdminVenuesPage() {
                               {/* Tarif (Rp) */}
                               <div className="sm:col-span-4">
                                 <label className="mb-1 block text-[10px] font-bold uppercase text-fg-muted">
-                                  Tarif Retribusi (Rp)
+                                  Tarif Sewa (Rp)
                                 </label>
                                 <div className="relative">
                                   <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-xs font-bold text-fg-muted">

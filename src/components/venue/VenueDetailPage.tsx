@@ -523,7 +523,7 @@ export const VenueDetailPage: React.FC = () => {
                   </div>
                   <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-2.5 text-left sm:text-right">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      {activeField.sportType === 'RENANG' ? 'Tarif Dasar PERDA' : 'Tarif Dasar'}
+                      Tarif Dasar
                     </span>
                     <div className="text-sm font-extrabold text-emerald-700">
                       Rp {activeField.priceNonPeak.toLocaleString('id-ID')}
@@ -660,7 +660,7 @@ export const VenueDetailPage: React.FC = () => {
                             Jumlah Pengguna / Perenang
                           </h5>
                           <p className="text-[11px] text-emerald-700">
-                            Tarif resmi PERDA dihitung per orang per jam
+                            Tarif dihitung per orang per jam
                           </p>
                         </div>
                       </div>
@@ -700,10 +700,23 @@ export const VenueDetailPage: React.FC = () => {
                             </span>
                           </div>
                           <h4 className="mt-1 text-sm font-black text-slate-900">
-                            Pertandingan / Seleksi / Kejuaraan (Rp 3.500.000 / hari)
+                            Pertandingan / Seleksi / Kejuaraan
+                            {(() => {
+                              const matchRate = activeField?.rates?.find(
+                                (r) => r.category === 'PERTANDINGAN'
+                              );
+                              if (!matchRate) return '';
+                              const unitLabel =
+                                matchRate.unit === 'PER_HARI'
+                                  ? 'hari'
+                                  : matchRate.unit === 'PER_PERTANDINGAN'
+                                  ? 'pertandingan'
+                                  : 'jam';
+                              return ` (Rp ${matchRate.price.toLocaleString('id-ID')} / ${unitLabel})`;
+                            })()}
                           </h4>
                           <p className="mt-1 text-xs text-slate-600 leading-relaxed">
-                            Sesuai PERDA, kegiatan pertandingan/kompetisi memerlukan <strong>Surat Rekomendasi Resmi DISBUDPORA</strong>. Silakan hubungi langsung WhatsApp Admin untuk verifikasi rekomendasi dan penjadwalan.
+                            Kegiatan pertandingan/turnamen memerlukan koordinasi jadwal dan surat rekomendasi resmi DISBUDPORA. Silakan hubungi langsung WhatsApp Admin untuk verifikasi dan penjadwalan.
                           </p>
                           <div className="mt-3">
                             <a

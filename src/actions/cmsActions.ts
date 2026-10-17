@@ -62,7 +62,13 @@ function normaliseRateInputs(input?: FieldRateInput[]): NormalisedRate[] {
     const window = timeStart && timeEnd ? { timeStart, timeEnd } : { timeStart: null, timeEnd: null };
 
     const key = `${r.category}|${window.timeStart ?? '-'}|${window.timeEnd ?? '-'}`;
-    if (seen.has(key)) continue;
+    if (seen.has(key)) {
+      // Jangan dibuang diam-diam: admin mengira datanya tersimpan padahal tidak.
+      const jam = window.timeStart ? `${window.timeStart}-${window.timeEnd}` : 'sepanjang hari';
+      throw new UserFacingError(
+        `Tarif "${r.label?.trim() || r.category}" bentrok: tipe sistem ${r.category} pada jam ${jam} sudah dipakai baris lain. Ganti Tipe Sistem atau jam berlakunya.`
+      );
+    }
     seen.add(key);
 
     const unit = VALID_UNITS.includes(r.unit) ? r.unit : 'PER_JAM';
@@ -274,13 +280,19 @@ export async function createOrUpdateField(data: {
     // Simpan tarif kategori. Selalu dihapus lalu dibuat ulang supaya form admin
     // menjadi sumber kebenaran tunggal (tidak ada tarif nyasar yang tertinggal).
     if (data.rates) {
-      await prisma.fieldRate.deleteMany({ where: { fieldId: field.id } });
-      if (rates.length) {
-        await prisma.fieldRate.createMany({
-          data: rates.map((r, i) => ({ ...r, fieldId: field.id, sortOrder: i })),
-        });
-      }
-      await refreshFutureSlotPrices(field.id);
+      const fieldId = field.id;
+      // Atomik: kalau createMany gagal, tarif lama tidak ikut hilang.
+      await prisma.$transaction([
+        prisma.fieldRate.deleteMany({ where: { fieldId } }),
+        ...(rates.length
+          ? [
+              prisma.fieldRate.createMany({
+                data: rates.map((r, i) => ({ ...r, fieldId, sortOrder: i })),
+              }),
+            ]
+          : []),
+      ]);
+      await refreshFutureSlotPrices(fieldId);
     }
 
     // Generate initial slots (hanya saat lapangan baru).
@@ -362,22 +374,35 @@ async function refreshFutureSlotPrices(fieldId: string) {
 
   const today = dateFromKey(todayKey());
 
-  const slots = await prisma.fieldSlot.findMany({
+  // Harga slot hanya bergantung pada (jam, isPeak), jadi cukup satu updateMany
+  // per kombinasi — bukan ratusan update satu per satu yang bikin simpan lambat.
+  const groups = await prisma.fieldSlot.groupBy({
+    by: ['hour', 'isPeakHour'],
     where: { fieldId, date: { gte: today }, status: 'AVAILABLE' },
   });
 
-  for (const slot of slots) {
-    const resolved = resolveFieldPrice({
+  const updates = groups.map((g) => {
+    const { price } = resolveFieldPrice({
       rates: field.rates,
       priceNonPeak: field.priceNonPeak,
       pricePeak: field.pricePeak,
-      hour: slot.hour,
-      isPeak: slot.isPeakHour,
+      hour: g.hour,
+      isPeak: g.isPeakHour,
     });
-    if (resolved.price !== slot.price) {
-      await prisma.fieldSlot.update({ where: { id: slot.id }, data: { price: resolved.price } });
-    }
-  }
+    return prisma.fieldSlot.updateMany({
+      where: {
+        fieldId,
+        date: { gte: today },
+        status: 'AVAILABLE',
+        hour: g.hour,
+        isPeakHour: g.isPeakHour,
+        NOT: { price },
+      },
+      data: { price },
+    });
+  });
+
+  if (updates.length) await prisma.$transaction(updates);
 }
 
 /**
