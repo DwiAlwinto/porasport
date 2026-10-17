@@ -864,7 +864,7 @@ export const VenueDetailPage: React.FC = () => {
                               </div>
 
                               {/* Tombol Aksi Cepat Pilih Paket */}
-                              {isRateSelected && isDaily && (
+                              {isRateSelected && isDaily && rate.category !== 'PERTANDINGAN' && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -878,6 +878,13 @@ export const VenueDetailPage: React.FC = () => {
                                     Pilih Semua Slot Paket ({rate.timeStart || '08:00'} - {rate.timeEnd || '20:00'})
                                   </span>
                                 </button>
+                              )}
+
+                              {isRateSelected && rate.category === 'PERTANDINGAN' && (
+                                <div className="mt-3 flex items-center justify-center gap-1.5 rounded-xl bg-amber-100 border border-amber-300 px-3 py-2 text-[11px] font-bold text-amber-900">
+                                  <Award className="h-3.5 w-3.5 text-amber-700 shrink-0" />
+                                  <span>Wajib Koordinasi &amp; Surat Rekomendasi</span>
+                                </div>
                               )}
 
                               {isRateSelected && !isDaily && rate.timeStart && rate.timeEnd && (
@@ -898,8 +905,8 @@ export const VenueDetailPage: React.FC = () => {
                         })}
                       </div>
 
-                      {/* Info highlight waktu terpilih */}
-                      {selectedRate && selectedRate.timeStart && selectedRate.timeEnd && (
+                      {/* Info highlight waktu terpilih (hanya untuk kategori reguler) */}
+                      {userCategory !== 'PERTANDINGAN' && selectedRate && selectedRate.timeStart && selectedRate.timeEnd && (
                         <div className="mt-3 flex items-center justify-between gap-2 rounded-xl bg-emerald-100/60 px-3.5 py-2 text-xs font-semibold text-emerald-900 border border-emerald-200">
                           <div className="flex items-center gap-1.5">
                             <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
@@ -1003,223 +1010,252 @@ export const VenueDetailPage: React.FC = () => {
                   )}
                 </div>
               )}
-              <div className="mt-4 flex flex-wrap items-center gap-4 text-xs font-semibold">
-                <div className="flex items-center gap-1.5">
-                  <div className="h-3 w-3 rounded bg-emerald-100 border border-emerald-400" />
-                  <span className="text-slate-600">Tersedia (Klik pilih)</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="h-3 w-3 rounded bg-emerald-600" />
-                  <span className="text-slate-900 font-bold">Terpilih ({selectedSlots.length})</span>
-                </div>
-                {selectedRate?.timeStart && selectedRate?.timeEnd && (
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-3 w-3 rounded bg-emerald-100 border-2 border-emerald-500 ring-1 ring-emerald-400/50" />
-                    <span className="text-emerald-900 font-extrabold">
-                      Waktu Pilihan ({selectedRate.timeStart} - {selectedRate.timeEnd})
-                    </span>
+              {userCategory === 'PERTANDINGAN' ? (
+                <div className="mt-6 rounded-2xl border-2 border-dashed border-amber-300 bg-gradient-to-br from-amber-50 via-white to-amber-50/60 p-6 text-center shadow-xs">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500 text-white shadow-md">
+                    <Award className="h-7 w-7" />
                   </div>
-                )}
-                <div className="flex items-center gap-1.5">
-                  <div className="h-3 w-3 rounded bg-slate-100 border border-slate-300" />
-                  <span className="text-slate-600">Tersedia Lainnya</span>
+                  <h4 className="mt-3 text-base font-black text-slate-900">
+                    Jadwal Slot Jam Dinonaktifkan (Khusus Pertandingan)
+                  </h4>
+                  <p className="mt-1.5 text-xs text-slate-600 max-w-lg mx-auto leading-relaxed">
+                    Untuk kegiatan <strong>Pertandingan / Seleksi / Kejuaraan resmi</strong>, lapangan disewakan secara penuh (sepanjang hari) dan tidak menggunakan sistem slot jam reguler. Silakan hubungi langsung WhatsApp Admin DISBUDPORA untuk verifikasi surat rekomendasi dan kesiapan lapangan.
+                  </p>
+                  <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <a
+                      href={`https://wa.me/6281234567890?text=${encodeURIComponent(
+                        `Halo Admin DISBUDPORA Sport Bekasi,\nSaya ingin mengajukan permohonan sewa venue ${selectedVenue.name} untuk kegiatan Pertandingan / Seleksi / Kompetisi pada tanggal ${selectedDate}.\nMohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-xs font-black text-white shadow-md hover:bg-emerald-700 transition"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      <span>Hubungi WhatsApp Admin DISBUDPORA</span>
+                    </a>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="h-3 w-3 rounded bg-slate-200" />
-                  <span className="text-slate-400">Booked / Penuh</span>
-                </div>
-              </div>
+              ) : (
+                <>
+                  <div className="mt-4 flex flex-wrap items-center gap-4 text-xs font-semibold">
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-3 w-3 rounded bg-emerald-100 border border-emerald-400" />
+                      <span className="text-slate-600">Tersedia (Klik pilih)</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-3 w-3 rounded bg-emerald-600" />
+                      <span className="text-slate-900 font-bold">Terpilih ({selectedSlots.length})</span>
+                    </div>
+                    {selectedRate?.timeStart && selectedRate?.timeEnd && (
+                      <div className="flex items-center gap-1.5">
+                        <div className="h-3 w-3 rounded bg-emerald-100 border-2 border-emerald-500 ring-1 ring-emerald-400/50" />
+                        <span className="text-emerald-900 font-extrabold">
+                          Waktu Pilihan ({selectedRate.timeStart} - {selectedRate.timeEnd})
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-3 w-3 rounded bg-slate-100 border border-slate-300" />
+                      <span className="text-slate-600">Tersedia Lainnya</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-3 w-3 rounded bg-slate-200" />
+                      <span className="text-slate-400">Booked / Penuh</span>
+                    </div>
+                  </div>
 
-              {/* Status / Error pemuatan jadwal */}
-              {(slotsLoading || slotsError) && (
-                <div
-                  className={`mt-4 flex items-start gap-2 rounded-xl border p-3 text-[11px] font-semibold ${
-                    slotsError
-                      ? 'border-amber-200 bg-amber-50 text-amber-800'
-                      : 'border-slate-200 bg-slate-50 text-slate-500'
-                  }`}
-                >
-                  <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <span>
-                    {slotsError
-                      ? `${slotsError} Jadwal di bawah adalah estimasi; ketersediaan sebenarnya diverifikasi server saat booking.`
-                      : 'Memuat jadwal terbaru...'}
-                  </span>
-                </div>
+                  {/* Status / Error pemuatan jadwal */}
+                  {(slotsLoading || slotsError) && (
+                    <div
+                      className={`mt-4 flex items-start gap-2 rounded-xl border p-3 text-[11px] font-semibold ${
+                        slotsError
+                          ? 'border-amber-200 bg-amber-50 text-amber-800'
+                          : 'border-slate-200 bg-slate-50 text-slate-500'
+                      }`}
+                    >
+                      <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        {slotsError
+                          ? `${slotsError} Jadwal di bawah adalah estimasi; ketersediaan sebenarnya diverifikasi server saat booking.`
+                          : 'Memuat jadwal terbaru...'}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Hourly Grid (06:00 - 23:00) */}
+                  <div className="mt-6">
+                    <div className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Pagi - Siang (06:00 - 16:00 WIB • Tarif Non-Peak)
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-5">
+                      {daySlots
+                        .filter((s) => !s.isPeakHour)
+                        .map((slot) => {
+                          const isSelected = selectedSlots.some((s) => s.id === slot.id);
+                          const isBooked = slot.status === 'BOOKED';
+                          const isMaintenance = slot.status === 'MAINTENANCE';
+                          const isPast = isSlotPast(selectedDate, slot.hour, slot.timeStart);
+                          const isDisabled = isBooked || isMaintenance || isPast;
+                          const isInWindow =
+                            selectedRate?.timeStart && selectedRate?.timeEnd
+                              ? rateCoversHour(
+                                  {
+                                    timeStart: selectedRate.timeStart,
+                                    timeEnd: selectedRate.timeEnd,
+                                  },
+                                  slot.hour
+                                )
+                              : false;
+
+                          return (
+                            <button
+                              key={slot.id}
+                              disabled={isDisabled}
+                              onClick={() => handleSlotToggle(slot)}
+                              className={`relative flex flex-col items-center justify-center rounded-xl border p-3 text-center transition ${
+                                isSelected
+                                  ? 'border-emerald-600 bg-emerald-600 text-white shadow-md scale-[1.02] ring-2 ring-emerald-500/50'
+                                  : isBooked
+                                  ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
+                                  : isMaintenance
+                                  ? 'border-amber-200 bg-amber-50 text-amber-700 cursor-not-allowed'
+                                  : isPast
+                                  ? 'border-slate-200 bg-slate-100/70 text-slate-400 cursor-not-allowed opacity-60'
+                                  : isInWindow
+                                  ? 'border-emerald-400 bg-emerald-50/90 text-emerald-950 font-bold hover:bg-emerald-100 shadow-xs ring-2 ring-emerald-400/40'
+                                  : 'border-slate-200 bg-white text-slate-800 hover:border-emerald-300 hover:bg-emerald-50/40'
+                              }`}
+                            >
+                              <div className="text-sm font-black">
+                                {slot.timeStart} - {slot.timeEnd}
+                              </div>
+                              {isBooked ? (
+                                <span className="mt-0.5 text-[10px] font-semibold uppercase text-slate-400">
+                                  Booked
+                                </span>
+                              ) : isMaintenance ? (
+                                <span className="mt-0.5 text-[10px] font-semibold uppercase text-amber-600">
+                                  Turnamen
+                                </span>
+                              ) : isPast ? (
+                                <span className="mt-0.5 text-[10px] font-extrabold uppercase tracking-wide text-slate-400">
+                                  Lewat
+                                </span>
+                              ) : isSelected ? (
+                                <div className="mt-0.5 flex flex-col items-center">
+                                  <span className="text-[11px] font-bold text-emerald-100">
+                                    Rp {(slot.price / 1000).toFixed(0)}k
+                                  </span>
+                                  <span className="rounded-full bg-emerald-700 px-1.5 py-0.2 text-[8px] font-black uppercase text-white">
+                                    ✓ Dipilih
+                                  </span>
+                                </div>
+                              ) : isInWindow ? (
+                                <div className="mt-0.5 flex flex-col items-center">
+                                  <span className="text-[11px] font-black text-emerald-700">
+                                    Rp {(slot.price / 1000).toFixed(0)}k
+                                  </span>
+                                  <span className="rounded-full bg-emerald-200/90 px-1.5 py-0.2 text-[8px] font-black uppercase text-emerald-900">
+                                    Waktu Pilihan
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="mt-0.5 text-[11px] font-bold text-slate-600">
+                                  Rp {(slot.price / 1000).toFixed(0)}k
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                    </div>
+
+                    <div className="mt-6 mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Malam / Peak Hour (16:00 - 23:00 WIB • Tarif Prime)
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-5">
+                      {daySlots
+                        .filter((s) => s.isPeakHour)
+                        .map((slot) => {
+                          const isSelected = selectedSlots.some((s) => s.id === slot.id);
+                          const isBooked = slot.status === 'BOOKED';
+                          const isMaintenance = slot.status === 'MAINTENANCE';
+                          const isPast = isSlotPast(selectedDate, slot.hour, slot.timeStart);
+                          const isDisabled = isBooked || isMaintenance || isPast;
+                          const isInWindow =
+                            selectedRate?.timeStart && selectedRate?.timeEnd
+                              ? rateCoversHour(
+                                  {
+                                    timeStart: selectedRate.timeStart,
+                                    timeEnd: selectedRate.timeEnd,
+                                  },
+                                  slot.hour
+                                )
+                              : false;
+
+                          return (
+                            <button
+                              key={slot.id}
+                              disabled={isDisabled}
+                              onClick={() => handleSlotToggle(slot)}
+                              className={`relative flex flex-col items-center justify-center rounded-xl border p-3 text-center transition ${
+                                isSelected
+                                  ? 'border-emerald-600 bg-emerald-600 text-white shadow-md scale-[1.02] ring-2 ring-emerald-500/50'
+                                  : isBooked
+                                  ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
+                                  : isMaintenance
+                                  ? 'border-amber-200 bg-amber-50 text-amber-700 cursor-not-allowed'
+                                  : isPast
+                                  ? 'border-slate-200 bg-slate-100/70 text-slate-400 cursor-not-allowed opacity-60'
+                                  : isInWindow
+                                  ? 'border-emerald-400 bg-emerald-50/90 text-emerald-950 font-bold hover:bg-emerald-100 shadow-xs ring-2 ring-emerald-400/40'
+                                  : 'border-slate-200 bg-white text-slate-800 hover:border-emerald-300 hover:bg-emerald-50/40'
+                              }`}
+                            >
+                              <div className="text-sm font-black">
+                                {slot.timeStart} - {slot.timeEnd}
+                              </div>
+                              {isBooked ? (
+                                <span className="mt-0.5 text-[10px] font-semibold uppercase text-slate-400">
+                                  Booked
+                                </span>
+                              ) : isMaintenance ? (
+                                <span className="mt-0.5 text-[10px] font-semibold uppercase text-amber-600">
+                                  Turnamen
+                                </span>
+                              ) : isPast ? (
+                                <span className="mt-0.5 text-[10px] font-extrabold uppercase tracking-wide text-slate-400">
+                                  Lewat
+                                </span>
+                              ) : isSelected ? (
+                                <div className="mt-0.5 flex flex-col items-center">
+                                  <span className="text-[11px] font-bold text-emerald-100">
+                                    Rp {(slot.price / 1000).toFixed(0)}k
+                                  </span>
+                                  <span className="rounded-full bg-emerald-700 px-1.5 py-0.2 text-[8px] font-black uppercase text-white">
+                                    ✓ Dipilih
+                                  </span>
+                                </div>
+                              ) : isInWindow ? (
+                                <div className="mt-0.5 flex flex-col items-center">
+                                  <span className="text-[11px] font-black text-emerald-700">
+                                    Rp {(slot.price / 1000).toFixed(0)}k
+                                  </span>
+                                  <span className="rounded-full bg-emerald-200/90 px-1.5 py-0.2 text-[8px] font-black uppercase text-emerald-900">
+                                    Waktu Pilihan
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="mt-0.5 text-[11px] font-bold text-slate-600">
+                                  Rp {(slot.price / 1000).toFixed(0)}k
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                </>
               )}
-
-              {/* Hourly Grid (06:00 - 23:00) */}
-              <div className="mt-6">
-                <div className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Pagi - Siang (06:00 - 16:00 WIB • Tarif Non-Peak)
-                </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-5">
-                  {daySlots
-                    .filter((s) => !s.isPeakHour)
-                    .map((slot) => {
-                      const isSelected = selectedSlots.some((s) => s.id === slot.id);
-                      const isBooked = slot.status === 'BOOKED';
-                      const isMaintenance = slot.status === 'MAINTENANCE';
-                      const isPast = isSlotPast(selectedDate, slot.hour, slot.timeStart);
-                      const isDisabled = isBooked || isMaintenance || isPast;
-                      const isInWindow =
-                        selectedRate?.timeStart && selectedRate?.timeEnd
-                          ? rateCoversHour(
-                              {
-                                timeStart: selectedRate.timeStart,
-                                timeEnd: selectedRate.timeEnd,
-                              },
-                              slot.hour
-                            )
-                          : false;
-
-                      return (
-                        <button
-                          key={slot.id}
-                          disabled={isDisabled}
-                          onClick={() => handleSlotToggle(slot)}
-                          className={`relative flex flex-col items-center justify-center rounded-xl border p-3 text-center transition ${
-                            isSelected
-                              ? 'border-emerald-600 bg-emerald-600 text-white shadow-md scale-[1.02] ring-2 ring-emerald-500/50'
-                              : isBooked
-                              ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
-                              : isMaintenance
-                              ? 'border-amber-200 bg-amber-50 text-amber-700 cursor-not-allowed'
-                              : isPast
-                              ? 'border-slate-200 bg-slate-100/70 text-slate-400 cursor-not-allowed opacity-60'
-                              : isInWindow
-                              ? 'border-emerald-400 bg-emerald-50/90 text-emerald-950 font-bold hover:bg-emerald-100 shadow-xs ring-2 ring-emerald-400/40'
-                              : 'border-slate-200 bg-white text-slate-800 hover:border-emerald-300 hover:bg-emerald-50/40'
-                          }`}
-                        >
-                          <div className="text-sm font-black">
-                            {slot.timeStart} - {slot.timeEnd}
-                          </div>
-                          {isBooked ? (
-                            <span className="mt-0.5 text-[10px] font-semibold uppercase text-slate-400">
-                              Booked
-                            </span>
-                          ) : isMaintenance ? (
-                            <span className="mt-0.5 text-[10px] font-semibold uppercase text-amber-600">
-                              Turnamen
-                            </span>
-                          ) : isPast ? (
-                            <span className="mt-0.5 text-[10px] font-extrabold uppercase tracking-wide text-slate-400">
-                              Lewat
-                            </span>
-                          ) : isSelected ? (
-                            <div className="mt-0.5 flex flex-col items-center">
-                              <span className="text-[11px] font-bold text-emerald-100">
-                                Rp {(slot.price / 1000).toFixed(0)}k
-                              </span>
-                              <span className="rounded-full bg-emerald-700 px-1.5 py-0.2 text-[8px] font-black uppercase text-white">
-                                ✓ Dipilih
-                              </span>
-                            </div>
-                          ) : isInWindow ? (
-                            <div className="mt-0.5 flex flex-col items-center">
-                              <span className="text-[11px] font-black text-emerald-700">
-                                Rp {(slot.price / 1000).toFixed(0)}k
-                              </span>
-                              <span className="rounded-full bg-emerald-200/90 px-1.5 py-0.2 text-[8px] font-black uppercase text-emerald-900">
-                                Waktu Pilihan
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="mt-0.5 text-[11px] font-bold text-slate-600">
-                              Rp {(slot.price / 1000).toFixed(0)}k
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                </div>
-
-                <div className="mt-6 mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Malam / Peak Hour (16:00 - 23:00 WIB • Tarif Prime)
-                </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-5">
-                  {daySlots
-                    .filter((s) => s.isPeakHour)
-                    .map((slot) => {
-                      const isSelected = selectedSlots.some((s) => s.id === slot.id);
-                      const isBooked = slot.status === 'BOOKED';
-                      const isMaintenance = slot.status === 'MAINTENANCE';
-                      const isPast = isSlotPast(selectedDate, slot.hour, slot.timeStart);
-                      const isDisabled = isBooked || isMaintenance || isPast;
-                      const isInWindow =
-                        selectedRate?.timeStart && selectedRate?.timeEnd
-                          ? rateCoversHour(
-                              {
-                                timeStart: selectedRate.timeStart,
-                                timeEnd: selectedRate.timeEnd,
-                              },
-                              slot.hour
-                            )
-                          : false;
-
-                      return (
-                        <button
-                          key={slot.id}
-                          disabled={isDisabled}
-                          onClick={() => handleSlotToggle(slot)}
-                          className={`relative flex flex-col items-center justify-center rounded-xl border p-3 text-center transition ${
-                            isSelected
-                              ? 'border-emerald-600 bg-emerald-600 text-white shadow-md scale-[1.02] ring-2 ring-emerald-500/50'
-                              : isBooked
-                              ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
-                              : isMaintenance
-                              ? 'border-amber-200 bg-amber-50 text-amber-700 cursor-not-allowed'
-                              : isPast
-                              ? 'border-slate-200 bg-slate-100/70 text-slate-400 cursor-not-allowed opacity-60'
-                              : isInWindow
-                              ? 'border-emerald-400 bg-emerald-50/90 text-emerald-950 font-bold hover:bg-emerald-100 shadow-xs ring-2 ring-emerald-400/40'
-                              : 'border-slate-200 bg-white text-slate-800 hover:border-emerald-300 hover:bg-emerald-50/40'
-                          }`}
-                        >
-                          <div className="text-sm font-black">
-                            {slot.timeStart} - {slot.timeEnd}
-                          </div>
-                          {isBooked ? (
-                            <span className="mt-0.5 text-[10px] font-semibold uppercase text-slate-400">
-                              Booked
-                            </span>
-                          ) : isMaintenance ? (
-                            <span className="mt-0.5 text-[10px] font-semibold uppercase text-amber-600">
-                              Turnamen
-                            </span>
-                          ) : isPast ? (
-                            <span className="mt-0.5 text-[10px] font-extrabold uppercase tracking-wide text-slate-400">
-                              Lewat
-                            </span>
-                          ) : isSelected ? (
-                            <div className="mt-0.5 flex flex-col items-center">
-                              <span className="text-[11px] font-bold text-emerald-100">
-                                Rp {(slot.price / 1000).toFixed(0)}k
-                              </span>
-                              <span className="rounded-full bg-emerald-700 px-1.5 py-0.2 text-[8px] font-black uppercase text-white">
-                                ✓ Dipilih
-                              </span>
-                            </div>
-                          ) : isInWindow ? (
-                            <div className="mt-0.5 flex flex-col items-center">
-                              <span className="text-[11px] font-black text-emerald-700">
-                                Rp {(slot.price / 1000).toFixed(0)}k
-                              </span>
-                              <span className="rounded-full bg-emerald-200/90 px-1.5 py-0.2 text-[8px] font-black uppercase text-emerald-900">
-                                Waktu Pilihan
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="mt-0.5 text-[11px] font-bold text-slate-600">
-                              Rp {(slot.price / 1000).toFixed(0)}k
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                </div>
-              </div>
             </div>
 
             {/* User Reviews Section */}
@@ -1261,119 +1297,190 @@ export const VenueDetailPage: React.FC = () => {
 
           {/* RIGHT SIDEBAR: Order Summary Floating Card */}
           <div className="lg:col-span-1">
-            <div className="sticky top-20 rounded-2xl border border-slate-200 bg-white p-6 shadow-lg">
-              <h3 className="text-base font-black text-slate-900">Ringkasan Pesanan</h3>
-              <p className="text-xs text-slate-500">
-                Periksa tanggal, lapangan, &amp; jam bermainmu
-              </p>
+            {userCategory === 'PERTANDINGAN' ? (
+              <div className="sticky top-20 rounded-2xl border-2 border-amber-300 bg-white p-6 shadow-lg">
+                <div className="flex items-center gap-2 text-amber-700">
+                  <Award className="h-5 w-5 shrink-0" />
+                  <span className="text-xs font-black uppercase tracking-wider">
+                    Khusus Event &amp; Pertandingan
+                  </span>
+                </div>
+                <h3 className="mt-1.5 text-base font-black text-slate-900">
+                  Pengajuan Rekomendasi
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Pemesanan memerlukan verifikasi resmi DISBUDPORA
+                </p>
 
-              <div className="mt-4 space-y-2.5 border-t border-slate-100 pt-4 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Venue:</span>
-                  <span className="font-bold text-slate-900">{selectedVenue.name}</span>
+                <div className="mt-4 space-y-2.5 border-t border-slate-100 pt-4 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Venue:</span>
+                    <span className="font-bold text-slate-900">{selectedVenue.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Lapangan:</span>
+                    <span className="font-bold text-emerald-700">{activeField?.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Kategori:</span>
+                    <span className="font-bold text-amber-900">Pertandingan / Kompetisi</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Tanggal Rencana:</span>
+                    <span className="font-bold text-slate-900">{selectedDate}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Durasi Sewa:</span>
+                    <span className="font-bold text-slate-900">Sepanjang Hari (Event)</span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Lapangan:</span>
-                  <span className="font-bold text-emerald-700">{activeField?.name}</span>
+
+                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 space-y-1.5">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <ShieldCheck className="h-4 w-4 text-amber-700 shrink-0" />
+                    <span>Tarif Resmi Event</span>
+                  </div>
+                  <div className="text-lg font-black text-emerald-800">
+                    Rp {selectedRate ? selectedRate.price.toLocaleString('id-ID') : '2.000.000'}
+                    <span className="text-xs font-normal text-slate-500"> / hari</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800/90 leading-relaxed">
+                    *Pembayaran dan administrasi resmi diselesaikan setelah surat rekomendasi dan verifikasi jadwal disetujui.
+                  </p>
                 </div>
-                {selectedCategoryLabel && (
-                  <div className="flex justify-between items-start gap-2">
-                    <span className="text-slate-500 shrink-0">Kategori:</span>
-                    <span className="font-bold text-slate-900 text-right line-clamp-2">
-                      {selectedCategoryLabel}
+
+                <a
+                  href={`https://wa.me/6281234567890?text=${encodeURIComponent(
+                    `Halo Admin DISBUDPORA Sport Bekasi,\nSaya ingin mengajukan permohonan sewa venue ${selectedVenue.name} untuk kegiatan Pertandingan / Seleksi / Kompetisi pada tanggal ${selectedDate}.\nMohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 py-3.5 text-xs font-black text-white shadow-lg shadow-emerald-600/25 hover:from-emerald-700 hover:to-emerald-800 transition"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  <span>Hubungi WhatsApp Admin DISBUDPORA</span>
+                </a>
+
+                <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+                  <Clock className="h-3.5 w-3.5 text-slate-400" />
+                  <span>Respon cepat jam kerja DISBUDPORA Kab. Bekasi</span>
+                </div>
+              </div>
+            ) : (
+              <div className="sticky top-20 rounded-2xl border border-slate-200 bg-white p-6 shadow-lg">
+                <h3 className="text-base font-black text-slate-900">Ringkasan Pesanan</h3>
+                <p className="text-xs text-slate-500">
+                  Periksa tanggal, lapangan, &amp; jam bermainmu
+                </p>
+
+                <div className="mt-4 space-y-2.5 border-t border-slate-100 pt-4 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Venue:</span>
+                    <span className="font-bold text-slate-900">{selectedVenue.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Lapangan:</span>
+                    <span className="font-bold text-emerald-700">{activeField?.name}</span>
+                  </div>
+                  {selectedCategoryLabel && (
+                    <div className="flex justify-between items-start gap-2">
+                      <span className="text-slate-500 shrink-0">Kategori:</span>
+                      <span className="font-bold text-slate-900 text-right line-clamp-2">
+                        {selectedCategoryLabel}
+                      </span>
+                    </div>
+                  )}
+                  {selectedRate && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500">Pilihan Waktu:</span>
+                      <span className="font-bold text-emerald-700">
+                        {selectedRate.timeStart && selectedRate.timeEnd
+                          ? `${selectedRate.timeStart} - ${selectedRate.timeEnd} WIB`
+                          : 'Sepanjang Hari'}
+                        {selectedRate.unit === 'PER_HARI' ? ' (Paket)' : ''}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Tanggal:</span>
+                    <span className="font-bold text-slate-900">{selectedDate}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Slot Jam Dipilih:</span>
+                    <span className="font-bold text-slate-900">
+                      {selectedSlots.length} Jam
                     </span>
                   </div>
+                </div>
+
+                {/* Selected Slots Pills */}
+                {selectedSlots.length > 0 && (
+                  <div className="mt-4 rounded-xl bg-emerald-50 p-3">
+                    <div className="text-[11px] font-bold uppercase text-emerald-800">
+                      Daftar Jam Terpilih:
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {selectedSlots
+                        .sort((a, b) => a.hour - b.hour)
+                        .map((s) => (
+                          <span
+                            key={s.id}
+                            className="rounded-lg bg-emerald-600 px-2 py-1 text-xs font-bold text-white shadow-sm"
+                          >
+                            {s.timeStart} - {s.timeEnd}
+                          </span>
+                        ))}
+                    </div>
+                  </div>
                 )}
-                {selectedRate && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500">Pilihan Waktu:</span>
-                    <span className="font-bold text-emerald-700">
-                      {selectedRate.timeStart && selectedRate.timeEnd
-                        ? `${selectedRate.timeStart} - ${selectedRate.timeEnd} WIB`
-                        : 'Sepanjang Hari'}
-                      {selectedRate.unit === 'PER_HARI' ? ' (Paket)' : ''}
+
+                {/* Price Calculation */}
+                <div className="mt-5 border-t border-slate-200 pt-4">
+                  <div className="flex items-center justify-between text-xs text-slate-600">
+                    <span>
+                      {selectedRate && selectedRate.unit === 'PER_HARI' && selectedSlots.length > 0
+                        ? `Tarif Paket Seharian (${selectedSlots.length} jam)`
+                        : `Subtotal Sewa (${selectedSlots.length} jam)`}
+                    </span>
+                    <span className="font-bold text-slate-900">
+                      Rp {selectedTotalPrice.toLocaleString('id-ID')}
                     </span>
                   </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Tanggal:</span>
-                  <span className="font-bold text-slate-900">{selectedDate}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Slot Jam Dipilih:</span>
-                  <span className="font-bold text-slate-900">
-                    {selectedSlots.length} Jam
-                  </span>
-                </div>
-              </div>
-
-              {/* Selected Slots Pills */}
-              {selectedSlots.length > 0 && (
-                <div className="mt-4 rounded-xl bg-emerald-50 p-3">
-                  <div className="text-[11px] font-bold uppercase text-emerald-800">
-                    Daftar Jam Terpilih:
+                  <div className="mt-1 flex items-center justify-between text-xs text-slate-600">
+                    <span>Biaya Layanan Wibawa Mukti</span>
+                    <span>Rp {selectedSlots.length > 0 ? '5.000' : '0'}</span>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {selectedSlots
-                      .sort((a, b) => a.hour - b.hour)
-                      .map((s) => (
-                        <span
-                          key={s.id}
-                          className="rounded-lg bg-emerald-600 px-2 py-1 text-xs font-bold text-white shadow-sm"
-                        >
-                          {s.timeStart} - {s.timeEnd}
-                        </span>
-                      ))}
+                  <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3 text-base font-black text-slate-900">
+                    <span>Total Bayar</span>
+                    <span className="text-emerald-600">
+                      Rp{' '}
+                      {(selectedSlots.length > 0 ? selectedTotalPrice + 5000 : 0).toLocaleString(
+                        'id-ID'
+                      )}
+                    </span>
                   </div>
                 </div>
-              )}
 
-              {/* Price Calculation */}
-              <div className="mt-5 border-t border-slate-200 pt-4">
-                <div className="flex items-center justify-between text-xs text-slate-600">
-                  <span>
-                    {selectedRate && selectedRate.unit === 'PER_HARI' && selectedSlots.length > 0
-                      ? `Tarif Paket Seharian (${selectedSlots.length} jam)`
-                      : `Subtotal Sewa (${selectedSlots.length} jam)`}
-                  </span>
-                  <span className="font-bold text-slate-900">
-                    Rp {selectedTotalPrice.toLocaleString('id-ID')}
-                  </span>
-                </div>
-                <div className="mt-1 flex items-center justify-between text-xs text-slate-600">
-                  <span>Biaya Layanan Wibawa Mukti</span>
-                  <span>Rp {selectedSlots.length > 0 ? '5.000' : '0'}</span>
-                </div>
-                <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3 text-base font-black text-slate-900">
-                  <span>Total Bayar</span>
-                  <span className="text-emerald-600">
-                    Rp{' '}
-                    {(selectedSlots.length > 0 ? selectedTotalPrice + 5000 : 0).toLocaleString(
-                      'id-ID'
-                    )}
-                  </span>
+                {/* CTA Button */}
+                <button
+                  disabled={selectedSlots.length === 0}
+                  onClick={handleProceedToCheckout}
+                  className={`mt-6 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold shadow-lg transition ${
+                    selectedSlots.length > 0
+                      ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-emerald-500/30 hover:from-emerald-600 hover:to-emerald-700 active:scale-98'
+                      : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  }`}
+                >
+                  <span>Lanjut ke Pembayaran</span>
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+
+                <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>Pembayaran aman dengan QRIS &amp; Virtual Account Bank</span>
                 </div>
               </div>
-
-              {/* CTA Button */}
-              <button
-                disabled={selectedSlots.length === 0}
-                onClick={handleProceedToCheckout}
-                className={`mt-6 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold shadow-lg transition ${
-                  selectedSlots.length > 0
-                    ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-emerald-500/30 hover:from-emerald-600 hover:to-emerald-700 active:scale-98'
-                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                }`}
-              >
-                <span>Lanjut ke Pembayaran</span>
-                <ChevronRight className="h-4 w-4" />
-              </button>
-
-              <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
-                <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                <span>Pembayaran aman dengan QRIS &amp; Virtual Account Bank</span>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
