@@ -19,7 +19,14 @@ const VALID_CATEGORIES: UserCategory[] = [
   'LOKAL',
   'SOSIAL',
 ];
-const VALID_UNITS: RateUnit[] = ['PER_JAM', 'PER_HARI', 'PER_PERTANDINGAN'];
+const VALID_UNITS: RateUnit[] = [
+  'PER_JAM',
+  'PER_2_JAM',
+  'PER_3_JAM',
+  'PER_4_JAM',
+  'PER_HARI',
+  'PER_PERTANDINGAN',
+];
 
 /** Bentuk data tarif yang dikirim dari form admin. */
 export type FieldRateInput = {
@@ -61,17 +68,16 @@ function normaliseRateInputs(input?: FieldRateInput[]): NormalisedRate[] {
     // Satu waktu tanpa pasangannya berarti tarif sepanjang hari.
     const window = timeStart && timeEnd ? { timeStart, timeEnd } : { timeStart: null, timeEnd: null };
 
-    const key = `${r.category}|${window.timeStart ?? '-'}|${window.timeEnd ?? '-'}`;
+    const unit = VALID_UNITS.includes(r.unit) ? r.unit : 'PER_JAM';
+    const key = `${r.category}|${window.timeStart ?? '-'}|${window.timeEnd ?? '-'}|${unit}`;
     if (seen.has(key)) {
       // Jangan dibuang diam-diam: admin mengira datanya tersimpan padahal tidak.
       const jam = window.timeStart ? `${window.timeStart}-${window.timeEnd}` : 'sepanjang hari';
       throw new UserFacingError(
-        `Tarif "${r.label?.trim() || r.category}" bentrok: tipe sistem ${r.category} pada jam ${jam} sudah dipakai baris lain. Ganti Tipe Sistem atau jam berlakunya.`
+        `Tarif "${r.label?.trim() || r.category}" bentrok: tipe sistem ${r.category} pada jam ${jam} dengan satuan yang sama sudah dipakai baris lain. Ganti Tipe Sistem, jam, atau satuannya.`
       );
     }
     seen.add(key);
-
-    const unit = VALID_UNITS.includes(r.unit) ? r.unit : 'PER_JAM';
     const customLabel = r.label?.trim();
     out.push({
       category: r.category,

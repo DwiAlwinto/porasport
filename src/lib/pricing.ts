@@ -11,6 +11,9 @@ export const USER_CATEGORY_LABELS: Record<UserCategory, string> = {
 
 export const RATE_UNIT_LABELS: Record<RateUnit, string> = {
   PER_JAM: 'Per jam',
+  PER_2_JAM: 'Per 2 jam',
+  PER_3_JAM: 'Per 3 jam',
+  PER_4_JAM: 'Per 4 jam',
   PER_HARI: 'Per hari',
   PER_PERTANDINGAN: 'Per pertandingan',
 };
@@ -18,6 +21,9 @@ export const RATE_UNIT_LABELS: Record<RateUnit, string> = {
 /** Versi pendek untuk badge di kartu venue. */
 export const RATE_UNIT_SHORT: Record<RateUnit, string> = {
   PER_JAM: 'jam',
+  PER_2_JAM: '2 jam',
+  PER_3_JAM: '3 jam',
+  PER_4_JAM: '4 jam',
   PER_HARI: 'hari',
   PER_PERTANDINGAN: 'pertandingan',
 };
@@ -231,8 +237,17 @@ export function resolveFieldPrice(params: {
 
   const match = pickRateForSlot(rates, category, hour);
   if (match) {
+    let slotPrice = match.price;
+    if (match.unit === 'PER_2_JAM') {
+      slotPrice = Math.round(match.price / 2);
+    } else if (match.unit === 'PER_3_JAM') {
+      slotPrice = Math.round(match.price / 3);
+    } else if (match.unit === 'PER_4_JAM') {
+      slotPrice = Math.round(match.price / 4);
+    }
+
     return {
-      price: match.price,
+      price: slotPrice,
       source: 'rate',
       matchedLabel: match.timeStart ? `${match.timeStart}-${match.timeEnd}` : 'sepanjang hari',
     };

@@ -346,12 +346,12 @@ export default function AdminVenuesPage() {
     });
   };
 
-  // Baris tarif yang bentrok (Tipe Sistem + jam sama). Server hanya bisa
+  // Baris tarif yang bentrok (Tipe Sistem + jam + satuan sama). Server hanya bisa
   // menyimpan satu tarif per kombinasi ini, jadi tandai sebelum disimpan.
   const duplicateRateKeys = React.useMemo(() => {
     const count = new Map<string, number>();
     const keyOf = (r: RateRow) =>
-      `${r.category}|${r.timeStart && r.timeEnd ? `${r.timeStart}-${r.timeEnd}` : '-'}`;
+      `${r.category}|${r.timeStart && r.timeEnd ? `${r.timeStart}-${r.timeEnd}` : '-'}|${r.unit}`;
     for (const r of fieldRates) count.set(keyOf(r), (count.get(keyOf(r)) ?? 0) + 1);
     return new Set(fieldRates.filter((r) => (count.get(keyOf(r)) ?? 0) > 1).map((r) => r.key));
   }, [fieldRates]);
@@ -363,8 +363,8 @@ export default function AdminVenuesPage() {
 
     if (duplicateRateKeys.size > 0) {
       alert(
-        'Ada kategori yang bentrok: Tipe Sistem dan jam berlakunya sama persis dengan baris lain.\n\n' +
-          'Ubah Tipe Sistem (mis. Sosial → Amatir untuk Sekolah/Institusi) atau ubah jamnya, lalu simpan lagi.'
+        'Ada kategori yang bentrok: Tipe Sistem, jam berlaku, dan satuannya sama persis dengan baris lain.\n\n' +
+          'Ubah Tipe Sistem, jamnya, atau satuannya, lalu simpan lagi.'
       );
       return;
     }
@@ -1146,8 +1146,8 @@ export default function AdminVenuesPage() {
                           >
                             {duplicateRateKeys.has(row.key) && (
                               <div className="mb-2.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] font-bold text-red-700">
-                                ⚠️ Bentrok: Tipe Sistem &amp; jam sama dengan baris lain. Hanya satu yang bisa
-                                disimpan — ganti Tipe Sistem atau jam berlakunya.
+                                ⚠️ Bentrok: Tipe Sistem, jam, &amp; satuan sama persis dengan baris lain. Hanya satu yang bisa
+                                disimpan — ganti Tipe Sistem, jam, atau satuannya.
                               </div>
                             )}
                             {/* Baris 1: Label Kategori, Tipe Sistem, dan Tombol Hapus */}

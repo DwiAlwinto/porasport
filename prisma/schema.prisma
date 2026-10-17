@@ -50,6 +50,9 @@ enum UserCategory {
 /// Satuan dari sebuah tarif.
 enum RateUnit {
   PER_JAM
+  PER_2_JAM
+  PER_3_JAM
+  PER_4_JAM
   PER_HARI
   PER_PERTANDINGAN
 }
@@ -178,7 +181,7 @@ model FieldRate {
   // Relasi
   field      VenueField   @relation(fields: [fieldId], references: [id], onDelete: Cascade)
 
-  @@unique([fieldId, category, timeStart, timeEnd])
+  @@unique([fieldId, category, timeStart, timeEnd, unit])
   @@index([fieldId, category, isActive])
   @@map("field_rates")
 }

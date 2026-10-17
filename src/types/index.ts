@@ -44,7 +44,7 @@ export interface FieldRate {
   timeStart: string | null; // "08:00" atau null = sepanjang hari
   timeEnd: string | null; // "17:00" atau null = sepanjang hari
   price: number;
-  unit: 'PER_JAM' | 'PER_HARI' | 'PER_PERTANDINGAN';
+  unit: 'PER_JAM' | 'PER_2_JAM' | 'PER_3_JAM' | 'PER_4_JAM' | 'PER_HARI' | 'PER_PERTANDINGAN';
   sortOrder: number;
   isActive: boolean;
 }

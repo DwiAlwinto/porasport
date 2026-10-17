@@ -343,12 +343,36 @@ export const VenueDetailPage: React.FC = () => {
     setSelectedSlots(matching);
   };
 
+  const handleSelectMultiHourBlock = (rate: FieldRate, blockHours: number) => {
+    let candidateSlots = daySlots;
+    if (rate.timeStart && rate.timeEnd) {
+      const startHour = parseInt(rate.timeStart.split(':')[0], 10);
+      const endHour = parseInt(rate.timeEnd.split(':')[0], 10);
+      candidateSlots = candidateSlots.filter(
+        (s) => s.hour >= startHour && s.hour < endHour
+      );
+    }
+    const available = candidateSlots.filter(
+      (s) => s.status === 'AVAILABLE' && !isSlotPast(selectedDate, s.hour, s.timeStart)
+    );
+    setSelectedSlots(available.slice(0, blockHours));
+  };
+
   // Calculate total price of selected slots
   const selectedTotalPrice = useMemo(() => {
-    const isDailyPackage =
-      selectedRate && selectedRate.unit === 'PER_HARI' && selectedSlots.length > 0;
-    if (isDailyPackage) {
+    if (!selectedRate || selectedSlots.length === 0) return 0;
+
+    if (selectedRate.unit === 'PER_HARI') {
       return selectedRate.price;
+    }
+    if (selectedRate.unit === 'PER_2_JAM') {
+      return Math.round((selectedSlots.length / 2) * selectedRate.price);
+    }
+    if (selectedRate.unit === 'PER_3_JAM') {
+      return Math.round((selectedSlots.length / 3) * selectedRate.price);
+    }
+    if (selectedRate.unit === 'PER_4_JAM') {
+      return Math.round((selectedSlots.length / 4) * selectedRate.price);
     }
 
     const base = selectedSlots.reduce((sum, s) => sum + s.price, 0);
@@ -369,12 +393,27 @@ export const VenueDetailPage: React.FC = () => {
 
     const isDailyPackage =
       selectedRate && selectedRate.unit === 'PER_HARI' && selectedSlots.length > 0;
+    const isMultiHourPackage =
+      selectedRate &&
+      (selectedRate.unit === 'PER_2_JAM' ||
+        selectedRate.unit === 'PER_3_JAM' ||
+        selectedRate.unit === 'PER_4_JAM') &&
+      selectedSlots.length > 0;
+    const multiHourDuration =
+      selectedRate?.unit === 'PER_2_JAM'
+        ? 2
+        : selectedRate?.unit === 'PER_3_JAM'
+        ? 3
+        : selectedRate?.unit === 'PER_4_JAM'
+        ? 4
+        : 1;
+
     const isAquaticPerson = activeField.sportType === 'RENANG' && userCategory !== 'PERTANDINGAN';
 
     const items: BookingItem[] = selectedSlots.map((s) => {
       let itemPrice = s.price;
-      if (isDailyPackage) {
-        itemPrice = Math.round(selectedRate.price / selectedSlots.length);
+      if (isDailyPackage || isMultiHourPackage) {
+        itemPrice = Math.round(selectedTotalPrice / selectedSlots.length);
       } else if (isAquaticPerson) {
         itemPrice = s.price * swimmerCount;
       }
@@ -384,6 +423,8 @@ export const VenueDetailPage: React.FC = () => {
         fieldId: activeField.id,
         fieldName: isDailyPackage
           ? `${activeField.name} (Paket Seharian)`
+          : isMultiHourPackage
+          ? `${activeField.name} (Paket ${multiHourDuration} Jam)`
           : isAquaticPerson && swimmerCount > 1
           ? `${activeField.name} (${swimmerCount} Orang)`
           : activeField.name,
@@ -781,6 +822,18 @@ export const VenueDetailPage: React.FC = () => {
                         {activeCategoryGroup.rates.map((rate) => {
                           const isRateSelected = selectedRateId === rate.id;
                           const isDaily = rate.unit === 'PER_HARI';
+                          const isMultiHour =
+                            rate.unit === 'PER_2_JAM' ||
+                            rate.unit === 'PER_3_JAM' ||
+                            rate.unit === 'PER_4_JAM';
+                          const multiHourCount =
+                            rate.unit === 'PER_2_JAM'
+                              ? 2
+                              : rate.unit === 'PER_3_JAM'
+                              ? 3
+                              : rate.unit === 'PER_4_JAM'
+                              ? 4
+                              : 1;
                           const isNight =
                             rate.timeStart && parseInt(rate.timeStart.split(':')[0], 10) >= 18;
 
@@ -800,6 +853,8 @@ export const VenueDetailPage: React.FC = () => {
                                     className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
                                       isDaily
                                         ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                        : isMultiHour
+                                        ? 'bg-blue-100 text-blue-900 border border-blue-300'
                                         : isNight
                                         ? 'bg-indigo-100 text-indigo-900 border border-indigo-200'
                                         : 'bg-emerald-100 text-emerald-900 border border-emerald-200'
@@ -809,6 +864,11 @@ export const VenueDetailPage: React.FC = () => {
                                       <>
                                         <Sparkles className="h-3 w-3 text-amber-600" />
                                         Paket Seharian
+                                      </>
+                                    ) : isMultiHour ? (
+                                      <>
+                                        <Sparkles className="h-3 w-3 text-blue-600" />
+                                        Paket {multiHourCount} Jam
                                       </>
                                     ) : isNight ? (
                                       <>
@@ -854,6 +914,12 @@ export const VenueDetailPage: React.FC = () => {
                                   <span className="text-[10px] font-bold text-slate-500">
                                     {activeField?.sportType === 'RENANG' && rate.unit === 'PER_JAM'
                                       ? '/ orang / jam'
+                                      : rate.unit === 'PER_2_JAM'
+                                      ? '/ 2 jam'
+                                      : rate.unit === 'PER_3_JAM'
+                                      ? '/ 3 jam'
+                                      : rate.unit === 'PER_4_JAM'
+                                      ? '/ 4 jam'
                                       : rate.unit === 'PER_HARI'
                                       ? '/ hari (flat)'
                                       : rate.unit === 'PER_PERTANDINGAN'
@@ -863,7 +929,7 @@ export const VenueDetailPage: React.FC = () => {
                                 </div>
                               </div>
 
-                              {/* Tombol Aksi Cepat Pilih Paket */}
+                              {/* Tombol Aksi Cepat Pilih Paket Seharian */}
                               {isRateSelected && isDaily && rate.category !== 'PERTANDINGAN' && (
                                 <button
                                   type="button"
@@ -880,6 +946,23 @@ export const VenueDetailPage: React.FC = () => {
                                 </button>
                               )}
 
+                              {/* Tombol Aksi Cepat Pilih Paket Multi Jam */}
+                              {isRateSelected && isMultiHour && rate.category !== 'PERTANDINGAN' && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSelectMultiHourBlock(rate, multiHourCount);
+                                  }}
+                                  className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-2 text-[11px] font-black text-white shadow-sm hover:from-blue-700 hover:to-indigo-700 transition"
+                                >
+                                  <Zap className="h-3.5 w-3.5" />
+                                  <span>
+                                    ⚡ Pilih Paket {multiHourCount} Jam
+                                  </span>
+                                </button>
+                              )}
+
                               {isRateSelected && rate.category === 'PERTANDINGAN' && (
                                 <div className="mt-3 flex items-center justify-center gap-1.5 rounded-xl bg-amber-100 border border-amber-300 px-3 py-2 text-[11px] font-bold text-amber-900">
                                   <Award className="h-3.5 w-3.5 text-amber-700 shrink-0" />
@@ -887,7 +970,7 @@ export const VenueDetailPage: React.FC = () => {
                                 </div>
                               )}
 
-                              {isRateSelected && !isDaily && rate.timeStart && rate.timeEnd && (
+                              {isRateSelected && !isDaily && !isMultiHour && rate.timeStart && rate.timeEnd && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -1397,7 +1480,15 @@ export const VenueDetailPage: React.FC = () => {
                         {selectedRate.timeStart && selectedRate.timeEnd
                           ? `${selectedRate.timeStart} - ${selectedRate.timeEnd} WIB`
                           : 'Sepanjang Hari'}
-                        {selectedRate.unit === 'PER_HARI' ? ' (Paket)' : ''}
+                        {selectedRate.unit === 'PER_HARI'
+                          ? ' (Paket Seharian)'
+                          : selectedRate.unit === 'PER_2_JAM'
+                          ? ' (Paket 2 Jam)'
+                          : selectedRate.unit === 'PER_3_JAM'
+                          ? ' (Paket 3 Jam)'
+                          : selectedRate.unit === 'PER_4_JAM'
+                          ? ' (Paket 4 Jam)'
+                          : ''}
                       </span>
                     </div>
                   )}
@@ -1440,6 +1531,18 @@ export const VenueDetailPage: React.FC = () => {
                     <span>
                       {selectedRate && selectedRate.unit === 'PER_HARI' && selectedSlots.length > 0
                         ? `Tarif Paket Seharian (${selectedSlots.length} jam)`
+                        : selectedRate &&
+                          (selectedRate.unit === 'PER_2_JAM' ||
+                            selectedRate.unit === 'PER_3_JAM' ||
+                            selectedRate.unit === 'PER_4_JAM') &&
+                          selectedSlots.length > 0
+                        ? `Tarif Paket ${
+                            selectedRate.unit === 'PER_2_JAM'
+                              ? '2'
+                              : selectedRate.unit === 'PER_3_JAM'
+                              ? '3'
+                              : '4'
+                          } Jam (${selectedSlots.length} jam)`
                         : `Subtotal Sewa (${selectedSlots.length} jam)`}
                     </span>
                     <span className="font-bold text-slate-900">
