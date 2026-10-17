@@ -37,6 +37,7 @@ const VALID_SPORTS = new Set<string>([
 const VALID_CITIES = new Set<string>([
   'ALL',
   'Wibawa Mukti',
+  'Pemda Bekasi',
   'Grand Wisata',
   'Tambun Selatan',
   'Cibarusah',

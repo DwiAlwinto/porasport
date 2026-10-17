@@ -73,6 +73,7 @@ const formatRupiah = (n: number) => 'Rp' + n.toLocaleString('id-ID');
 
 const KABUPATEN_BEKASI_LOCATIONS = [
   'Wibawa Mukti',
+  'Pemda Bekasi',
   'Grand Wisata',
   'Tambun Selatan',
   'Sukatani',

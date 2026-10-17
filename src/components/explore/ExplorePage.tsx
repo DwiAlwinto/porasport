@@ -140,6 +140,7 @@ export const ExplorePage: React.FC = () => {
 
   const CITY_LABELS: Record<string, string> = {
     'Wibawa Mukti': 'Wibawa Mukti (Cikarang Timur)',
+    'Pemda Bekasi': 'Pemda Bekasi (Pusat Pemerintahan)',
     'Grand Wisata': 'Grand Wisata (Tambun Sel.)',
     'Tambun Selatan': 'Tambun Selatan (GOR Tambun)',
     'Sukatani': 'Sukatani',
@@ -147,6 +148,7 @@ export const ExplorePage: React.FC = () => {
     'Tarumajaya': 'Tarumajaya',
     'Cikarang Barat': 'Cikarang Barat',
     'Cikarang Utara': 'Cikarang Utara',
+    'Cikarang Timur': 'Cikarang Timur',
   };
 
   // Dynamic Options derived from Venues Data

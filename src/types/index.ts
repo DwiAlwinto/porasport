@@ -18,6 +18,7 @@ export type SportCategory =
 export type CityLocation =
   | 'ALL'
   | 'Wibawa Mukti'
+  | 'Pemda Bekasi'
   | 'Grand Wisata'
   | 'Tambun Selatan'
   | 'Sukatani'
