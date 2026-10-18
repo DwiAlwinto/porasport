@@ -5,13 +5,7 @@ import {
   SportCategory,
   CityLocation,
 } from '../../types';
-import {
-  Search,
-  MapPin,
-  Calendar,
-  Trophy,
-  Zap,
-} from 'lucide-react';
+import { Search } from 'lucide-react';
 
 export const HeroSection: React.FC = () => {
   const { handleSearchSubmit, searchFilters, activeLang, venues } = useApp();
@@ -129,7 +123,6 @@ export const HeroSection: React.FC = () => {
               Olahraga
             </label>
             <div className="flex items-center">
-              <Trophy className="mr-2 h-4 w-4 text-[#05BB75]" />
               <span className="text-sm font-bold text-slate-900 select-none">
                 {SPORTS_OPTIONS.find(o => o.value === selectedSport)?.label || selectedSport}
               </span>
@@ -169,7 +162,6 @@ export const HeroSection: React.FC = () => {
               Lokasi
             </label>
             <div className="flex items-center">
-              <MapPin className="mr-2 h-4 w-4 text-[#05BB75]" />
               <span className="text-sm font-bold text-slate-900 select-none">
                 {CITIES_OPTIONS.find(o => o.value === selectedCity)?.label || selectedCity}
               </span>
@@ -218,7 +210,6 @@ export const HeroSection: React.FC = () => {
               Tanggal
             </label>
             <div className="flex items-center">
-              <Calendar className="mr-2 h-4 w-4 text-[#05BB75]" />
               <input
                 ref={dateInputRef}
                 type="date"
