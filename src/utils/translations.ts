@@ -10,7 +10,7 @@ export const TRANSLATIONS = {
     login: "MASUK",
     heroTitle: "Cari Lapangan Olahraga Terbaik di Wibawa Mukti",
     searchPlaceholderSport: "Semua Olahraga",
-    searchPlaceholderLocation: "Semua Kota / Area",
+    searchPlaceholderLocation: "Kabupaten Bekasi",
     searchButton: "Cari",
     quickSearch: "Pencarian Cepat:",
     loginSim: "Simulasi Login / Ganti Akun",

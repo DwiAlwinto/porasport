@@ -356,7 +356,7 @@ export const ExplorePage: React.FC = () => {
 
   const dynamicCityTitle =
     searchFilters.city === 'ALL'
-      ? 'Semua Kota'
+      ? 'Kabupaten Bekasi'
       : CITY_LABELS[searchFilters.city] || searchFilters.city;
 
   // Daftar jam slot standar ala Gelora
