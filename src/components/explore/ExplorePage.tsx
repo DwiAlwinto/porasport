@@ -366,23 +366,6 @@ export const ExplorePage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50/70 pb-20">
-      {/* 1. TOP PROMO BANNER (Gaya Gelora Banner) */}
-      <div className="bg-gradient-to-r from-emerald-800 via-teal-900 to-[#103B2B] text-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-3">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-400/30">
-              <Sparkles className="h-4 w-4" />
-            </span>
-            <div className="text-xs sm:text-sm font-semibold">
-              <span className="font-extrabold text-emerald-300">DISBUDPORA KABUPATEN BEKASI:</span> Arena Olahraga Terstandar Resmi, Mudah &amp; Transparan.
-            </div>
-          </div>
-          <div className="hidden sm:flex items-center gap-2 text-xs font-bold text-emerald-200">
-            <span>Standar PERDA Resmi</span>
-          </div>
-        </div>
-      </div>
-
       <div className="mx-auto max-w-7xl px-4 sm:px-6 pt-10">
         {/* 2. DYNAMIC HEADLINE (Gaya Gelora: "Venue Semua Olahraga di Semua Kota") */}
         <div className="mb-8 text-center">
@@ -725,18 +708,13 @@ export const ExplorePage: React.FC = () => {
                         />
 
                         {/* Badges Overlay */}
-                        <div className="absolute left-3 top-3 flex gap-1">
-                          {venue.isPromo && (
+                        {venue.isPromo && (
+                          <div className="absolute left-3 top-3 flex gap-1">
                             <span className="rounded-full bg-emerald-600 px-2.5 py-1 text-[10px] font-bold text-white shadow">
                               {venue.promoBadge || 'Promo'}
                             </span>
-                          )}
-                        </div>
-                        <div className="absolute bottom-3 right-3 rounded-lg bg-slate-900/80 px-2.5 py-1 text-xs font-bold text-amber-400 backdrop-blur-md flex items-center gap-1 shadow">
-                          <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                          <span>{venue.rating}</span>
-                          <span className="text-slate-300 font-normal">({venue.reviewCount})</span>
-                        </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* 2. Informasi Utama Venue */}
