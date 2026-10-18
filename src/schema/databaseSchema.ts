@@ -83,7 +83,7 @@ model Venue {
   lat            Float?
   lng            Float?
   description    String?
-  openingHours   String          @default("06:00 - 23:00 WIB")
+  openingHours   String          @default("08:00 - 20:00 WIB")
   images         String[]        @default([])
   facilities     String[]        @default([])
   minPrice       Int
@@ -113,8 +113,8 @@ model VenueField {
   sportType      SportCategory
   type           String        @default("Indoor")
   floorType      String        @default("Sintetis")
-  priceNonPeak   Int           // Harga pagi-siang (06:00 - 16:00)
-  pricePeak      Int           // Harga malam/weekend (16:00 - 23:00)
+  priceNonPeak   Int           // Harga pagi-siang (08:00 - 16:00)
+  pricePeak      Int           // Harga malam/weekend (16:00 - 20:00)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
@@ -255,7 +255,7 @@ CREATE TABLE venues (
     lat DOUBLE PRECISION,
     lng DOUBLE PRECISION,
     description TEXT,
-    opening_hours VARCHAR(100) DEFAULT '06:00 - 23:00 WIB',
+    opening_hours VARCHAR(100) DEFAULT '08:00 - 20:00 WIB',
     images TEXT[] DEFAULT '{}',
     facilities TEXT[] DEFAULT '{}',
     min_price INTEGER NOT NULL,
@@ -344,7 +344,7 @@ export const SCHEMA_EXPLANATION = [
   },
   {
     title: "2. Entitas FieldSlot (Jadwal Waktu per Jam)",
-    desc: "Setiap tanggal aktif membagi waktu menjadi slot 1 jam (06:00 - 23:00). Status slot berupa: AVAILABLE (hijau), BOOKED (terpesan/merah), atau MAINTENANCE (diblokir oleh Mitra)."
+    desc: "Setiap tanggal aktif membagi waktu menjadi slot 1 jam (08:00 - 20:00). Status slot berupa: AVAILABLE (hijau), BOOKED (terpesan/merah), atau MAINTENANCE (diblokir oleh Mitra)."
   },
   {
     title: "3. Entitas Booking & BookingItem (Pemesanan Multi-Slot)",

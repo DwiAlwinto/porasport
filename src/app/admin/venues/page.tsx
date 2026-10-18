@@ -38,9 +38,9 @@ import {
 import { VENUE_FACILITIES } from '../../../lib/venueConstants';
 
 const HOURS_OPTIONS: string[] = [
-  '06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00',
+  '08:00', '09:00', '10:00', '11:00', '12:00',
   '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00',
-  '20:00', '21:00', '22:00', '23:00',
+  '20:00',
 ];
 
 /** Satu baris tarif yang sedang diedit di form admin. */
@@ -121,7 +121,7 @@ export default function AdminVenuesPage() {
   const [venueSlug, setVenueSlug] = useState('');
   const [venueCity, setVenueCity] = useState(KABUPATEN_BEKASI_LOCATIONS[0]);
   const [venueAddress, setVenueAddress] = useState('');
-  const [venueHours, setVenueHours] = useState('06:00 - 23:00 WIB');
+  const [venueHours, setVenueHours] = useState('08:00 - 20:00 WIB');
   const [venueDesc, setVenueDesc] = useState('');
   const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);
   const [venueImages, setVenueImages] = useState<string[]>([]);
@@ -219,8 +219,8 @@ export default function AdminVenuesPage() {
    */
   const applyRegularPreset = () => {
     const rows: RateRow[] = [
-      { ...newRateRow('SOSIAL', 'PER_JAM', 'Reguler Pagi-Siang (06:00 - 16:00)'), timeStart: '06:00', timeEnd: '16:00', price: '100000' },
-      { ...newRateRow('SOSIAL', 'PER_JAM', 'Reguler Sore-Malam (16:00 - 23:00)'), timeStart: '16:00', timeEnd: '23:00', price: '150000' },
+      { ...newRateRow('SOSIAL', 'PER_JAM', 'Reguler Pagi-Siang (08:00 - 16:00)'), timeStart: '08:00', timeEnd: '16:00', price: '100000' },
+      { ...newRateRow('SOSIAL', 'PER_JAM', 'Reguler Sore-Malam (16:00 - 20:00)'), timeStart: '16:00', timeEnd: '20:00', price: '150000' },
       { ...newRateRow('PERTANDINGAN', 'PER_HARI', 'Event / Turnamen'), timeStart: '', timeEnd: '', price: '1500000' },
     ];
     setFieldRates(rows);
@@ -287,7 +287,7 @@ export default function AdminVenuesPage() {
     setVenueSlug('');
     setVenueCity(KABUPATEN_BEKASI_LOCATIONS[0]);
     setVenueAddress('');
-    setVenueHours('06:00 - 23:00 WIB');
+    setVenueHours('08:00 - 20:00 WIB');
     setVenueDesc('');
     setSelectedFacilities(['Parkir Luas', 'Toilet & Shower', 'Mushola']);
     setVenueImages(['/images/wibawamukti.png']);
@@ -1240,7 +1240,7 @@ export default function AdminVenuesPage() {
                                       if (row.timeStart || row.timeEnd) {
                                         updateRateRow(row.key, { timeStart: '', timeEnd: '' });
                                       } else {
-                                        updateRateRow(row.key, { timeStart: '06:00', timeEnd: '16:00' });
+                                        updateRateRow(row.key, { timeStart: '08:00', timeEnd: '16:00' });
                                       }
                                     }}
                                     className="text-[10px] font-bold text-emerald-700 hover:underline cursor-pointer"
@@ -1251,12 +1251,12 @@ export default function AdminVenuesPage() {
 
                                 {!row.timeStart && !row.timeEnd ? (
                                   <div className="flex h-9 items-center rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 text-xs font-bold text-emerald-800">
-                                    ☀️ Sepanjang Hari (06:00 - 23:00)
+                                    ☀️ Sepanjang Hari (08:00 - 20:00)
                                   </div>
                                 ) : (
                                   <div className="flex items-center gap-2">
                                     <select
-                                      value={row.timeStart || '06:00'}
+                                      value={row.timeStart || '08:00'}
                                       onChange={(e) => updateRateRow(row.key, { timeStart: e.target.value })}
                                       className="w-full rounded-xl border border-line-strong bg-field px-2.5 py-1.5 text-xs font-semibold text-fg outline-none focus:border-emerald-500"
                                     >

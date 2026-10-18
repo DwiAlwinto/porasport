@@ -33,9 +33,9 @@ export const TIME_OF_DAY_WINDOWS: Record<
   Exclude<TimeOfDayFilter, 'ALL'>,
   { startHour: number; endHour: number; label: string }
 > = {
-  PAGI: { startHour: 6, endHour: 11, label: 'Pagi: 06:00 - 11:00 WIB' },
-  SIANG: { startHour: 11, endHour: 16, label: 'Siang: 11:00 - 16:00 WIB' },
-  MALAM: { startHour: 16, endHour: 23, label: 'Malam: 16:00 - 23:00 WIB' },
+  PAGI: { startHour: 8, endHour: 12, label: 'Pagi: 08:00 - 12:00 WIB' },
+  SIANG: { startHour: 12, endHour: 16, label: 'Siang: 12:00 - 16:00 WIB' },
+  MALAM: { startHour: 16, endHour: 20, label: 'Sore / Malam: 16:00 - 20:00 WIB' },
 };
 
 /**

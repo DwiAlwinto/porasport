@@ -361,8 +361,8 @@ export const ExplorePage: React.FC = () => {
       ? t.hero.allLocations
       : CITY_LABELS[searchFilters.city] || searchFilters.city;
 
-  // Daftar jam slot standar ala Gelora
-  const STANDARD_SLOT_HOURS = ['06:00', '08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00'];
+  // Daftar jam slot standar fasilitas (08:00 - 20:00 WIB)
+  const STANDARD_SLOT_HOURS = ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'];
 
   return (
     <div className="min-h-screen bg-slate-50/70 pb-20">

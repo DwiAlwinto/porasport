@@ -696,13 +696,13 @@ export const VenueDetailPage: React.FC = () => {
                         </p>
                         <div className="mt-3 flex items-center justify-between w-full border-t border-slate-200/60 pt-2 text-xs">
                           <div>
-                            <span className="text-[10px] text-slate-400">Siang (06-16)</span>
+                            <span className="text-[10px] text-slate-400">Siang (08-16)</span>
                             <div className="font-bold text-slate-900">
                               Rp {f.priceNonPeak.toLocaleString('id-ID')}/jam
                             </div>
                           </div>
                           <div className="text-right">
-                            <span className="text-[10px] text-slate-400">Malam/Peak (16-23)</span>
+                            <span className="text-[10px] text-slate-400">Sore-Malam (16-20)</span>
                             <div className="font-bold text-emerald-700">
                               Rp {f.pricePeak.toLocaleString('id-ID')}/jam
                             </div>
@@ -1222,14 +1222,14 @@ export const VenueDetailPage: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Hourly Grid (06:00 - 23:00) */}
+                  {/* Hourly Grid (08:00 - 20:00) */}
                   <div className="mt-6">
                     <div className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">
-                      Pagi - Siang (06:00 - 16:00 WIB • Tarif Non-Peak)
+                      Pagi - Siang (08:00 - 16:00 WIB • Tarif Non-Peak)
                     </div>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-5">
                       {daySlots
-                        .filter((s) => !s.isPeakHour)
+                        .filter((s) => !s.isPeakHour && s.hour >= 8 && s.hour < 20)
                         .map((slot) => {
                           const isSelected = selectedSlots.some((s) => s.id === slot.id);
                           const isPool = activeField?.sportType === 'RENANG';
@@ -1336,11 +1336,11 @@ export const VenueDetailPage: React.FC = () => {
                     </div>
 
                     <div className="mt-6 mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">
-                      Malam / Peak Hour (16:00 - 23:00 WIB • Tarif Prime)
+                      Sore - Malam / Peak Hour (16:00 - 20:00 WIB • Tarif Prime)
                     </div>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-5">
                       {daySlots
-                        .filter((s) => s.isPeakHour)
+                        .filter((s) => s.isPeakHour && s.hour >= 8 && s.hour < 20)
                         .map((slot) => {
                           const isSelected = selectedSlots.some((s) => s.id === slot.id);
                           const isPool = activeField?.sportType === 'RENANG';

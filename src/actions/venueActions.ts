@@ -63,11 +63,11 @@ export async function getVenueBySlug(slug: string) {
 /* Slot jadwal publik                                                 */
 /* ------------------------------------------------------------------ */
 
-const SLOT_START_HOUR = 6;
-const SLOT_END_HOUR = 23; // exclusive
+const SLOT_START_HOUR = 8;
+const SLOT_END_HOUR = 20; // exclusive (08:00 - 20:00 WIB, slot terakhir adalah 19:00 - 20:00)
 
 /**
- * Buat slot jadwal untuk tanggal yang dituju jika belum tersedia.
+ * Buat slot jadwal untuk tanggal yang dituju jika belum tersedia (jam 08:00 - 20:00).
  */
 async function generateSlotsForDate(field: {
   id: string;
@@ -137,7 +137,7 @@ export type PublicSlot = {
 };
 
 /**
- * Slot jadwal untuk halaman detail venue.
+ * Slot jadwal untuk halaman detail venue (HANYA jam 08:00 - 20:00 WIB).
  *
  * Mengambil slot secara efisien (1 round-trip paralel) untuk tanggal yang diminta.
  */
@@ -154,14 +154,18 @@ export async function getPublicFieldSlots(params: {
       return { ok: false, slots: [], error: 'Tanggal tidak valid.' };
     }
 
-    // Ambil data lapangan dan slot yang ada secara paralel
+    // Ambil data lapangan dan slot yang ada secara paralel (hanya jam 08:00 s.d. 20:00)
     const [field, existingSlots] = await Promise.all([
       prisma.venueField.findUnique({
         where: { id: fieldId },
         include: { rates: { orderBy: { sortOrder: 'asc' } } },
       }),
       prisma.fieldSlot.findMany({
-        where: { fieldId, date: target },
+        where: {
+          fieldId,
+          date: target,
+          hour: { gte: SLOT_START_HOUR, lt: SLOT_END_HOUR },
+        },
         orderBy: { hour: 'asc' },
       }),
     ]);
@@ -174,12 +178,21 @@ export async function getPublicFieldSlots(params: {
     if (rows.length === 0) {
       await generateSlotsForDate(field, target);
       rows = await prisma.fieldSlot.findMany({
-        where: { fieldId, date: target },
+        where: {
+          fieldId,
+          date: target,
+          hour: { gte: SLOT_START_HOUR, lt: SLOT_END_HOUR },
+        },
         orderBy: { hour: 'asc' },
       });
     }
 
-    const slots: PublicSlot[] = rows.map((r) => {
+    // Pastikan hanya slot dalam rentang 08:00 s.d. 20:00 yang diproses
+    const filteredRows = rows.filter(
+      (r) => r.hour >= SLOT_START_HOUR && r.hour < SLOT_END_HOUR
+    );
+
+    const slots: PublicSlot[] = filteredRows.map((r) => {
       // Harga ikut mengikuti kategori yang dipilih user, sehingga yang tampil
       // selalu sama dengan yang akan ditagihkan.
       const { price } = resolveFieldPrice({
