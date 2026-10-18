@@ -140,6 +140,7 @@ model Venue {
   reviews        Review[]
 
   @@index([city])
+  @@index([ownerId])
   @@map("venues")
 }
 
@@ -162,6 +163,7 @@ model VenueField {
   bookingItems   BookingItem[]
   rates          FieldRate[]
 
+  @@index([venueId])
   @@map("venue_fields")
 }
 
@@ -212,6 +214,7 @@ model FieldSlot {
 
   @@unique([fieldId, date, hour])
   @@index([date, status])
+  @@index([bookingId])
   @@map("field_slots")
 }
 
@@ -301,6 +304,8 @@ model Review {
   venue       Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([venueId])
+  @@index([userId])
   @@map("reviews")
 }
 

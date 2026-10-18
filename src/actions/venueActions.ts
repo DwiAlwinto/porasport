@@ -47,21 +47,10 @@ export async function getVenueBySlug(slug: string) {
       include: {
         fields: {
           include: {
-            slots: {
-              where: {
-                // Hanya ambil slot mulai dari hari ini ke depan
-                date: {
-                  gte: new Date(new Date().setHours(0, 0, 0, 0))
-                }
-              },
-              orderBy: [
-                { date: 'asc' },
-                { hour: 'asc' }
-              ]
-            }
-          }
-        }
-      }
+            rates: { orderBy: { sortOrder: 'asc' } },
+          },
+        },
+      },
     });
     return venue;
   } catch (error) {
@@ -76,40 +65,20 @@ export async function getVenueBySlug(slug: string) {
 
 const SLOT_START_HOUR = 6;
 const SLOT_END_HOUR = 23; // exclusive
-/** Berapa hari ke depan slot dijaga agar selalu tersedia. */
-const SLOT_ROLL_FORWARD_DAYS = 45;
-
-function startOfDay(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-}
-
-function addDays(d: Date, days: number): Date {
-  return new Date(d.getTime() + days * 86_400_000);
-}
 
 /**
- * Pastikan slot untuk N hari ke depan tersedia.
- *
- * Sebelumnya slot hanya dibuat 7 hari saat lapangan dibuat, lalu tidak pernah
- * digulirkan — sehingga tanggal yang lebih jauh selalu kosong. Sekarang setiap
- * kali slot diambil, hari yang belum ada akan dibuat lengkap.
+ * Buat slot jadwal untuk tanggal yang dituju jika belum tersedia.
  */
-async function ensureSlotsForField(fieldId: string, daysAhead = SLOT_ROLL_FORWARD_DAYS) {
-  const field = await prisma.venueField.findUnique({
-    where: { id: fieldId },
-    include: { rates: true },
-  });
-  if (!field) return null;
-
-  const today = startOfDay(new Date());
-  const until = addDays(today, daysAhead);
-
-  const existing = await prisma.fieldSlot.findMany({
-    where: { fieldId, date: { gte: today, lt: until } },
-    select: { date: true },
-    distinct: ['date'],
-  });
-  const have = new Set(existing.map((r) => toDateKey(r.date)));
+async function generateSlotsForDate(field: {
+  id: string;
+  sportType: SportCategory;
+  maxCapacity: number;
+  priceNonPeak: number;
+  pricePeak: number;
+  rates: any[];
+}, target: Date) {
+  const key = toDateKey(target);
+  const defaultCapacity = field.maxCapacity || (field.sportType === 'RENANG' ? 30 : 1);
 
   const rows: {
     id: string;
@@ -125,40 +94,31 @@ async function ensureSlotsForField(fieldId: string, daysAhead = SLOT_ROLL_FORWAR
     bookedCapacity: number;
   }[] = [];
 
-  const defaultCapacity = field.maxCapacity || (field.sportType === 'RENANG' ? 30 : 1);
-
-  for (let i = 0; i < daysAhead; i++) {
-    const d = addDays(today, i);
-    const key = toDateKey(d);
-    if (have.has(key)) continue;
-
-    for (let hour = SLOT_START_HOUR; hour < SLOT_END_HOUR; hour++) {
-      const { price } = resolveFieldPrice({
-        rates: field.rates,
-        priceNonPeak: field.priceNonPeak,
-        pricePeak: field.pricePeak,
-        hour,
-      });
-      rows.push({
-        id: `${field.id}-${key}-${hour}`,
-        fieldId: field.id,
-        date: d,
-        hour,
-        timeStart: `${String(hour).padStart(2, '0')}:00`,
-        timeEnd: `${String(hour + 1).padStart(2, '0')}:00`,
-        price,
-        isPeakHour: hour >= 16,
-        status: 'AVAILABLE',
-        maxCapacity: defaultCapacity,
-        bookedCapacity: 0,
-      });
-    }
+  for (let hour = SLOT_START_HOUR; hour < SLOT_END_HOUR; hour++) {
+    const { price } = resolveFieldPrice({
+      rates: field.rates,
+      priceNonPeak: field.priceNonPeak,
+      pricePeak: field.pricePeak,
+      hour,
+    });
+    rows.push({
+      id: `${field.id}-${key}-${hour}`,
+      fieldId: field.id,
+      date: target,
+      hour,
+      timeStart: `${String(hour).padStart(2, '0')}:00`,
+      timeEnd: `${String(hour + 1).padStart(2, '0')}:00`,
+      price,
+      isPeakHour: hour >= 16,
+      status: 'AVAILABLE',
+      maxCapacity: defaultCapacity,
+      bookedCapacity: 0,
+    });
   }
 
   if (rows.length) {
     await prisma.fieldSlot.createMany({ data: rows, skipDuplicates: true });
   }
-  return field;
 }
 
 export type PublicSlot = {
@@ -179,9 +139,7 @@ export type PublicSlot = {
 /**
  * Slot jadwal untuk halaman detail venue.
  *
- * Harga dihitung ulang di server dari `field_rates` untuk kategori yang dipilih,
- * sehingga angka yang dilihat pengguna identik dengan yang tersimpan saat booking.
- * Data pemesan / booking TIDAK ikut dikembalikan.
+ * Mengambil slot secara efisien (1 round-trip paralel) untuk tanggal yang diminta.
  */
 export async function getPublicFieldSlots(params: {
   fieldId: string;
@@ -196,15 +154,30 @@ export async function getPublicFieldSlots(params: {
       return { ok: false, slots: [], error: 'Tanggal tidak valid.' };
     }
 
-    const field = await ensureSlotsForField(fieldId);
+    // Ambil data lapangan dan slot yang ada secara paralel
+    const [field, existingSlots] = await Promise.all([
+      prisma.venueField.findUnique({
+        where: { id: fieldId },
+        include: { rates: { orderBy: { sortOrder: 'asc' } } },
+      }),
+      prisma.fieldSlot.findMany({
+        where: { fieldId, date: target },
+        orderBy: { hour: 'asc' },
+      }),
+    ]);
+
     if (!field) {
       return { ok: false, slots: [], error: 'Lapangan tidak ditemukan.' };
     }
 
-    const rows = await prisma.fieldSlot.findMany({
-      where: { fieldId, date: target },
-      orderBy: { hour: 'asc' },
-    });
+    let rows = existingSlots;
+    if (rows.length === 0) {
+      await generateSlotsForDate(field, target);
+      rows = await prisma.fieldSlot.findMany({
+        where: { fieldId, date: target },
+        orderBy: { hour: 'asc' },
+      });
+    }
 
     const slots: PublicSlot[] = rows.map((r) => {
       // Harga ikut mengikuti kategori yang dipilih user, sehingga yang tampil

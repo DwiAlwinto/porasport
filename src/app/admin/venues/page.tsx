@@ -110,6 +110,7 @@ const AVAILABLE_FACILITIES = VENUE_FACILITIES.map((f) => f.name);
 export default function AdminVenuesPage() {
   const [venues, setVenues] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
@@ -250,13 +251,24 @@ export default function AdminVenuesPage() {
 
   const fetchVenues = async () => {
     setLoading(true);
-    const res = await getCmsVenues();
-    if (res.success) {
-      setVenues(res.venues);
-    } else if (res.error) {
-      showToast(res.error);
+    setLoadError(null);
+    try {
+      const res = await getCmsVenues();
+      if (res.success) {
+        setVenues(res.venues);
+      } else {
+        const err = res.error || 'Gagal memuat data venue dari database.';
+        setLoadError(err);
+        showToast(err);
+      }
+    } catch (err: any) {
+      console.error('Fetch venues error:', err);
+      const msg = err?.message || 'Terjadi gangguan koneksi ke server database.';
+      setLoadError(msg);
+      showToast(msg);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -499,8 +511,20 @@ export default function AdminVenuesPage() {
 
       {/* Venue List */}
       {loading ? (
-        <div className="py-20 text-center text-xs font-bold text-fg-faint">
-          Memuat data fasilitas dari database...
+        <div className="py-24 flex flex-col items-center justify-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+          <span className="text-xs font-bold text-fg-muted">Memuat data fasilitas dari database...</span>
+        </div>
+      ) : loadError ? (
+        <div className="rounded-3xl border border-rose-200 bg-rose-50/60 p-8 text-center text-rose-700 space-y-3">
+          <AlertCircle className="h-8 w-8 text-rose-500 mx-auto" />
+          <p className="text-sm font-bold">{loadError}</p>
+          <button
+            onClick={fetchVenues}
+            className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-rose-500 transition"
+          >
+            <span>Coba Muat Ulang</span>
+          </button>
         </div>
       ) : venues.length === 0 ? (
         <div className="rounded-3xl border border-line bg-surface p-12 text-center text-fg-muted">
