@@ -16,7 +16,6 @@ import { USER_CATEGORY_LABELS, getUserCategoryLabel, rateCoversHour } from '../.
 import type { UserCategory } from '@prisma/client';
 import {
   MapPin,
-  Star,
   Clock,
   Calendar,
   CheckCircle2,
@@ -116,7 +115,6 @@ export const VenueDetailPage: React.FC = () => {
     venuesLoading,
     setActiveView,
     startBookingCheckout,
-    reviews,
     isLoggedIn,
   } = useApp();
 
@@ -482,7 +480,6 @@ export const VenueDetailPage: React.FC = () => {
     );
   };
 
-  const venueReviews = reviews.filter((r) => r.venueId === selectedVenue?.id);
 
   // Semua hook sudah selesai dipanggil; aman untuk keluar lebih awal di sini.
   if (!selectedVenue) {
@@ -613,11 +610,6 @@ export const VenueDetailPage: React.FC = () => {
                     {SPORT_LABELS[st] || st}
                   </span>
                 ))}
-                <span className="flex items-center gap-1 rounded-md bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 ring-1 ring-amber-300">
-                  <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                  <span>{selectedVenue.rating}</span>
-                  <span className="text-slate-500">({selectedVenue.reviewCount} ulasan)</span>
-                </span>
               </div>
 
               <h1 className="mt-3 text-2xl font-black text-slate-900 sm:text-3xl">
@@ -1447,42 +1439,6 @@ export const VenueDetailPage: React.FC = () => {
                   </div>
                 </>
               )}
-            </div>
-
-            {/* User Reviews Section */}
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h3 className="text-base font-bold text-slate-900">
-                Ulasan &amp; Rating dari Pemain ({selectedVenue.reviewCount})
-              </h3>
-              <div className="mt-4 space-y-4">
-                {venueReviews.length === 0 ? (
-                  <p className="text-xs text-slate-400">Belum ada ulasan untuk venue ini.</p>
-                ) : (
-                  venueReviews.map((rev) => (
-                    <div key={rev.id} className="border-b border-slate-100 pb-4 last:border-0">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <img
-                            src={rev.userAvatar}
-                            alt={rev.userName}
-                            className="h-8 w-8 rounded-full object-cover"
-                            onError={handleImageError}
-                          />
-                          <div>
-                            <div className="text-xs font-bold text-slate-900">{rev.userName}</div>
-                            <div className="text-[10px] text-slate-400">{rev.createdAt}</div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1 text-xs font-bold text-amber-500">
-                          <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                          <span>{rev.rating}</span>
-                        </div>
-                      </div>
-                      <p className="mt-2 text-xs text-slate-600">{rev.comment}</p>
-                    </div>
-                  ))
-                )}
-              </div>
             </div>
           </div>
 
