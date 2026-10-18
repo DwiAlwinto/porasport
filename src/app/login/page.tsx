@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, Suspense, useTransition } from 'react';
+import React, { useState, useEffect, Suspense, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -22,9 +22,12 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const returnUrl = safeReturnUrl(searchParams.get('returnUrl'));
   const errorMessage = searchParams.get('error');
+  const hasAccountParam =
+    searchParams.get('has_account') === 'true' || searchParams.get('registered') === 'true';
   const isGoogleDevMode = searchParams.get('google_dev_mode') === 'true';
   const stateParam = searchParams.get('state') || '';
 
+  const [isCheckingRegister, setIsCheckingRegister] = useState(true);
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,6 +37,36 @@ function LoginContent() {
   // State untuk Dev Simulator Google jika belum ada Google Client ID di .env
   const [devEmail, setDevEmail] = useState('budi.santoso@gmail.com');
   const [devName, setDevName] = useState('Budi Santoso');
+
+  // Proteksi: Jika pengguna belum pernah register di browser ini, redirect ke /register
+  useEffect(() => {
+    const isRegisteredCookie =
+      typeof document !== 'undefined' &&
+      document.cookie
+        .split('; ')
+        .find((row) => row.startsWith('has_registered='))
+        ?.split('=')[1];
+    const isRegisteredStorage =
+      typeof window !== 'undefined' && localStorage.getItem('has_registered') === 'true';
+
+    if (hasAccountParam) {
+      // Pengguna datang dari tombol "Sudah punya akun? Login di sini"
+      try {
+        localStorage.setItem('has_registered', 'true');
+        document.cookie = 'has_registered=true; path=/; max-age=31536000';
+      } catch (e) {}
+      setIsCheckingRegister(false);
+      return;
+    }
+
+    if (!isRegisteredCookie && !isRegisteredStorage) {
+      // Belum pernah register: arahkan otomatis ke halaman pendaftaran
+      router.replace(`/register?redirect_from=login&returnUrl=${encodeURIComponent(returnUrl)}`);
+      return;
+    }
+
+    setIsCheckingRegister(false);
+  }, [hasAccountParam, returnUrl, router]);
 
   const handleEmailLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,6 +80,10 @@ function LoginContent() {
     startTransition(async () => {
       const res = await loginUserAction({ email, password });
       if (res.success) {
+        try {
+          localStorage.setItem('has_registered', 'true');
+          document.cookie = 'has_registered=true; path=/; max-age=31536000';
+        } catch (e) {}
         router.push(returnUrl);
         router.refresh();
       } else {
@@ -62,6 +99,17 @@ function LoginContent() {
       stateParam
     )}&dev_email=${encodeURIComponent(devEmail)}&dev_name=${encodeURIComponent(devName)}`;
   };
+
+  if (isCheckingRegister) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-xs font-bold text-slate-500">
+        <div className="flex flex-col items-center gap-2">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#05BB75] border-t-transparent" />
+          <span>Memeriksa status akun...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-between">
@@ -140,9 +188,22 @@ function LoginContent() {
 
             {/* Error Notification */}
             {formError && (
-              <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-3.5 text-xs font-semibold text-red-700">
-                <AlertCircle className="h-4 w-4 shrink-0 text-red-500 mt-0.5" />
-                <span>{formError}</span>
+              <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-3.5 text-xs font-semibold text-red-700 space-y-2">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-red-500 mt-0.5" />
+                  <span>{formError}</span>
+                </div>
+                {formError.toLowerCase().includes('belum terdaftar') && (
+                  <div className="pt-1 border-t border-red-200/60 ml-6.5">
+                    <Link
+                      href={`/register?returnUrl=${encodeURIComponent(returnUrl)}`}
+                      className="inline-flex items-center gap-1.5 font-extrabold text-[#05BB75] hover:text-[#049a60] hover:underline text-xs"
+                    >
+                      <span>Daftar (Register) Akun Sekarang</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
+                )}
               </div>
             )}
 
@@ -186,7 +247,7 @@ function LoginContent() {
               
               {/* 1. Official Google Login Button */}
               <a
-                href={`/api/auth/google?returnUrl=${encodeURIComponent(returnUrl)}`}
+                href={`/api/auth/google?mode=login&returnUrl=${encodeURIComponent(returnUrl)}`}
                 className="w-full flex items-center justify-center gap-3 rounded-xl bg-[#1e293b] hover:bg-[#0f172a] text-white py-3.5 px-4 text-xs font-extrabold uppercase tracking-wider transition-all shadow-md hover:shadow-lg active:scale-[0.99]"
               >
                 {/* Official Google 'G' Icon */}

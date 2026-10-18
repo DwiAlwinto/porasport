@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { googleAuthUpsertUser } from '@/actions/userAuthActions';
+import { googleAuthLoginUser, googleAuthRegisterUser } from '@/actions/userAuthActions';
 import { safeReturnUrl } from '@/lib/safeUrl';
 
 export async function GET(req: NextRequest) {
@@ -10,21 +10,23 @@ export async function GET(req: NextRequest) {
 
   const cookieStore = req.cookies;
   const expectedState = cookieStore.get('oauth_state')?.value;
+  const oauthMode = cookieStore.get('oauth_mode')?.value || 'login';
   // Cookie bisa saja dibuat oleh versi lama yang belum menyanitasi, jadi
   // tetap dibersihkan di sini sebelum dipakai.
   const returnUrl = safeReturnUrl(cookieStore.get('oauth_return_url')?.value);
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;
+  const errorRedirectTarget = oauthMode === 'register' ? `${baseUrl}/register` : `${baseUrl}/login`;
 
   // Cek jika user membatalkan di Google
   if (error) {
-    return NextResponse.redirect(`${baseUrl}/login?error=${encodeURIComponent(error)}`);
+    return NextResponse.redirect(`${errorRedirectTarget}?error=${encodeURIComponent(error)}`);
   }
 
   // Verifikasi Anti-CSRF State
   if (!state || !expectedState || state !== expectedState) {
     return NextResponse.redirect(
-      `${baseUrl}/login?error=${encodeURIComponent('Verifikasi keamanan Google (CSRF) gagal. Silakan coba kembali.')}`
+      `${errorRedirectTarget}?error=${encodeURIComponent('Verifikasi keamanan Google (CSRF) gagal. Silakan coba kembali.')}`
     );
   }
 
@@ -32,23 +34,15 @@ export async function GET(req: NextRequest) {
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const redirectUri = `${baseUrl}/api/auth/google/callback`;
 
-  // Jalur simulasi lokal (login dev tanpa kredensial Google).
-  //
-  // Dulu cabang ini hanya bergantung pada query param `dev_email`/`dev_name`
-  // tanpa pemeriksaan environment apa pun, sehingga bisa dipanggil di produksi:
-  // penyerang cukup mengambil cookie oauth_state miliknya sendiri lalu
-  // meminta sesi untuk email siapa pun, termasuk admin. Jadi sekarang ia
-  // berada DI DALAM blok pemeriksaan kredensial di bawah, yang otomatis
-  // menolak saat Google Client ID/Secret belum dikonfigurasi.
   if (!clientId || !clientSecret) {
     return NextResponse.redirect(
-      `${baseUrl}/login?google_dev_mode=true&state=${state}`
+      `${errorRedirectTarget}?google_dev_mode=true&state=${state}`
     );
   }
 
   if (!code) {
     return NextResponse.redirect(
-      `${baseUrl}/login?google_dev_mode=true&state=${state}`
+      `${errorRedirectTarget}?google_dev_mode=true&state=${state}`
     );
   }
 
@@ -59,20 +53,38 @@ export async function GET(req: NextRequest) {
     const devName = searchParams.get('dev_name');
 
     if (devEmail && devName) {
-      const upsertRes = await googleAuthUpsertUser({
+      const profile = {
         email: devEmail,
         name: devName,
         avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(devName)}`,
-      });
+      };
 
-      if (!upsertRes.success) {
+      const authRes =
+        oauthMode === 'register'
+          ? await googleAuthRegisterUser(profile)
+          : await googleAuthLoginUser(profile);
+
+      if (!authRes.success) {
+        if ((authRes as any).notRegistered) {
+          const res = NextResponse.redirect(
+            `${baseUrl}/register?error=${encodeURIComponent(
+              'Akun Google belum terdaftar. Silakan registrasi terlebih dahulu.'
+            )}&email=${encodeURIComponent(devEmail)}&name=${encodeURIComponent(devName)}`
+          );
+          res.cookies.delete('oauth_state');
+          res.cookies.delete('oauth_mode');
+          res.cookies.delete('oauth_return_url');
+          return res;
+        }
+
         return NextResponse.redirect(
-          `${baseUrl}/login?error=${encodeURIComponent(upsertRes.error || 'Gagal menyimpan user.')}`
+          `${errorRedirectTarget}?error=${encodeURIComponent(authRes.error || 'Gagal memproses user.')}`
         );
       }
 
       const res = NextResponse.redirect(`${baseUrl}${returnUrl}`);
       res.cookies.delete('oauth_state');
+      res.cookies.delete('oauth_mode');
       res.cookies.delete('oauth_return_url');
       return res;
     }
@@ -99,7 +111,7 @@ export async function GET(req: NextRequest) {
     if (!tokenRes.ok || !tokenData.access_token) {
       console.error('Google token exchange error:', tokenData);
       return NextResponse.redirect(
-        `${baseUrl}/login?error=${encodeURIComponent('Gagal menukarkan token otorisasi Google.')}`
+        `${errorRedirectTarget}?error=${encodeURIComponent('Gagal menukarkan token otorisasi Google.')}`
       );
     }
 
@@ -115,33 +127,62 @@ export async function GET(req: NextRequest) {
     if (!userRes.ok || !userData.email) {
       console.error('Google userinfo fetch error:', userData);
       return NextResponse.redirect(
-        `${baseUrl}/login?error=${encodeURIComponent('Gagal membaca data profil dari akun Google.')}`
+        `${errorRedirectTarget}?error=${encodeURIComponent('Gagal membaca data profil dari akun Google.')}`
       );
     }
 
-    // 3. Simpan data user ke PostgreSQL database dengan role 'USER'
-    const upsertRes = await googleAuthUpsertUser({
+    const profile = {
       googleId: userData.id,
       email: userData.email,
       name: userData.name || userData.email.split('@')[0],
       avatarUrl: userData.picture,
-    });
+    };
 
-    if (!upsertRes.success) {
-      return NextResponse.redirect(
-        `${baseUrl}/login?error=${encodeURIComponent(upsertRes.error || 'Gagal menyimpan user.')}`
-      );
+    // 3. Proses berdasarkan mode: LOGIN atau REGISTER
+    if (oauthMode === 'login') {
+      const loginRes = await googleAuthLoginUser(profile);
+
+      if (!loginRes.success) {
+        if ((loginRes as any).notRegistered) {
+          // Akun belum terdaftar: Arahkan ke register dengan pesan jelas dan auto-fill data
+          const res = NextResponse.redirect(
+            `${baseUrl}/register?error=${encodeURIComponent(
+              'Akun Google belum terdaftar. Silakan lakukan registrasi akun terlebih dahulu.'
+            )}&email=${encodeURIComponent(userData.email)}&name=${encodeURIComponent(
+              userData.name || ''
+            )}`
+          );
+          res.cookies.delete('oauth_state');
+          res.cookies.delete('oauth_mode');
+          res.cookies.delete('oauth_return_url');
+          return res;
+        }
+
+        return NextResponse.redirect(
+          `${baseUrl}/login?error=${encodeURIComponent(loginRes.error || 'Gagal masuk menggunakan Google.')}`
+        );
+      }
+    } else {
+      // mode === 'register'
+      const registerRes = await googleAuthRegisterUser(profile);
+
+      if (!registerRes.success) {
+        return NextResponse.redirect(
+          `${baseUrl}/register?error=${encodeURIComponent(registerRes.error || 'Gagal mendaftar menggunakan Google.')}`
+        );
+      }
     }
 
-    // 4. Sukses, bersihkan cookie state dan arahkan ke tujuan
+    // 4. Sukses, bersihkan cookie state & mode lalu arahkan ke tujuan
     const res = NextResponse.redirect(`${baseUrl}${returnUrl}`);
     res.cookies.delete('oauth_state');
+    res.cookies.delete('oauth_mode');
     res.cookies.delete('oauth_return_url');
     return res;
   } catch (err: any) {
     console.error('Google OAuth callback error:', err);
     return NextResponse.redirect(
-      `${baseUrl}/login?error=${encodeURIComponent('Terjadi kesalahan internal saat autentikasi Google.')}`
+      `${errorRedirectTarget}?error=${encodeURIComponent('Terjadi kesalahan internal saat autentikasi Google.')}`
     );
   }
 }

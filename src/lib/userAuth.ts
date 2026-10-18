@@ -157,6 +157,15 @@ export async function setUserSessionCookie(payload: {
     path: '/',
     maxAge: 30 * 24 * 60 * 60, // 30 hari dalam detik
   });
+
+  // Tandai bahwa browser/perangkat ini sudah terdaftar / pernah login
+  cookieStore.set('has_registered', 'true', {
+    httpOnly: false,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 365 * 24 * 60 * 60, // 1 tahun
+  });
 }
 
 /**

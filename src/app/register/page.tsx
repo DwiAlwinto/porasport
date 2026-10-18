@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   Sparkles,
+  Info,
 } from 'lucide-react';
 import { registerUserAction } from '../../actions/userAuthActions';
 
@@ -22,13 +23,17 @@ function RegisterContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnUrl = safeReturnUrl(searchParams.get('returnUrl'));
+  const emailParam = searchParams.get('email') || '';
+  const nameParam = searchParams.get('name') || '';
+  const errorParam = searchParams.get('error');
+  const redirectFrom = searchParams.get('redirect_from');
 
-  const [showEmailForm, setShowEmailForm] = useState(false);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [showEmailForm, setShowEmailForm] = useState(Boolean(emailParam || nameParam));
+  const [name, setName] = useState(nameParam);
+  const [email, setEmail] = useState(emailParam);
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [formError, setFormError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(errorParam || null);
   const [isPending, startTransition] = useTransition();
 
   const handleEmailRegister = (e: React.FormEvent) => {
@@ -54,6 +59,10 @@ function RegisterContent() {
       });
 
       if (res.success) {
+        try {
+          localStorage.setItem('has_registered', 'true');
+          document.cookie = 'has_registered=true; path=/; max-age=31536000';
+        } catch (err) {}
         router.push(returnUrl);
         router.refresh();
       } else {
@@ -139,6 +148,16 @@ function RegisterContent() {
               <div className="h-1 w-10 bg-[#05BB75] rounded-full" />
             </div>
 
+            {/* Notification jika dialihkan dari halaman login */}
+            {redirectFrom === 'login' && !formError && (
+              <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 text-xs font-semibold text-emerald-800">
+                <Info className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
+                <span>
+                  Silakan lakukan registrasi akun terlebih dahulu sebelum dapat masuk ke sistem.
+                </span>
+              </div>
+            )}
+
             {/* Error Notification */}
             {formError && (
               <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-3.5 text-xs font-semibold text-red-700">
@@ -152,7 +171,7 @@ function RegisterContent() {
               
               {/* 1. Official Google Register / Sign In Button */}
               <a
-                href={`/api/auth/google?returnUrl=${encodeURIComponent(returnUrl)}`}
+                href={`/api/auth/google?mode=register&returnUrl=${encodeURIComponent(returnUrl)}`}
                 className="w-full flex items-center justify-center gap-3 rounded-xl bg-[#1e293b] hover:bg-[#0f172a] text-white py-3.5 px-4 text-xs font-extrabold uppercase tracking-wider transition-all shadow-md hover:shadow-lg active:scale-[0.99]"
               >
                 {/* Official Google 'G' Icon */}
@@ -174,7 +193,7 @@ function RegisterContent() {
                     d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.25 2.59 1.21 6.57l4.11 3.15c.94-2.82 3.58-4.97 6.68-4.97z"
                   />
                 </svg>
-                <span>Masuk dengan Google</span>
+                <span>Daftar dengan Google</span>
               </a>
 
               {/* 2. Register With Email Toggle Button */}
@@ -288,7 +307,7 @@ function RegisterContent() {
               <p className="text-xs text-slate-600">
                 Sudah punya akun?{' '}
                 <Link
-                  href={`/login?returnUrl=${encodeURIComponent(returnUrl)}`}
+                  href={`/login?has_account=true&returnUrl=${encodeURIComponent(returnUrl)}`}
                   className="font-extrabold text-[#05BB75] hover:text-[#049a60] hover:underline"
                 >
                   Login di sini

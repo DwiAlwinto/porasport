@@ -217,9 +217,10 @@ export async function loginUserAction(data: { email: string; password?: string }
 }
 
 /**
- * Server Action: Upsert user dari Google OAuth resmi
+/**
+ * Server Action: Google OAuth Khusus LOGIN (hanya boleh masuk jika sudah terdaftar)
  */
-export async function googleAuthUpsertUser(profile: {
+export async function googleAuthLoginUser(profile: {
   googleId?: string;
   email: string;
   name: string;
@@ -233,29 +234,28 @@ export async function googleAuthUpsertUser(profile: {
       where: { email },
     });
 
-    if (user) {
-      // Perbarui foto avatar jika ada perubahan atau belum ada
-      if (profile.avatarUrl && (!user.avatarUrl || user.avatarUrl.includes('dicebear'))) {
-        user = await prisma.user.update({
-          where: { id: user.id },
-          data: {
-            avatarUrl: profile.avatarUrl,
-          },
-        });
-      }
-    } else {
-      // Buat user penyewa baru otomatis dari profil Google
-      user = await prisma.user.create({
+    // Jika user belum ada di database, tolak login dan minta register dahulu
+    if (!user) {
+      return {
+        success: false,
+        notRegistered: true,
+        error: 'Akun Google ini belum terdaftar. Silakan lakukan registrasi terlebih dahulu.',
+        email,
+        name,
+      };
+    }
+
+    // Perbarui foto avatar jika ada perubahan atau belum ada
+    if (profile.avatarUrl && (!user.avatarUrl || user.avatarUrl.includes('dicebear'))) {
+      user = await prisma.user.update({
+        where: { id: user.id },
         data: {
-          name,
-          email,
-          avatarUrl: profile.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`,
-          role: 'USER', // Otomatis tersimpan sebagai User Penyewa
+          avatarUrl: profile.avatarUrl,
         },
       });
     }
 
-    // Buat HTTP-only session cookie
+    // Buat HTTP-only session cookie & tandai has_registered
     await setUserSessionCookie({
       userId: user.id,
       email: user.email,
@@ -279,12 +279,101 @@ export async function googleAuthUpsertUser(profile: {
       },
     };
   } catch (err: any) {
-    console.error('Error googleAuthUpsertUser:', err);
+    console.error('Error googleAuthLoginUser:', err);
     return {
       success: false,
       error: 'Gagal memproses autentikasi Google.',
     };
   }
+}
+
+/**
+ * Server Action: Google OAuth Khusus REGISTER (mendaftarkan akun baru ke database)
+ */
+export async function googleAuthRegisterUser(profile: {
+  googleId?: string;
+  email: string;
+  name: string;
+  avatarUrl?: string;
+}) {
+  try {
+    const email = profile.email.trim().toLowerCase();
+    const name = profile.name.trim();
+
+    let user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (user) {
+      // Akun sudah ada, perbarui avatar jika ada
+      if (profile.avatarUrl && (!user.avatarUrl || user.avatarUrl.includes('dicebear'))) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            avatarUrl: profile.avatarUrl,
+          },
+        });
+      }
+    } else {
+      // Buat user penyewa baru di database
+      user = await prisma.user.create({
+        data: {
+          name,
+          email,
+          avatarUrl: profile.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`,
+          role: 'USER',
+        },
+      });
+    }
+
+    // Buat HTTP-only session cookie & tandai has_registered
+    await setUserSessionCookie({
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      avatarUrl: user.avatarUrl,
+      role: user.role,
+    });
+
+    revalidatePath('/admin/users/customers');
+    revalidatePath('/');
+
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        avatarUrl: user.avatarUrl,
+        role: user.role,
+      },
+    };
+  } catch (err: any) {
+    console.error('Error googleAuthRegisterUser:', err);
+    return {
+      success: false,
+      error: 'Gagal memproses registrasi Google.',
+    };
+  }
+}
+
+/**
+ * Kompatibilitas mundur: panggil googleAuthRegisterUser atau googleAuthLoginUser sesuai mode
+ */
+export async function googleAuthUpsertUser(
+  profile: {
+    googleId?: string;
+    email: string;
+    name: string;
+    avatarUrl?: string;
+  },
+  mode: 'login' | 'register' = 'register'
+) {
+  if (mode === 'login') {
+    return googleAuthLoginUser(profile);
+  }
+  return googleAuthRegisterUser(profile);
 }
 
 /**
