@@ -15,6 +15,7 @@ import {
   X,
   Sparkles,
   QrCode,
+  PhoneCall,
 } from 'lucide-react';
 import { adminLogoutAction } from '../../actions/authActions';
 import { AdminSessionProvider } from '../../context/AdminSessionContext';
@@ -97,6 +98,13 @@ export const AdminLayoutClient: React.FC<AdminLayoutClientProps> = ({ session, c
       icon: QrCode,
       badge: 'Pembayaran',
       active: pathname.startsWith('/admin/settings/qris'),
+    },
+    {
+      name: 'Kontak & Footer',
+      href: '/admin/settings/footer',
+      icon: PhoneCall,
+      badge: 'Konten',
+      active: pathname.startsWith('/admin/settings/footer'),
     },
   ];
 

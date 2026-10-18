@@ -9,10 +9,29 @@ import { SETTING_KEYS } from '../lib/settingsConstants';
 
 // Default values jika belum ada di database
 const SETTING_DEFAULTS: Record<string, string> = {
+  // QRIS
   qris_image_url: '/images/qris-disbudpora.png',
   payment_notes: 'Rekening Resmi Dinas Kebudayaan, Pemuda dan Olahraga Kabupaten Bekasi.',
   qris_label: 'DISBUDPORA KAB. BEKASI',
   bank_name: 'DISBUDPORA',
+
+  // WhatsApp & Kontak
+  whatsapp_number: '6281234567890',
+  whatsapp_message: 'Halo Admin DISBUDPORA, saya ingin konfirmasi pemesanan venue / koordinasi sewa event & pertandingan.',
+  contact_email: 'disbudporasport@bekasikab.go.id',
+  office_address: 'Stadion Wibawa Mukti, Sertajaya, Kec. Cikarang Timur, Kabupaten Bekasi, Jawa Barat 17530',
+
+  // Footer & Branding
+  footer_tagline: 'Platform resmi pemesanan gelanggang olahraga dan fasilitas olahraga di bawah naungan Dinas Kebudayaan, Pemuda dan Olahraga Kabupaten Bekasi.',
+  footer_copyright: '© 2026 Dinas Kebudayaan, Pemuda dan Olahraga (DISBUDPORA) Kabupaten Bekasi.',
+
+  // FIND US (Hanya Instagram & YouTube)
+  social_instagram: 'https://instagram.com/disbudporakabbekasi',
+  social_youtube: 'https://youtube.com/@disbudporakabbekasi',
+
+  // Download Aplikasi
+  playstore_url: '#',
+  appstore_url: '#',
 };
 
 /**
@@ -57,11 +76,58 @@ export async function updateTextSetting(key: string, value: string) {
       create: { key, value, label: key, updatedBy: session.name },
     });
     revalidatePath('/admin/settings/qris');
+    revalidatePath('/admin/settings/footer');
     revalidatePath('/');
     return { success: true };
   } catch (err: any) {
     return { success: false, error: toPublicMessage(err, 'Gagal menyimpan pengaturan.') };
   }
+}
+
+/**
+ * Update multiple settings sekaligus dalam satu transaksi database
+ */
+export async function updateMultipleSettings(data: Record<string, string>) {
+  const session = await getAdminSession();
+  if (!session || (session.role !== 'ADMIN' && session.role !== 'SUPERADMIN')) {
+    return { success: false, error: 'Akses ditolak: Anda harus login sebagai admin.' };
+  }
+
+  try {
+    const keys = Object.keys(data);
+    await prisma.$transaction(
+      keys.map((key) =>
+        prisma.systemSetting.upsert({
+          where: { key },
+          update: { value: data[key], updatedBy: session.name },
+          create: { key, value: data[key], label: key, updatedBy: session.name },
+        })
+      )
+    );
+
+    revalidatePath('/admin/settings/footer');
+    revalidatePath('/admin/settings/qris');
+    revalidatePath('/');
+    return { success: true };
+  } catch (err: any) {
+    console.error('Error updating multiple settings:', err);
+    return { success: false, error: toPublicMessage(err, 'Gagal menyimpan pengaturan.') };
+  }
+}
+
+/**
+ * Helper untuk memformat nomor WhatsApp ke link wa.me yang valid
+ */
+export async function formatWhatsAppUrl(phone: string, message?: string): Promise<string> {
+  const clean = phone.replace(/\D/g, '');
+  let normalized = clean;
+  if (normalized.startsWith('0')) {
+    normalized = '62' + normalized.slice(1);
+  } else if (!normalized.startsWith('62')) {
+    normalized = '62' + normalized;
+  }
+  const textQuery = message ? `?text=${encodeURIComponent(message)}` : '';
+  return `https://wa.me/${normalized}${textQuery}`;
 }
 
 /**

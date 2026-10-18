@@ -118,7 +118,18 @@ export const VenueDetailPage: React.FC = () => {
     isLoggedIn,
     t,
     activeLang,
+    systemSettings,
   } = useApp();
+
+  const waNumber = (systemSettings?.whatsapp_number || '6281234567890').replace(/\D/g, '');
+  const cleanWaNumber = waNumber.startsWith('0') ? '62' + waNumber.slice(1) : (waNumber.startsWith('62') ? waNumber : '62' + waNumber);
+
+  const getEventWhatsAppUrl = () => {
+    const defaultTemplate =
+      systemSettings?.whatsapp_message ||
+      `Halo Admin DISBUDPORA Sport Bekasi,\nSaya ingin mengajukan permohonan sewa venue ${selectedVenue?.name} untuk kegiatan Pertandingan / Seleksi / Kompetisi pada tanggal ${selectedDate}.\nMohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`;
+    return `https://wa.me/${cleanWaNumber}?text=${encodeURIComponent(defaultTemplate)}`;
+  };
 
   // Auth gate state — tampil jika user belum login
   const [showLoginGate, setShowLoginGate] = useState(false);
@@ -1126,9 +1137,7 @@ export const VenueDetailPage: React.FC = () => {
                           </p>
                           <div className="mt-3">
                             <a
-                              href={`https://wa.me/6281234567890?text=${encodeURIComponent(
-                                `Halo Admin DISBUDPORA Sport Bekasi,\nSaya ingin mengajukan permohonan sewa venue ${selectedVenue.name} untuk kegiatan Pertandingan / Seleksi / Kompetisi pada tanggal ${selectedDate}.\nMohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
-                              )}`}
+                              href={getEventWhatsAppUrl()}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-md hover:bg-emerald-700 transition"
@@ -1156,9 +1165,7 @@ export const VenueDetailPage: React.FC = () => {
                   </p>
                   <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
                     <a
-                      href={`https://wa.me/6281234567890?text=${encodeURIComponent(
-                        `Halo Admin DISBUDPORA Sport Bekasi,\nSaya ingin mengajukan permohonan sewa venue ${selectedVenue.name} untuk kegiatan Pertandingan / Seleksi / Kompetisi pada tanggal ${selectedDate}.\nMohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
-                      )}`}
+                      href={getEventWhatsAppUrl()}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-xs font-black text-white shadow-md hover:bg-emerald-700 transition"
@@ -1499,9 +1506,7 @@ export const VenueDetailPage: React.FC = () => {
                 </div>
 
                 <a
-                  href={`https://wa.me/6281234567890?text=${encodeURIComponent(
-                    `Halo Admin DISBUDPORA Sport Bekasi,\nSaya ingin mengajukan permohonan sewa venue ${selectedVenue.name} untuk kegiatan Pertandingan / Seleksi / Kompetisi pada tanggal ${selectedDate}.\nMohon info persyaratan surat rekomendasi dan verifikasi jadwal. Terima kasih.`
-                  )}`}
+                  href={getEventWhatsAppUrl()}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 py-3.5 text-xs font-black text-white shadow-lg shadow-emerald-600/25 hover:from-emerald-700 hover:to-emerald-800 transition"

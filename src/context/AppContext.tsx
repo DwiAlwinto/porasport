@@ -16,6 +16,7 @@ import type { UserCategory } from '@prisma/client';
 import { getVenues, createBooking } from '../actions/venueActions';
 import { getCurrentUserAction, logoutUserAction } from '../actions/userAuthActions';
 import { validateAndProcessPaymentProof } from '../actions/paymentValidationActions';
+import { getSystemSettings } from '../actions/settingsActions';
 import { parseFiltersFromQuery, serialiseFiltersToQuery } from '../lib/filterUrl';
 import { parseRouteFromUrl, buildRouteUrl, type AppView } from '../lib/navigationUrl';
 import { stripPII } from '../lib/sanitize';
@@ -25,6 +26,8 @@ interface AppContextType {
   venues: Venue[];
   venuesLoading: boolean;
   venuesError: string | null;
+  systemSettings: Record<string, string>;
+  refreshSystemSettings: () => Promise<void>;
   activeUser: UserProfile | null;
   bookings: Booking[];
   reviews: VenueReview[];
@@ -137,6 +140,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // "tidak ada venue" selama data masih di-fetch.
   const [venuesLoading, setVenuesLoading] = useState(true);
   const [venuesError, setVenuesError] = useState<string | null>(null);
+
+  // System Settings (WhatsApp, Footer, Kontak, dll.)
+  const [systemSettings, setSystemSettings] = useState<Record<string, string>>({});
+
+  const refreshSystemSettings = async () => {
+    try {
+      const data = await getSystemSettings();
+      setSystemSettings(data);
+    } catch (e) {
+      console.error('[AppContext] Gagal memuat system settings:', e);
+    }
+  };
+
+  useEffect(() => {
+    refreshSystemSettings();
+  }, []);
 
   // Load Venues from Server Actions
   useEffect(() => {
@@ -639,6 +658,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         venues,
         venuesLoading,
         venuesError,
+        systemSettings,
+        refreshSystemSettings,
         activeUser,
         bookings,
         reviews,
