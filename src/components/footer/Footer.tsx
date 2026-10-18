@@ -2,7 +2,7 @@ import React from 'react';
 import { useApp } from '../../context/AppContext';
 
 export const Footer: React.FC = () => {
-  const { setActiveView } = useApp();
+  const { setActiveView, t } = useApp();
 
   return (
     <footer className="border-t border-slate-200 bg-white pt-16 pb-8 text-slate-700">
@@ -27,12 +27,15 @@ export const Footer: React.FC = () => {
                 disbudpora sport
               </span>
             </div>
+            <p className="text-xs text-slate-500 font-medium leading-relaxed">
+              {t.footer.tagline}
+            </p>
           </div>
 
           {/* Products */}
           <div>
             <h3 className="text-[11px] font-extrabold uppercase tracking-widest text-slate-900 mb-5">
-              PRODUK
+              {t.footer.products}
             </h3>
             <ul className="space-y-3 text-sm text-slate-500 font-medium">
               <li>
@@ -40,14 +43,14 @@ export const Footer: React.FC = () => {
                   onClick={() => { setActiveView('EXPLORE'); window.scrollTo(0,0); }}
                   className="hover:text-[#05BB75] transition"
                 >
-                  Cari Venue
+                  {t.footer.searchVenues}
                 </button>
               </li>
-              <li><button className="hover:text-[#05BB75] transition">Aktivitas & Event</button></li>
-              <li><button className="hover:text-[#05BB75] transition">Komunitas Olahraga</button></li>
+              <li><button className="hover:text-[#05BB75] transition">{t.footer.activities}</button></li>
+              <li><button className="hover:text-[#05BB75] transition">{t.footer.community}</button></li>
               <li>
                 <a href="/login" className="hover:text-[#05BB75] transition">
-                  Mitra Bisnis / Pemilik Venue
+                  {t.footer.businessPartner}
                 </a>
               </li>
             </ul>
@@ -56,22 +59,22 @@ export const Footer: React.FC = () => {
           {/* Support */}
           <div>
             <h3 className="text-[11px] font-extrabold uppercase tracking-widest text-slate-900 mb-5">
-              BANTUAN
+              {t.footer.support}
             </h3>
             <ul className="space-y-3 text-sm text-slate-500 font-medium">
-              <li><button className="hover:text-[#05BB75] transition">Pusat Bantuan (FAQ)</button></li>
-              <li><button className="hover:text-[#05BB75] transition">Syarat & Ketentuan</button></li>
-              <li><button className="hover:text-[#05BB75] transition">Live Chat</button></li>
+              <li><button className="hover:text-[#05BB75] transition">{t.footer.faq}</button></li>
+              <li><button className="hover:text-[#05BB75] transition">{t.footer.terms}</button></li>
+              <li><button className="hover:text-[#05BB75] transition">{t.footer.liveChat}</button></li>
             </ul>
           </div>
 
           {/* Download App */}
           <div>
             <h3 className="text-[11px] font-extrabold uppercase tracking-widest text-slate-900 mb-5">
-              DOWNLOAD APLIKASI
+              {t.footer.downloadApp}
             </h3>
             <p className="text-sm text-slate-500 mb-4 font-medium leading-relaxed">
-              Rasakan kemudahan booking lapangan langsung dari genggaman Anda.
+              {t.footer.downloadSub}
             </p>
             <div className="flex flex-row gap-3">
               <button className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-black px-3 py-1.5 text-white transition hover:scale-105 hover:shadow-lg">

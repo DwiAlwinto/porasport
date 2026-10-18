@@ -32,6 +32,8 @@ export const CheckoutModal: React.FC = () => {
     completePayment,
     setActiveView,
     venues,
+    t,
+    activeLang,
   } = useApp();
 
   // 60 Minutes countdown timer in seconds (60 * 60 = 3600)
@@ -123,7 +125,7 @@ export const CheckoutModal: React.FC = () => {
     .padStart(2, '0')}`;
 
   const formatRupiah = (val: number) => {
-    return new Intl.NumberFormat('id-ID', {
+    return new Intl.NumberFormat(activeLang === 'US' ? 'en-US' : 'id-ID', {
       style: 'currency',
       currency: 'IDR',
       maximumFractionDigits: 0,

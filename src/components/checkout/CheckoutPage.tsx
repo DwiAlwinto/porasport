@@ -25,6 +25,8 @@ export const CheckoutPage: React.FC = () => {
     completePayment,
     setActiveView,
     venues,
+    t,
+    activeLang,
   } = useApp();
 
   const [step, setStep] = useState<1 | 2>(1);
@@ -89,13 +91,13 @@ export const CheckoutPage: React.FC = () => {
   if (!activeBookingDraft) {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center p-6 text-center">
-        <h2 className="text-xl font-bold text-slate-800">Tidak ada pesanan aktif</h2>
-        <p className="mt-2 text-sm text-slate-500 mb-6">Silakan pilih jadwal sewa terlebih dahulu.</p>
+        <h2 className="text-xl font-bold text-slate-800">{t.checkout.noActiveOrder}</h2>
+        <p className="mt-2 text-sm text-slate-500 mb-6">{t.checkout.selectScheduleFirst}</p>
         <button
           onClick={() => setActiveView('EXPLORE')}
           className="rounded-xl bg-emerald-600 px-6 py-3 text-sm font-bold text-white transition hover:bg-emerald-700"
         >
-          Cari Lapangan
+          {t.checkout.searchCourt}
         </button>
       </div>
     );
@@ -112,7 +114,7 @@ export const CheckoutPage: React.FC = () => {
   const timerString = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 
   const formatRupiah = (val: number) => {
-    return new Intl.NumberFormat('id-ID', {
+    return new Intl.NumberFormat(activeLang === 'US' ? 'en-US' : 'id-ID', {
       style: 'currency',
       currency: 'IDR',
       maximumFractionDigits: 0,
@@ -252,7 +254,7 @@ export const CheckoutPage: React.FC = () => {
                 <div className={`flex h-4 w-4 items-center justify-center rounded-full shadow-sm ring-4 ring-slate-50 ${step >= 1 ? 'bg-[#ff5722]' : 'bg-slate-300'}`}>
                 </div>
                 <span className={`mt-3 text-sm font-bold ${step >= 1 ? 'text-slate-900' : 'text-slate-400'}`}>
-                  Validasi Item
+                  {t.checkout.validateItems}
                 </span>
               </div>
 
@@ -261,7 +263,7 @@ export const CheckoutPage: React.FC = () => {
                 <div className={`flex h-4 w-4 items-center justify-center rounded-full shadow-sm ring-4 ring-slate-50 ${step >= 2 ? 'bg-[#ff5722]' : 'bg-slate-300'}`}>
                 </div>
                 <span className={`mt-3 text-sm font-bold ${step >= 2 ? 'text-slate-900' : 'text-slate-400'}`}>
-                  Data dan Pembayaran
+                  {t.checkout.dataAndPayment}
                 </span>
               </div>
             </div>
@@ -275,9 +277,9 @@ export const CheckoutPage: React.FC = () => {
               <Lock className="h-5 w-5 text-amber-700" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-black text-amber-900">Slot Dikunci Sementara</div>
+              <div className="text-sm font-black text-amber-900">{t.checkout.slotLockedTitle}</div>
               <div className="text-xs text-amber-700 leading-relaxed">
-                Mohon selesaikan pesanan Anda dalam <span className="font-black text-amber-900 bg-amber-200/50 px-1 rounded">{timerString}</span> sebelum slot dilepas otomatis.
+                {t.checkout.slotLockedNoticePrefix} <span className="font-black text-amber-900 bg-amber-200/50 px-1 rounded">{timerString}</span> {t.checkout.slotLockedNoticeSuffix}
               </div>
             </div>
           </div>
@@ -301,17 +303,17 @@ export const CheckoutPage: React.FC = () => {
                   ? 'bg-emerald-100 text-emerald-800'
                   : 'bg-amber-100 text-amber-800'
               }`}>
-                {completedBooking.status === 'PAID_SUCCESS' ? 'LUNAS & Tiket Terbit' : 'Menunggu Validasi Admin'}
+                {completedBooking.status === 'PAID_SUCCESS' ? t.checkout.paidAndTicketIssued : t.checkout.waitingAdminValidation}
               </span>
               <h2 className="mt-4 text-2xl font-black text-slate-900">
                 {completedBooking.status === 'PAID_SUCCESS'
-                  ? 'Pembayaran Berhasil Divalidasi Otomatis!'
-                  : 'Bukti Pembayaran Berhasil Dikirim!'}
+                  ? t.checkout.paymentAutoValidated
+                  : t.checkout.paymentProofSubmitted}
               </h2>
               <p className="mt-2 text-sm text-slate-600 max-w-lg mx-auto leading-relaxed">
                 {completedBooking.status === 'PAID_SUCCESS'
-                  ? 'Nominal, tanggal, dan kata kunci struk cocok. Tiket sewa sudah terbit.'
-                  : 'Data pesanan dan struk transfer QRIS Anda telah kami terima. Tim Admin DISBUDPORA akan memvalidasi bukti Anda segera.'}
+                  ? t.checkout.paymentSuccessDetail
+                  : t.checkout.paymentWaitDetail}
               </p>
             </div>
 
@@ -320,24 +322,24 @@ export const CheckoutPage: React.FC = () => {
               <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-left space-y-3 text-sm">
                 <div className="font-bold text-blue-800 flex items-center gap-1.5">
                   <AlertCircle className="h-5 w-5" />
-                  Detail Validasi OCR Otomatis
+                  {t.checkout.ocrValidationTitle}
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div className={`rounded-xl p-3 text-xs font-bold ${completedBooking.ocrValidationResult.amountMatch ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
                     <div>{completedBooking.ocrValidationResult.amountMatch ? '✅' : '❌'}</div>
-                    <div>Nominal</div>
+                    <div>{t.checkout.ocrAmount}</div>
                   </div>
                   <div className={`rounded-xl p-3 text-xs font-bold ${completedBooking.ocrValidationResult.dateMatch ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
                     <div>{completedBooking.ocrValidationResult.dateMatch ? '✅' : '❌'}</div>
-                    <div>Tanggal</div>
+                    <div>{t.checkout.ocrDate}</div>
                   </div>
                   <div className={`rounded-xl p-3 text-xs font-bold ${completedBooking.ocrValidationResult.keywordMatch ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
                     <div>{completedBooking.ocrValidationResult.keywordMatch ? '✅' : '❌'}</div>
-                    <div>Kata Kunci</div>
+                    <div>{t.checkout.ocrKeyword}</div>
                   </div>
                 </div>
                 <div className="text-xs text-blue-700">
-                  Admin akan mencocokkan dengan mutasi rekening BJB DISBUDPORA.
+                  {t.checkout.ocrAdminNote}
                 </div>
               </div>
             )}
@@ -345,21 +347,21 @@ export const CheckoutPage: React.FC = () => {
             {/* Booking Summary Box */}
             <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-slate-50 p-5 text-left space-y-3 text-sm">
               <div className="flex justify-between border-b border-slate-200 pb-3">
-                <span className="text-slate-500 font-medium">Nomor Booking</span>
+                <span className="text-slate-500 font-medium">{t.checkout.bookingNumber}</span>
                 <span className="font-mono font-black text-slate-900">{completedBooking.id}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Venue</span>
+                <span className="text-slate-500">{t.checkout.venue}</span>
                 <span className="font-bold text-slate-800">{completedBooking.venueName}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Jadwal Sewa</span>
+                <span className="text-slate-500">{t.checkout.rentalSchedule}</span>
                 <span className="font-bold text-slate-800">
                   {completedBooking.items[0]?.date} • {completedBooking.items.map(i => i.timeStart).join(', ')} WIB
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Total Nominal</span>
+                <span className="text-slate-500">{t.checkout.totalAmount}</span>
                 <span className="font-black text-emerald-700">{formatRupiah(completedBooking.grandTotal)}</span>
               </div>
             </div>
@@ -368,7 +370,7 @@ export const CheckoutPage: React.FC = () => {
               onClick={() => setActiveView('USER_DASHBOARD')}
               className="mt-6 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-sm font-bold text-white transition hover:bg-slate-800 shadow-md shadow-slate-900/20"
             >
-              Lihat Status Pesanan
+              {t.checkout.checkBookingStatus}
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>
@@ -379,8 +381,8 @@ export const CheckoutPage: React.FC = () => {
           <div className="mx-auto max-w-4xl space-y-6">
             <div className="rounded-3xl bg-white p-6 sm:p-8 shadow-sm ring-1 ring-slate-200">
               <div className="text-center mb-8">
-                <h2 className="text-2xl font-black text-slate-900">Periksa Pemesanan Anda</h2>
-                <p className="text-sm text-slate-500 mt-1">Pastikan detail pemesanan sudah sesuai dan benar.</p>
+                <h2 className="text-2xl font-black text-slate-900">{t.checkout.checkYourOrder}</h2>
+                <p className="text-sm text-slate-500 mt-1">{t.checkout.checkOrderDesc}</p>
               </div>
 
               {/* Items List */}
@@ -388,10 +390,10 @@ export const CheckoutPage: React.FC = () => {
                 <div className="p-4 sm:p-6 bg-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                   <div>
                     <h3 className="font-bold text-slate-900 text-lg">{venue?.name}</h3>
-                    <p className="text-sm text-slate-500 mt-0.5">{activeBookingDraft.sportCategory.replace('_', ' ')} pitch</p>
+                    <p className="text-sm text-slate-500 mt-0.5">{(t.categories as any)[activeBookingDraft.sportCategory] || activeBookingDraft.sportCategory.replace('_', ' ')}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-1">Subtotal</p>
+                    <p className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-1">{t.checkout.subtotal}</p>
                     <p className="font-black text-slate-900 text-lg">{formatRupiah(subtotal)}</p>
                   </div>
                 </div>
@@ -412,7 +414,7 @@ export const CheckoutPage: React.FC = () => {
                         className="flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-red-500 transition"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                        Hapus
+                        {t.checkout.delete}
                       </button>
                     </div>
                   </div>
@@ -428,13 +430,13 @@ export const CheckoutPage: React.FC = () => {
               }}
               className="w-full rounded-xl bg-[#ff5722] py-4 text-sm font-black text-white shadow-lg shadow-[#ff5722]/30 transition hover:bg-[#e64a19] uppercase tracking-wider"
             >
-              Lanjut ke Pembayaran
+              {t.checkout.proceedToPayment}
             </button>
             <button
               onClick={() => setActiveView('VENUE_DETAIL')}
               className="w-full text-center text-sm font-bold text-slate-500 hover:text-slate-800"
             >
-              Kembali
+              {t.common.back}
             </button>
           </div>
         )}
@@ -448,13 +450,13 @@ export const CheckoutPage: React.FC = () => {
               <div className="lg:col-span-6 space-y-6">
                 <div className="rounded-3xl bg-white p-6 sm:p-8 shadow-sm ring-1 ring-slate-200">
                   <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
-                    Customer Detail
+                    {t.checkout.customerDetail}
                   </h3>
                   
                   <div className="space-y-5">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                       <div>
-                        <label className="mb-1.5 block text-xs font-bold text-slate-600">Customer Name</label>
+                        <label className="mb-1.5 block text-xs font-bold text-slate-600">{t.checkout.customerName}</label>
                         <input
                           type="text"
                           value={activeUser?.name || ''}
@@ -463,7 +465,7 @@ export const CheckoutPage: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="mb-1.5 block text-xs font-bold text-slate-600">Customer Phone Number</label>
+                        <label className="mb-1.5 block text-xs font-bold text-slate-600">{t.checkout.customerPhone}</label>
                         <div className="flex">
                           <span className="inline-flex items-center rounded-l-xl border border-r-0 border-slate-200 bg-slate-100 px-3 text-sm text-slate-500 font-medium">
                             🇮🇩 +62
@@ -479,7 +481,7 @@ export const CheckoutPage: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="mb-1.5 block text-xs font-bold text-slate-600">Email</label>
+                      <label className="mb-1.5 block text-xs font-bold text-slate-600">{t.checkout.email}</label>
                       <input
                         type="email"
                         value={activeUser?.email || ''}
@@ -489,11 +491,11 @@ export const CheckoutPage: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="mb-1.5 block text-xs font-bold text-slate-600">Notes (Opsional)</label>
+                      <label className="mb-1.5 block text-xs font-bold text-slate-600">{t.checkout.notes}</label>
                       <textarea
                         value={customerNote}
                         onChange={(e) => setCustomerNote(e.target.value)}
-                        placeholder="Contoh: Tolong disiapkan bola futsal"
+                        placeholder={t.checkout.notesPlaceholder}
                         className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-800 focus:border-[#ff5722] focus:ring-1 focus:ring-[#ff5722] outline-none transition"
                         rows={3}
                       />
@@ -504,21 +506,21 @@ export const CheckoutPage: React.FC = () => {
                 {/* DOKUMEN VALIDASI ADMIN */}
                 <div className="rounded-3xl bg-white p-6 sm:p-8 shadow-sm ring-1 ring-slate-200">
                   <h3 className="text-lg font-black text-slate-800 mb-2 flex items-center gap-2">
-                    Dokumen Validasi (Wajib)
+                    {t.checkout.validationDocs}
                   </h3>
-                  <p className="text-xs text-slate-500 mb-6">Sesuai regulasi DISBUDPORA, mohon lengkapi data identitas penyewa.</p>
+                  <p className="text-xs text-slate-500 mb-6">{t.checkout.validationDocsDesc}</p>
                   
                   <div className="space-y-5">
                     <div>
                       <label className="mb-1.5 block text-xs font-bold text-slate-700 flex justify-between">
-                        <span>Nomor Induk Kependudukan (NIK) <span className="text-red-500">*</span></span>
+                        <span>{t.checkout.nikLabel} <span className="text-red-500">*</span></span>
                       </label>
                       <input
                         type="text"
                         required
                         value={nik}
                         onChange={(e) => setNik(e.target.value)}
-                        placeholder="16 Digit NIK KTP Anda"
+                        placeholder={t.checkout.nikPlaceholder}
                         maxLength={16}
                         className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-medium text-slate-900 focus:border-[#ff5722] focus:ring-1 focus:ring-[#ff5722] outline-none transition"
                       />
@@ -526,42 +528,42 @@ export const CheckoutPage: React.FC = () => {
 
                     <div>
                       <label className="mb-1.5 block text-xs font-bold text-slate-700 flex justify-between">
-                        <span>Nomor Pokok Wajib Pajak (NPWP)</span>
-                        <span className="text-slate-400 font-normal">Opsional</span>
+                        <span>{t.checkout.npwpLabel}</span>
+                        <span className="text-slate-400 font-normal">{t.checkout.optional}</span>
                       </label>
                       <input
                         type="text"
                         value={npwp}
                         onChange={(e) => setNpwp(e.target.value)}
-                        placeholder="NPWP (Jika ada)"
+                        placeholder={t.checkout.optional}
                         className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-medium text-slate-900 focus:border-[#ff5722] focus:ring-1 focus:ring-[#ff5722] outline-none transition"
                       />
                     </div>
                     
                     <div>
                       <label className="mb-1.5 block text-xs font-bold text-slate-700 flex justify-between">
-                        <span>Nama Pengirim Bank/E-Wallet <span className="text-red-500">*</span></span>
+                        <span>{t.checkout.senderNameLabel} <span className="text-red-500">*</span></span>
                       </label>
                       <input
                         type="text"
                         required
                         value={senderName}
                         onChange={(e) => setSenderName(e.target.value)}
-                        placeholder="Sesuai nama di rekening/aplikasi pembayaran"
+                        placeholder={t.checkout.senderNamePlaceholder}
                         className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-medium text-slate-900 focus:border-[#ff5722] focus:ring-1 focus:ring-[#ff5722] outline-none transition"
                       />
                     </div>
                     
                     <div>
                       <label className="mb-1.5 block text-xs font-bold text-slate-700 flex justify-between">
-                        <span>Nomor Telepon Pengirim <span className="text-red-500">*</span></span>
+                        <span>{t.checkout.senderPhoneLabel} <span className="text-red-500">*</span></span>
                       </label>
                       <input
                         type="tel"
                         required
                         value={senderPhone}
                         onChange={(e) => setSenderPhone(e.target.value.replace(/\D/g, ''))}
-                        placeholder="Contoh: 081234567890"
+                        placeholder={t.checkout.senderPhonePlaceholder}
                         className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-medium text-slate-900 focus:border-[#ff5722] focus:ring-1 focus:ring-[#ff5722] outline-none transition"
                         maxLength={13}
                       />
@@ -576,9 +578,9 @@ export const CheckoutPage: React.FC = () => {
                 {/* PEMBAYARAN */}
                 <div className="rounded-3xl bg-white p-6 sm:p-8 shadow-sm ring-1 ring-slate-200">
                   <h3 className="text-xl font-black text-slate-800 mb-1">
-                    Pilih Jenis Pembayaran
+                    {t.checkout.choosePaymentType}
                   </h3>
-                  <p className="text-xs text-slate-500 mb-6">Semua transaksi dikonfirmasi aman dan terenkripsi.</p>
+                  <p className="text-xs text-slate-500 mb-6">{t.checkout.securePaymentNote}</p>
 
                   <div className="rounded-2xl border-2 border-[#ff5722] overflow-hidden">
                     <div className="bg-[#ff5722] px-4 py-3 text-white flex items-center justify-between">
@@ -612,17 +614,17 @@ export const CheckoutPage: React.FC = () => {
                           className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-white border-2 border-orange-200 hover:border-[#ff5722] hover:bg-orange-50 text-slate-800 hover:text-[#ff5722] px-4 py-2.5 text-xs font-bold shadow-sm transition-all active:scale-95 disabled:opacity-50"
                         >
                           <Download className={`h-4 w-4 text-[#ff5722] ${isDownloadingQris ? 'animate-bounce' : ''}`} />
-                          {isDownloadingQris ? 'Mengunduh QRIS...' : 'Download Barcode QRIS'}
+                          {isDownloadingQris ? t.checkout.downloading : t.checkout.downloadBarcode}
                         </button>
                         <p className="text-[11px] text-slate-500 text-center">
-                          Simpan gambar QRIS untuk di-scan lewat aplikasi m-Banking / E-Wallet Anda
+                          {t.checkout.saveBarcodeTip}
                         </p>
                       </div>
 
                       <div className="w-full border-t border-slate-200 pt-6">
                         <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center justify-center gap-2">
                           <UploadCloud className="h-4 w-4 text-[#ff5722]" />
-                          Upload Bukti Pembayaran
+                          {t.checkout.uploadProofHeading}
                         </h4>
 
                         {/* Amount Confirmation Checkbox - REQUIRED before upload */}
@@ -635,9 +637,9 @@ export const CheckoutPage: React.FC = () => {
                             required
                           />
                           <span className="text-sm text-slate-700 leading-relaxed">
-                            Saya telah mentransfer nominal <strong className="text-[#ff5722]">{formatRupiah(grandTotal)}</strong> TEPAT SESUAI tagihan.
+                            {t.checkout.amountConfirmCheckbox} <strong className="text-[#ff5722]">{formatRupiah(grandTotal)}</strong>
                             <br />
-                            <span className="text-red-600 font-semibold">Kesalahan nominal akan menyebabkan pesanan ditolak.</span>
+                            <span className="text-red-600 font-semibold">{t.checkout.amountConfirmWarning}</span>
                           </span>
                         </label>
 
@@ -660,7 +662,7 @@ export const CheckoutPage: React.FC = () => {
                                 <p className="truncate text-sm font-bold text-slate-800">
                                   {proofFileName}
                                 </p>
-                                <p className="text-xs text-emerald-600 font-medium">Berhasil diunggah</p>
+                                <p className="text-xs text-emerald-600 font-medium">{t.checkout.uploadSuccess}</p>
                               </div>
                             </div>
                             <button
@@ -689,9 +691,9 @@ export const CheckoutPage: React.FC = () => {
                             </div>
                             <div className="text-center">
                               <p className="text-sm font-semibold text-slate-700">
-                                {isAmountConfirmed ? 'Klik untuk unggah foto' : 'Centang konfirmasi di atas untuk mengaktifkan unggah'}
+                                {isAmountConfirmed ? t.checkout.clickToUpload : t.checkout.checkConfirmFirst}
                               </p>
-                              <p className="mt-1 text-xs text-slate-500">JPG, PNG maks 5MB</p>
+                              <p className="mt-1 text-xs text-slate-500">{t.checkout.maxFileSize}</p>
                             </div>
                             <input
                               type="file"
@@ -731,7 +733,7 @@ export const CheckoutPage: React.FC = () => {
                               <div className="flex items-start gap-2 justify-center">
                                 <AlertCircle className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
                                 <div className="text-center">
-                                  <div className="font-semibold">⚠️ Validasi otomatis memerlukan review manual</div>
+                                   <div className="font-semibold">⚠️ Validasi otomatis memerlukan review manual</div>
                                   <div className="text-[10px] mt-0.5">
                                     {ocrResult ? (
                                       <>
@@ -771,19 +773,19 @@ export const CheckoutPage: React.FC = () => {
                     
                     <div className="space-y-3 border-t border-slate-100 pt-4">
                       <div className="flex justify-between text-sm">
-                        <span className="text-slate-600">Harga Sewa</span>
+                        <span className="text-slate-600">{t.checkout.rentalPrice}</span>
                         <span className="font-bold text-slate-900">{formatRupiah(subtotal)}</span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-slate-600">Platform Fee</span>
+                        <span className="text-slate-600">{t.checkout.platformFee}</span>
                         <span className="font-bold text-slate-900">{formatRupiah(serviceFee)}</span>
                       </div>
                     </div>
 
                     <div className="flex justify-between border-t border-slate-200 pt-4">
                       <div>
-                        <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Total Bayar</span>
-                        <span className="text-[10px] text-red-500 font-semibold">Bayar Penuh</span>
+                        <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider">{t.checkout.totalPayment}</span>
+                        <span className="text-[10px] text-red-500 font-semibold">{t.checkout.payFull}</span>
                       </div>
                       <span className="text-2xl font-black text-[#ff5722]">
                         {formatRupiah(grandTotal)}
@@ -794,11 +796,11 @@ export const CheckoutPage: React.FC = () => {
 
                 {/* IMPORTANT INFO */}
                 <div className="rounded-3xl bg-slate-50 p-6 sm:p-8 border border-slate-200 space-y-4 text-xs text-slate-600 leading-relaxed">
-                  <h4 className="font-bold text-slate-800 text-sm">Informasi Penting Venue</h4>
+                  <h4 className="font-bold text-slate-800 text-sm">{t.checkout.importantVenueInfo}</h4>
                   <ul className="list-disc pl-4 space-y-2 text-slate-500">
-                    <li>Harga promo tidak dapat digabungkan dengan promo lain.</li>
-                    <li>Pastikan nomor telpon saat registrasi terkoneksi dengan aplikasi WA yg valid untuk memudahkan pihak pengelola lapangan dalam pengiriman info. TERIMA KASIH</li>
-                    <li>Dihimbau untuk para customer membawa perlengkapan pribadi.</li>
+                    <li>{t.checkout.importantInfo1}</li>
+                    <li>{t.checkout.importantInfo2}</li>
+                    <li>{t.checkout.importantInfo3}</li>
                   </ul>
                   
                   <div className="mt-6 pt-4 border-t border-slate-200 flex gap-3 items-start">
@@ -810,7 +812,7 @@ export const CheckoutPage: React.FC = () => {
                       className="mt-1 h-4 w-4 rounded border-slate-300 text-[#ff5722] focus:ring-[#ff5722]"
                     />
                     <label htmlFor="tnc" className="text-slate-500">
-                      Saya telah membaca dan menyetujui <a href="#" className="text-[#ff5722] font-semibold hover:underline">Syarat & Ketentuan</a> dan <a href="#" className="text-[#ff5722] font-semibold hover:underline">Privacy Policy</a> serta Peraturan dari pihak pengelola venue.
+                      {t.checkout.tncReadAgreement} <a href="#" className="text-[#ff5722] font-semibold hover:underline">{t.checkout.tncTerms}</a> {activeLang === 'US' ? 'and' : 'dan'} <a href="#" className="text-[#ff5722] font-semibold hover:underline">{t.checkout.tncPrivacy}</a> {t.checkout.tncRules}
                     </label>
                   </div>
                 </div>
@@ -832,14 +834,14 @@ export const CheckoutPage: React.FC = () => {
                     }}
                     className="flex-1 rounded-xl border-2 border-slate-200 bg-white py-4 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition text-center"
                   >
-                    Kembali
+                    {t.common.back}
                   </button>
                   <button
                     type="submit"
                     disabled={isProcessing}
                     className="flex-[2] flex items-center justify-center gap-2 rounded-xl bg-[#ff5722] py-4 text-sm font-black text-white shadow-lg shadow-[#ff5722]/30 transition hover:bg-[#e64a19] uppercase tracking-wider disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    {isProcessing ? 'Memproses...' : 'Konfirmasi Pembayaran'}
+                    {isProcessing ? t.checkout.submitting : t.checkout.confirmPayment}
                   </button>
                 </div>
 

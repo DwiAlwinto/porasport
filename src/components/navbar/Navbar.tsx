@@ -25,6 +25,7 @@ export const Navbar: React.FC = () => {
     bookings,
     activeLang,
     setActiveLang,
+    t,
     isLoggedIn,
     logoutUser,
   } = useApp();
@@ -33,8 +34,6 @@ export const Navbar: React.FC = () => {
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const [isLangDropdownOpen, setIsLangDropdownOpen] = useState(false);
   const [showLoginGate, setShowLoginGate] = useState(false);
-
-  const t = TRANSLATIONS[activeLang];
 
   const activeBookingsCount = bookings.filter(
     (b) => b.userId === activeUser?.id && (b.status === 'PENDING_PAYMENT' || b.status === 'PAID_SUCCESS')
@@ -76,13 +75,13 @@ export const Navbar: React.FC = () => {
             onClick={() => handleNavClick('HOME')}
             className={`transition hover:text-[#05BB75] ${activeView === 'HOME' ? 'text-[#05BB75]' : ''}`}
           >
-            {t.navHome}
+            {t.nav.home}
           </button>
           <button
             onClick={() => handleNavClick('EXPLORE')}
             className={`transition hover:text-[#05BB75] ${(activeView === 'EXPLORE' || activeView === 'VENUE_DETAIL') ? 'text-[#05BB75]' : ''}`}
           >
-            {t.navVenue}
+            {t.nav.venue}
           </button>
         </nav>
 
@@ -199,7 +198,7 @@ export const Navbar: React.FC = () => {
                       className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-[#05BB75] transition"
                     >
                       <ShoppingCart className="h-4 w-4" />
-                      <span>Pesanan & Riwayat Sewa</span>
+                      <span>{t.nav.myBookings}</span>
                     </button>
                     <button
                       onClick={async () => {
@@ -209,7 +208,7 @@ export const Navbar: React.FC = () => {
                       className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 transition"
                     >
                       <LogOut className="h-4 w-4" />
-                      <span>Keluar (Logout)</span>
+                      <span>{t.nav.logout}</span>
                     </button>
                   </div>
                 )}
@@ -221,13 +220,13 @@ export const Navbar: React.FC = () => {
                   href="/login"
                   className="px-3.5 py-2 text-xs font-extrabold uppercase tracking-wider text-slate-700 hover:text-[#05BB75] transition"
                 >
-                  MASUK
+                  {t.nav.login}
                 </a>
                 <a
                   href="/register"
                   className="rounded-full bg-[#05BB75] hover:bg-[#049a60] px-5 py-2 text-xs font-black uppercase tracking-wider text-white shadow-sm shadow-emerald-500/20 transition active:scale-95"
                 >
-                  DAFTAR
+                  {t.nav.register}
                 </a>
               </div>
             )}
@@ -266,7 +265,7 @@ export const Navbar: React.FC = () => {
                 activeView === 'HOME' ? 'text-[#05BB75] bg-[#05BB75]/10' : 'text-slate-600'
               }`}
             >
-              {t.navHome}
+              {t.nav.home}
             </button>
             <button
               onClick={() => handleNavClick('EXPLORE')}
@@ -274,8 +273,34 @@ export const Navbar: React.FC = () => {
                 activeView === 'EXPLORE' ? 'text-[#05BB75] bg-[#05BB75]/10' : 'text-slate-600'
               }`}
             >
-              {t.navVenue}
+              {t.nav.venue}
             </button>
+          </div>
+
+          {/* Mobile Language Switcher */}
+          <div className="mt-3 flex items-center justify-between rounded-xl bg-slate-50 p-2 border border-slate-200">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+              <Globe className="h-4 w-4 text-[#05BB75]" />
+              <span>{activeLang === 'ID' ? 'Bahasa Indonesia' : 'English (US)'}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setActiveLang('ID')}
+                className={`rounded-lg px-2.5 py-1 text-xs font-black transition ${
+                  activeLang === 'ID' ? 'bg-[#05BB75] text-white' : 'bg-white text-slate-600'
+                }`}
+              >
+                ID
+              </button>
+              <button
+                onClick={() => setActiveLang('US')}
+                className={`rounded-lg px-2.5 py-1 text-xs font-black transition ${
+                  activeLang === 'US' ? 'bg-[#05BB75] text-white' : 'bg-white text-slate-600'
+                }`}
+              >
+                EN
+              </button>
+            </div>
           </div>
 
           <div className="mt-4 border-t border-slate-200 pt-4">
@@ -304,7 +329,7 @@ export const Navbar: React.FC = () => {
                   className="flex w-full items-center gap-2 rounded-xl bg-slate-100 p-2.5 text-xs font-bold text-slate-700"
                 >
                   <ShoppingCart className="h-4 w-4" />
-                  <span>Pesanan & Riwayat Sewa</span>
+                  <span>{t.nav.myBookings}</span>
                 </button>
 
                 <button
@@ -315,7 +340,7 @@ export const Navbar: React.FC = () => {
                   className="flex w-full items-center gap-2 rounded-xl bg-red-50 p-2.5 text-xs font-bold text-red-600"
                 >
                   <LogOut className="h-4 w-4" />
-                  <span>Keluar (Logout)</span>
+                  <span>{t.nav.logout}</span>
                 </button>
               </div>
             ) : (
@@ -324,15 +349,14 @@ export const Navbar: React.FC = () => {
                   href="/login"
                   className="flex w-full items-center justify-center rounded-xl border border-slate-300 p-2.5 text-xs font-extrabold text-slate-700 uppercase"
                 >
-                  MASUK
+                  {t.nav.login}
                 </a>
                 <a
                   href="/register"
                   className="flex w-full items-center justify-center rounded-xl bg-[#05BB75] p-2.5 text-xs font-black text-white uppercase shadow-sm"
                 >
-                  DAFTAR
+                  {t.nav.register}
                 </a>
-
               </div>
             )}
           </div>

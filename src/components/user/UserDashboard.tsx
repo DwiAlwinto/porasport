@@ -31,6 +31,8 @@ export const UserDashboard: React.FC = () => {
     addReview,
     setActiveView,
     venues,
+    t,
+    activeLang,
   } = useApp();
 
   const [statusTab, setStatusTab] = useState<string>('ALL');
@@ -81,7 +83,7 @@ export const UserDashboard: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <h1 className="text-xl font-black">{activeUser?.name || 'User'}</h1>
                     <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-xs font-semibold text-emerald-300">
-                      {activeUser?.role === 'MITRA_OWNER' ? 'Mitra Owner' : 'Penyewa / Atlet'}
+                      {activeUser?.role === 'MITRA_OWNER' ? t.userDashboard.userRoleMitra : t.userDashboard.userRoleRenter}
                     </span>
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-4 text-xs text-slate-300">
@@ -102,7 +104,7 @@ export const UserDashboard: React.FC = () => {
                   onClick={() => setActiveView('EXPLORE')}
                   className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-emerald-700"
                 >
-                  + Pesan Lapangan Baru
+                  {t.userDashboard.orderNewCourt}
                 </button>
               </div>
             </div>
@@ -119,7 +121,7 @@ export const UserDashboard: React.FC = () => {
                 : 'bg-white text-slate-600 hover:bg-slate-100'
             }`}
           >
-            Semua ({userBookings.length})
+            {t.userDashboard.tabAll} ({userBookings.length})
           </button>
           <button
             onClick={() => setStatusTab('PENDING_PAYMENT')}
@@ -129,7 +131,7 @@ export const UserDashboard: React.FC = () => {
                 : 'bg-white text-slate-600 hover:bg-slate-100'
             }`}
           >
-            Menunggu Pembayaran (
+            {t.userDashboard.tabPending} (
             {userBookings.filter((b) => b.status === 'PENDING_PAYMENT').length})
           </button>
           <button
@@ -140,7 +142,7 @@ export const UserDashboard: React.FC = () => {
                 : 'bg-white text-slate-600 hover:bg-slate-100'
             }`}
           >
-            Sukses / e-Ticket (
+            {t.userDashboard.tabPaid} (
             {userBookings.filter((b) => b.status === 'PAID_SUCCESS').length})
           </button>
           <button
@@ -151,7 +153,7 @@ export const UserDashboard: React.FC = () => {
                 : 'bg-white text-slate-600 hover:bg-slate-100'
             }`}
           >
-            Selesai Bermain (
+            {t.userDashboard.tabCompleted} (
             {userBookings.filter((b) => b.status === 'COMPLETED').length})
           </button>
           <button
@@ -162,7 +164,7 @@ export const UserDashboard: React.FC = () => {
                 : 'bg-white text-slate-600 hover:bg-slate-100'
             }`}
           >
-            Dibatalkan ({userBookings.filter((b) => b.status === 'CANCELLED').length})
+            {t.userDashboard.tabCancelled} ({userBookings.filter((b) => b.status === 'CANCELLED').length})
           </button>
         </div>
 
@@ -172,16 +174,16 @@ export const UserDashboard: React.FC = () => {
             <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white py-16 text-center">
               <Calendar className="mb-3 h-12 w-12 text-slate-300" />
               <h3 className="text-base font-bold text-slate-800">
-                Belum ada riwayat pesanan dengan status ini
+                {t.userDashboard.noBookingsTitle}
               </h3>
               <p className="mt-1 max-w-sm text-xs text-slate-500">
-                Ayo pilih venue dan pesan jadwal lapangan favoritmu sekarang juga!
+                {t.userDashboard.noBookingsDesc}
               </p>
               <button
                 onClick={() => setActiveView('EXPLORE')}
                 className="mt-4 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow hover:bg-emerald-700"
               >
-                Cari &amp; Pesan Lapangan
+                {t.userDashboard.exploreCourts}
               </button>
             </div>
           ) : (
@@ -201,23 +203,23 @@ export const UserDashboard: React.FC = () => {
                     {booking.status === 'PENDING_PAYMENT' && (
                       <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
                         {booking.paymentProofUrl
-                          ? '⏳ Menunggu Validasi Admin DISBUDPORA'
-                          : '⏳ Menunggu Pembayaran'}
+                          ? t.userDashboard.statusPendingValidation
+                          : t.userDashboard.statusPendingPayment}
                       </span>
                     )}
                     {booking.status === 'PAID_SUCCESS' && (
                       <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">
-                        ✅ Sukses (e-Ticket Siap)
+                        {t.userDashboard.statusPaidSuccess}
                       </span>
                     )}
                     {booking.status === 'COMPLETED' && (
                       <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-800">
-                        🏆 Selesai Bermain
+                        {t.userDashboard.statusCompleted}
                       </span>
                     )}
                     {booking.status === 'CANCELLED' && (
                       <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">
-                        ❌ Dibatalkan
+                        {t.userDashboard.statusCancelled}
                       </span>
                     )}
                   </div>
@@ -233,7 +235,7 @@ export const UserDashboard: React.FC = () => {
                     />
                     <div>
                       <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
-                        {booking.sportCategory}
+                        {(t.categories as any)[booking.sportCategory] || booking.sportCategory}
                       </span>
                       <h3 className="mt-1 text-base font-black text-slate-900">
                         {booking.venueName}
@@ -245,7 +247,7 @@ export const UserDashboard: React.FC = () => {
                         <span>•</span>
                         <span>
                           ⏰ {booking.items.map((i) => `${i.timeStart}-${i.timeEnd}`).join(', ')} WIB (
-                          {booking.items.length} Jam)
+                          {booking.items.length} {t.userDashboard.hours})
                         </span>
                       </div>
                     </div>
@@ -254,11 +256,15 @@ export const UserDashboard: React.FC = () => {
                   {/* Actions & Price */}
                   <div className="flex flex-col items-end justify-between gap-3 border-t border-slate-100 pt-3 sm:border-0 sm:pt-0">
                     <div className="text-right">
-                      <div className="text-[10px] uppercase text-slate-400">Total Harga</div>
+                      <div className="text-[10px] uppercase text-slate-400">{t.userDashboard.totalPrice}</div>
                       <div className="text-base font-black text-slate-900">
-                        Rp {booking.grandTotal.toLocaleString('id-ID')}
+                        {new Intl.NumberFormat(activeLang === 'US' ? 'en-US' : 'id-ID', {
+                          style: 'currency',
+                          currency: 'IDR',
+                          maximumFractionDigits: 0,
+                        }).format(booking.grandTotal)}
                       </div>
-                      <div className="text-[11px] text-slate-500">via {booking.paymentMethod}</div>
+                      <div className="text-[11px] text-slate-500">{t.userDashboard.via} {booking.paymentMethod}</div>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
@@ -268,7 +274,7 @@ export const UserDashboard: React.FC = () => {
                           className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow hover:bg-slate-800"
                         >
                           <QrCode className="h-4 w-4 text-emerald-400" />
-                          <span>Lihat QR e-Ticket</span>
+                          <span>{t.userDashboard.viewTicket}</span>
                         </button>
                       )}
 
@@ -277,7 +283,7 @@ export const UserDashboard: React.FC = () => {
                           onClick={() => cancelBooking(booking.id)}
                           className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-100"
                         >
-                          Batalkan Pesanan
+                          {t.userDashboard.cancelOrder}
                         </button>
                       )}
 
@@ -287,13 +293,13 @@ export const UserDashboard: React.FC = () => {
                           className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-white shadow hover:bg-amber-600"
                         >
                           <Star className="h-4 w-4 fill-white" />
-                          <span>Beri Review &amp; Rating</span>
+                          <span>{t.userDashboard.giveReview}</span>
                         </button>
                       )}
 
                       {booking.status === 'COMPLETED' && booking.hasReviewed && (
                         <span className="text-xs font-semibold text-emerald-600">
-                          ✓ Ulasan Terkirim
+                          {t.userDashboard.reviewSubmitted}
                         </span>
                       )}
                     </div>
@@ -310,7 +316,7 @@ export const UserDashboard: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/75 p-4 backdrop-blur-sm">
           <div className="relative w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="text-sm font-bold text-slate-900">e-Ticket &amp; QR Check-in</div>
+              <div className="text-sm font-bold text-slate-900">{t.userDashboard.eTicketTitle}</div>
               <button
                 onClick={() => setActiveQrModalBooking(null)}
                 className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"
@@ -349,10 +355,10 @@ export const UserDashboard: React.FC = () => {
               </div>
 
               <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-                ✓ Lunas via {activeQrModalBooking.paymentMethod}
+                {t.userDashboard.paidVia} {activeQrModalBooking.paymentMethod}
               </span>
               <p className="mt-4 text-[11px] text-slate-400">
-                Tunjukkan QR Code ini kepada resepsionis atau petugas lapangan saat Anda datang bermain.
+                {t.userDashboard.qrInstructions}
               </p>
             </div>
           </div>
@@ -365,7 +371,7 @@ export const UserDashboard: React.FC = () => {
           <div className="relative w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-base font-bold text-slate-900">
-                Beri Ulasan &amp; Rating
+                {t.userDashboard.reviewModalTitle}
               </h3>
               <button
                 onClick={() => setReviewModalBooking(null)}
@@ -381,14 +387,14 @@ export const UserDashboard: React.FC = () => {
                   Venue: {reviewModalBooking.venueName}
                 </div>
                 <div className="text-xs text-slate-400">
-                  Bagikan pengalaman bermainmu kepada komunitas
+                  {t.userDashboard.shareExperience}
                 </div>
               </div>
 
               {/* Star rating selector */}
               <div>
                 <label className="mb-2 block text-xs font-bold text-slate-700">
-                  Rating Lapangan (1 - 5 Bintang)
+                  {t.userDashboard.courtRating}
                 </label>
                 <div className="flex items-center gap-2">
                   {[1, 2, 3, 4, 5].map((s) => (
@@ -406,7 +412,7 @@ export const UserDashboard: React.FC = () => {
                     </button>
                   ))}
                   <span className="ml-2 text-xs font-bold text-slate-800">
-                    {rating} dari 5 Bintang
+                    {rating} {t.userDashboard.starsOf}
                   </span>
                 </div>
               </div>
@@ -414,14 +420,14 @@ export const UserDashboard: React.FC = () => {
               {/* Comment text area */}
               <div>
                 <label className="mb-2 block text-xs font-bold text-slate-700">
-                  Komentar &amp; Ulasan Fasilitas
+                  {t.userDashboard.reviewCommentLabel}
                 </label>
                 <textarea
                   rows={3}
                   required
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
-                  placeholder="Contoh: Rumput bagus banget, toilet bersih, dan lampu sangat terang..."
+                  placeholder={t.userDashboard.reviewPlaceholder}
                   className="w-full rounded-xl border border-slate-300 p-3 text-xs outline-none focus:border-emerald-500"
                 />
               </div>
@@ -430,7 +436,7 @@ export const UserDashboard: React.FC = () => {
                 type="submit"
                 className="w-full rounded-xl bg-emerald-600 py-3 text-xs font-bold text-white shadow hover:bg-emerald-700"
               >
-                Kirim Ulasan &amp; Rating
+                {t.userDashboard.submitReview}
               </button>
             </form>
           </div>

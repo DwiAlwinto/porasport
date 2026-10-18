@@ -120,6 +120,8 @@ export const ExplorePage: React.FC = () => {
     setSearchFilters,
     setSelectedVenue,
     setActiveView,
+    t,
+    activeLang,
   } = useApp();
 
   // State tampilan & pencarian
@@ -167,9 +169,9 @@ export const ExplorePage: React.FC = () => {
   filteredByCity.forEach((v) => v.sportTypes.forEach((s) => availableSportsSet.add(s)));
 
   const SPORTS_OPTIONS: { label: string; value: SportCategory }[] = [
-    { label: 'Semua Cabang Olahraga', value: 'ALL' },
+    { label: t.explore.allSportsOption, value: 'ALL' },
     ...Array.from(availableSportsSet).map((s) => ({
-      label: SPORT_LABELS[s] || s,
+      label: (t.categories as Record<string, string>)[s] || SPORT_LABELS[s] || s,
       value: s as SportCategory,
     })),
   ];
@@ -179,7 +181,7 @@ export const ExplorePage: React.FC = () => {
   filteredBySport.forEach((v) => availableCitiesSet.add(v.city));
 
   const CITIES_OPTIONS: { label: string; value: CityLocation }[] = [
-    { label: 'Semua Lokasi / Kecamatan', value: 'ALL' },
+    { label: t.explore.allLocationsOption, value: 'ALL' },
     ...Array.from(availableCitiesSet).map((c) => ({
       label: CITY_LABELS[c] || c,
       value: c as CityLocation,
@@ -351,12 +353,12 @@ export const ExplorePage: React.FC = () => {
   // Judul dinamis gaya Gelora
   const dynamicSportTitle =
     searchFilters.sport === 'ALL'
-      ? 'Semua Olahraga'
-      : SPORT_LABELS[searchFilters.sport] || searchFilters.sport;
+      ? t.hero.allSports
+      : (t.categories as Record<string, string>)[searchFilters.sport] || SPORT_LABELS[searchFilters.sport] || searchFilters.sport;
 
   const dynamicCityTitle =
     searchFilters.city === 'ALL'
-      ? 'Kabupaten Bekasi'
+      ? t.hero.allLocations
       : CITY_LABELS[searchFilters.city] || searchFilters.city;
 
   // Daftar jam slot standar ala Gelora
@@ -368,13 +370,12 @@ export const ExplorePage: React.FC = () => {
         {/* 2. DYNAMIC HEADLINE (Gaya Gelora: "Venue Semua Olahraga di Semua Kota") */}
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-black text-slate-900 sm:text-4xl tracking-tight">
-            Venue <span className="text-[#05BB75]">{dynamicSportTitle}</span> di{' '}
+            {t.explore.headlinePrefix} <span className="text-[#05BB75]">{dynamicSportTitle}</span> {t.explore.headlineIn}{' '}
             <span className="text-[#05BB75]">{dynamicCityTitle}</span>
           </h1>
           <p className="mt-2.5 text-xs sm:text-sm text-slate-500 max-w-2xl mx-auto leading-relaxed">
-            Berikut Venue <span className="font-semibold text-slate-700">{dynamicSportTitle}</span> di{' '}
-            <span className="font-semibold text-slate-700">{dynamicCityTitle}</span> yang sudah memenuhi standar
-            kualitas terbaik Disbudpora untuk memanjakan pengalamanmu bermain.
+            {t.explore.subPrefix} <span className="font-semibold text-slate-700">{dynamicSportTitle}</span> {t.explore.subMiddle}{' '}
+            <span className="font-semibold text-slate-700">{dynamicCityTitle}</span> {t.explore.subSuffix}
           </p>
         </div>
 
@@ -385,7 +386,7 @@ export const ExplorePage: React.FC = () => {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
             <input
               type="text"
-              placeholder="Ketik Nama Venue..."
+              placeholder={t.explore.searchVenuePlaceholder}
               value={nameQuery}
               onChange={(e) => setNameQuery(e.target.value)}
               className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 pl-12 pr-10 py-3.5 text-sm font-semibold text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#05BB75] focus:bg-white focus:ring-4 focus:ring-emerald-500/10"
@@ -459,7 +460,7 @@ export const ExplorePage: React.FC = () => {
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#05BB75] hover:bg-[#049a60] py-3 text-xs font-black uppercase tracking-wider text-white shadow-md shadow-emerald-500/20 transition active:scale-95"
             >
               <Search className="h-4 w-4" />
-              <span>Cari Venue</span>
+              <span>{t.explore.searchVenueBtn}</span>
             </button>
           </div>
         </div>
@@ -471,9 +472,9 @@ export const ExplorePage: React.FC = () => {
         >
           <div>
             <p className="text-xs sm:text-sm font-medium text-slate-500">
-              Hasil pencarian:{' '}
+              {t.explore.searchResults}{' '}
               <span className="font-extrabold text-slate-900">
-                {sortedVenues.length} Venue tersedia
+                {t.explore.foundVenues} {sortedVenues.length} {t.explore.venuesCount}
               </span>
             </p>
           </div>
@@ -491,11 +492,11 @@ export const ExplorePage: React.FC = () => {
                 }
                 className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-800 shadow-sm outline-none focus:border-[#05BB75]"
               >
-                <option value="POPULARITY">🔥 Paling Populer</option>
-                <option value="NEWEST">🕒 Terbaru</option>
-                <option value="RATING_DESC">⭐ Rating Tertinggi</option>
-                <option value="PRICE_ASC">💰 Harga Termurah</option>
-                <option value="PRICE_DESC">💎 Harga Termahal</option>
+                <option value="POPULARITY">{activeLang === 'ID' ? '🔥 Paling Populer' : '🔥 Most Popular'}</option>
+                <option value="NEWEST">{activeLang === 'ID' ? '🕒 Terbaru' : '🕒 Newest'}</option>
+                <option value="RATING_DESC">{activeLang === 'ID' ? '⭐ Rating Tertinggi' : '⭐ Highest Rating'}</option>
+                <option value="PRICE_ASC">{activeLang === 'ID' ? '💰 Harga Termurah' : '💰 Lowest Price'}</option>
+                <option value="PRICE_DESC">{activeLang === 'ID' ? '💎 Harga Termahal' : '💎 Highest Price'}</option>
               </select>
             </div>
 
@@ -510,7 +511,7 @@ export const ExplorePage: React.FC = () => {
               }`}
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
-              <span>Filter Lanjutan</span>
+              <span>{t.explore.advancedFilter}</span>
               {activeAdvancedFilterCount > 0 && (
                 <span className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#05BB75] text-[10px] text-white font-bold">
                   {activeAdvancedFilterCount}
@@ -531,12 +532,12 @@ export const ExplorePage: React.FC = () => {
               {isMapView ? (
                 <>
                   <LayoutGrid className="h-4 w-4" />
-                  <span>Daftar Grid</span>
+                  <span>{t.explore.gridView}</span>
                 </>
               ) : (
                 <>
                   <MapIcon className="h-4 w-4 text-[#05BB75]" />
-                  <span>Peta Interaktif</span>
+                  <span>{t.explore.mapView}</span>
                 </>
               )}
             </button>
@@ -725,7 +726,7 @@ export const ExplorePage: React.FC = () => {
                             <span>{venue.city}</span>
                             <span>•</span>
                             <span className="text-[#05BB75] font-bold">
-                              {fieldCount} Lapangan
+                              {fieldCount} {activeLang === 'ID' ? 'Lapangan' : 'Court(s)'}
                             </span>
                           </div>
 
@@ -777,8 +778,8 @@ export const ExplorePage: React.FC = () => {
                         <div className="mt-5 pt-3 border-t border-slate-100 text-center">
                           <span className="inline-flex items-center gap-1 text-xs font-bold text-[#05BB75] group-hover:underline">
                             {fieldCount > 1
-                              ? `Lihat ${fieldCount} Lapangan Lainnya`
-                              : 'Lihat Lebih Lengkap'}
+                              ? (activeLang === 'ID' ? `Lihat ${fieldCount} Lapangan Lainnya` : `View Other ${fieldCount} Courts`)
+                              : t.home.viewDetail}
                             <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
                           </span>
                         </div>
@@ -839,7 +840,7 @@ export const ExplorePage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <SlidersHorizontal className="h-5 w-5 text-[#05BB75]" />
                 <h3 className="text-base font-black text-slate-900">
-                  Filter Lanjutan Pencarian
+                  {t.explore.filterModalTitle}
                 </h3>
               </div>
               <button
@@ -857,11 +858,11 @@ export const ExplorePage: React.FC = () => {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                    Batas Anggaran Maksimum
+                    {t.explore.maxBudget}
                   </label>
                   <span className="text-xs font-black text-[#05BB75]">
                     {searchFilters.maxPrice == null
-                      ? 'Tanpa Batas'
+                      ? t.explore.noLimit
                       : `Rp ${effectiveMaxPrice.toLocaleString('id-ID')}`}
                   </span>
                 </div>
@@ -884,32 +885,42 @@ export const ExplorePage: React.FC = () => {
               {/* Ketersediaan Waktu (Pagi / Siang / Malam) */}
               <div>
                 <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Ketersediaan Waktu
+                  {t.explore.timeAvailability}
                 </label>
                 <div className="grid grid-cols-4 gap-2">
-                  {(['ALL', 'PAGI', 'SIANG', 'MALAM'] as TimeOfDayFilter[]).map((time) => (
-                    <button
-                      key={time}
-                      type="button"
-                      onClick={() =>
-                        setSearchFilters((prev) => ({ ...prev, timeOfDay: time }))
-                      }
-                      className={`rounded-xl py-2.5 text-xs font-bold uppercase transition ${
-                        searchFilters.timeOfDay === time
-                          ? 'bg-[#05BB75] text-white shadow-sm'
-                          : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
-                      }`}
-                    >
-                      {time === 'ALL' ? 'Semua' : time}
-                    </button>
-                  ))}
+                  {(['ALL', 'PAGI', 'SIANG', 'MALAM'] as TimeOfDayFilter[]).map((time) => {
+                    const label =
+                      time === 'ALL'
+                        ? t.explore.timeAll
+                        : time === 'PAGI'
+                        ? t.explore.timeMorning
+                        : time === 'SIANG'
+                        ? t.explore.timeAfternoon
+                        : t.explore.timeEvening;
+                    return (
+                      <button
+                        key={time}
+                        type="button"
+                        onClick={() =>
+                          setSearchFilters((prev) => ({ ...prev, timeOfDay: time }))
+                        }
+                        className={`rounded-xl py-2.5 text-xs font-bold uppercase transition ${
+                          searchFilters.timeOfDay === time
+                            ? 'bg-[#05BB75] text-white shadow-sm'
+                            : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
               {/* Fasilitas Venue */}
               <div>
                 <label className="mb-2.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Fasilitas Penunjang Venue
+                  {t.explore.supportingFacilities}
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   {VENUE_FACILITIES.map((fac) => {
@@ -945,7 +956,7 @@ export const ExplorePage: React.FC = () => {
                 className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold text-slate-600 hover:text-slate-900 hover:underline"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
-                <span>Reset Filter</span>
+                <span>{t.explore.resetFilter}</span>
               </button>
 
               <button
@@ -953,7 +964,7 @@ export const ExplorePage: React.FC = () => {
                 onClick={() => setIsAdvancedFilterOpen(false)}
                 className="flex-1 rounded-xl bg-[#05BB75] hover:bg-[#049a60] py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-md shadow-emerald-500/20"
               >
-                Terapkan ({sortedVenues.length} Venue)
+                {t.explore.applyFilter} ({sortedVenues.length} {t.explore.venuesCount})
               </button>
             </div>
           </div>

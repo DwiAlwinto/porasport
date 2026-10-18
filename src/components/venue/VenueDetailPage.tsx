@@ -116,6 +116,8 @@ export const VenueDetailPage: React.FC = () => {
     setActiveView,
     startBookingCheckout,
     isLoggedIn,
+    t,
+    activeLang,
   } = useApp();
 
   // Auth gate state — tampil jika user belum login
@@ -526,7 +528,7 @@ export const VenueDetailPage: React.FC = () => {
             className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900"
           >
             <ArrowLeft className="h-4 w-4" />
-            <span>Kembali ke Hasil Pencarian</span>
+            <span>{t.venueDetail.backToExplore}</span>
           </button>
 
           <div className="flex items-center gap-2">
@@ -628,7 +630,7 @@ export const VenueDetailPage: React.FC = () => {
               {/* Facilities Checklist */}
               <div className="mt-6 border-t border-slate-100 pt-5">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Fasilitas &amp; Layanan Venue
+                  {t.venueDetail.facilitiesAvailable}
                 </h3>
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {selectedVenue.facilities.map((fac) => (
@@ -648,7 +650,7 @@ export const VenueDetailPage: React.FC = () => {
             {selectedVenue.fields.length > 1 ? (
               <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <h3 className="text-base font-black text-slate-900">
-                  1. Pilih Lapangan / Court
+                  1. {t.venueDetail.selectField}
                 </h3>
                 <p className="text-xs text-slate-500">
                   Setiap lapangan memiliki jenis lantai dan tarif sewa yang berbeda
@@ -741,7 +743,7 @@ export const VenueDetailPage: React.FC = () => {
                     <span>Core Feature Kalender &amp; Jadwal</span>
                   </div>
                   <h3 className="mt-0.5 text-lg font-black text-slate-900">
-                    2. Pilih Tanggal &amp; Slot Jam Bermain
+                    2. {t.venueDetail.selectDate}
                   </h3>
                   <p className="text-xs text-slate-500">
                     Bisa pilih lebih dari 1 jam sekaligus (multi-slot booking)
@@ -1065,7 +1067,7 @@ export const VenueDetailPage: React.FC = () => {
                           -
                         </button>
                         <span className="min-w-[4.5rem] text-center text-xs font-black text-emerald-950">
-                          {swimmerCount} Orang
+                          {swimmerCount} {t.common.people}
                         </span>
                         <button
                           type="button"
@@ -1515,9 +1517,9 @@ export const VenueDetailPage: React.FC = () => {
               </div>
             ) : (
               <div className="sticky top-20 rounded-2xl border border-slate-200 bg-white p-6 shadow-lg">
-                <h3 className="text-base font-black text-slate-900">Ringkasan Pesanan</h3>
+                <h3 className="text-base font-black text-slate-900">{t.venueDetail.orderSummary}</h3>
                 <p className="text-xs text-slate-500">
-                  Periksa tanggal, lapangan, &amp; jam bermainmu
+                  {activeLang === 'ID' ? 'Periksa tanggal, lapangan, & jam bermainmu' : 'Check your date, court, & playing hours'}
                 </p>
 
                 <div className="mt-4 space-y-2.5 border-t border-slate-100 pt-4 text-xs">
@@ -1526,12 +1528,12 @@ export const VenueDetailPage: React.FC = () => {
                     <span className="font-bold text-slate-900">{selectedVenue.name}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Lapangan:</span>
+                    <span className="text-slate-500">{t.venueDetail.courtField}</span>
                     <span className="font-bold text-emerald-700">{activeField?.name}</span>
                   </div>
                   {selectedCategoryLabel && (
                     <div className="flex justify-between items-start gap-2">
-                      <span className="text-slate-500 shrink-0">Kategori:</span>
+                      <span className="text-slate-500 shrink-0">{t.venueDetail.rateCategory}</span>
                       <span className="font-bold text-slate-900 text-right line-clamp-2">
                         {selectedCategoryLabel}
                       </span>
@@ -1539,31 +1541,22 @@ export const VenueDetailPage: React.FC = () => {
                   )}
                   {selectedRate && (
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-500">Pilihan Waktu:</span>
+                      <span className="text-slate-500">{activeLang === 'ID' ? 'Pilihan Waktu:' : 'Time Selection:'}</span>
                       <span className="font-bold text-emerald-700">
                         {selectedRate.timeStart && selectedRate.timeEnd
                           ? `${selectedRate.timeStart} - ${selectedRate.timeEnd} WIB`
                           : 'Sepanjang Hari'}
-                        {selectedRate.unit === 'PER_HARI'
-                          ? ' (Paket Seharian)'
-                          : selectedRate.unit === 'PER_2_JAM'
-                          ? ' (Paket 2 Jam)'
-                          : selectedRate.unit === 'PER_3_JAM'
-                          ? ' (Paket 3 Jam)'
-                          : selectedRate.unit === 'PER_4_JAM'
-                          ? ' (Paket 4 Jam)'
-                          : ''}
                       </span>
                     </div>
                   )}
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Tanggal:</span>
+                    <span className="text-slate-500">{t.venueDetail.playDate}</span>
                     <span className="font-bold text-slate-900">{selectedDate}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Slot Jam Dipilih:</span>
+                    <span className="text-slate-500">{t.venueDetail.selectedSlots}</span>
                     <span className="font-bold text-slate-900">
-                      {selectedSlots.length} Jam
+                      {selectedSlots.length} {t.venueDetail.hours}
                     </span>
                   </div>
                 </div>
@@ -1572,7 +1565,7 @@ export const VenueDetailPage: React.FC = () => {
                 {selectedSlots.length > 0 && (
                   <div className="mt-4 rounded-xl bg-emerald-50 p-3">
                     <div className="text-[11px] font-bold uppercase text-emerald-800">
-                      Daftar Jam Terpilih:
+                      {activeLang === 'ID' ? 'Daftar Jam Terpilih:' : 'Selected Playing Hours:'}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {selectedSlots
@@ -1593,32 +1586,18 @@ export const VenueDetailPage: React.FC = () => {
                 <div className="mt-5 border-t border-slate-200 pt-4">
                   <div className="flex items-center justify-between text-xs text-slate-600">
                     <span>
-                      {selectedRate && selectedRate.unit === 'PER_HARI' && selectedSlots.length > 0
-                        ? `Tarif Paket Seharian (${selectedSlots.length} jam)`
-                        : selectedRate &&
-                          (selectedRate.unit === 'PER_2_JAM' ||
-                            selectedRate.unit === 'PER_3_JAM' ||
-                            selectedRate.unit === 'PER_4_JAM') &&
-                          selectedSlots.length > 0
-                        ? `Tarif Paket ${
-                            selectedRate.unit === 'PER_2_JAM'
-                              ? '2'
-                              : selectedRate.unit === 'PER_3_JAM'
-                              ? '3'
-                              : '4'
-                          } Jam (${selectedSlots.length} jam)`
-                        : `Subtotal Sewa (${selectedSlots.length} jam)`}
+                      {activeLang === 'ID' ? `Subtotal Sewa (${selectedSlots.length} jam)` : `Rental Subtotal (${selectedSlots.length} hr)`}
                     </span>
                     <span className="font-bold text-slate-900">
                       Rp {selectedTotalPrice.toLocaleString('id-ID')}
                     </span>
                   </div>
                   <div className="mt-1 flex items-center justify-between text-xs text-slate-600">
-                    <span>Biaya Layanan Wibawa Mukti</span>
+                    <span>{activeLang === 'ID' ? 'Biaya Layanan Wibawa Mukti' : 'Wibawa Mukti Service Fee'}</span>
                     <span>Rp {selectedSlots.length > 0 ? '5.000' : '0'}</span>
                   </div>
                   <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3 text-base font-black text-slate-900">
-                    <span>Total Bayar</span>
+                    <span>{t.venueDetail.totalCost}</span>
                     <span className="text-emerald-600">
                       Rp{' '}
                       {(selectedSlots.length > 0 ? selectedTotalPrice + 5000 : 0).toLocaleString(
@@ -1638,7 +1617,7 @@ export const VenueDetailPage: React.FC = () => {
                       : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                   }`}
                 >
-                  <span>Lanjut ke Pembayaran</span>
+                  <span>{t.venueDetail.proceedToPayment}</span>
                   <ChevronRight className="h-4 w-4" />
                 </button>
 

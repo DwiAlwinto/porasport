@@ -8,8 +8,7 @@ import {
 import { Search } from 'lucide-react';
 
 export const HeroSection: React.FC = () => {
-  const { handleSearchSubmit, searchFilters, activeLang, venues } = useApp();
-  const t = TRANSLATIONS[activeLang];
+  const { handleSearchSubmit, searchFilters, activeLang, venues, t } = useApp();
 
   const SPORT_LABELS: Record<string, string> = {
     'MINI_SOCCER': 'Mini Soccer',
@@ -55,9 +54,9 @@ export const HeroSection: React.FC = () => {
   filteredByCity.forEach(v => v.sportTypes.forEach(s => availableSportsSet.add(s)));
   
   const SPORTS_OPTIONS: { label: string; value: SportCategory }[] = [
-    { label: t.searchPlaceholderSport, value: 'ALL' },
+    { label: t.hero.allSports, value: 'ALL' },
     ...Array.from(availableSportsSet).map(s => ({
-      label: SPORT_LABELS[s] || s,
+      label: (t.categories as Record<string, string>)[s] || SPORT_LABELS[s] || s,
       value: s as SportCategory
     }))
   ];
@@ -67,7 +66,7 @@ export const HeroSection: React.FC = () => {
   filteredBySport.forEach(v => availableCitiesSet.add(v.city));
 
   const CITIES_OPTIONS: { label: string; value: CityLocation }[] = [
-    { label: t.searchPlaceholderLocation, value: 'ALL' },
+    { label: t.hero.allLocations, value: 'ALL' },
     ...Array.from(availableCitiesSet).map(c => ({
       label: CITY_LABELS[c] || c,
       value: c as CityLocation
@@ -105,7 +104,7 @@ export const HeroSection: React.FC = () => {
 
       <div className="relative z-30 mx-auto w-full max-w-4xl text-center">
         <h1 className="mb-8 text-2xl font-extrabold leading-snug tracking-tight text-white drop-shadow-sm sm:text-3xl lg:text-4xl whitespace-pre-line">
-          {t.heroTitle}
+          {t.hero.title}
         </h1>
 
         {/* Bento White Floating Search Form */}
@@ -120,7 +119,7 @@ export const HeroSection: React.FC = () => {
             className="group relative flex flex-1 cursor-pointer flex-col rounded-full px-8 py-4 transition-colors hover:bg-slate-100"
           >
             <label className="mb-0.5 text-[10px] font-extrabold uppercase tracking-widest text-slate-500 cursor-pointer">
-              Olahraga
+              {t.hero.sport}
             </label>
             <div className="flex items-center">
               <span className="text-sm font-bold text-slate-900 select-none">
@@ -159,7 +158,7 @@ export const HeroSection: React.FC = () => {
             className="group relative flex flex-1 cursor-pointer flex-col rounded-full px-8 py-4 transition-colors hover:bg-slate-100"
           >
             <label className="mb-0.5 text-[10px] font-extrabold uppercase tracking-widest text-slate-500 cursor-pointer">
-              Lokasi
+              {t.hero.location}
             </label>
             <div className="flex items-center">
               <span className="text-sm font-bold text-slate-900 select-none">
@@ -207,7 +206,7 @@ export const HeroSection: React.FC = () => {
             className="group flex flex-1 cursor-pointer flex-col rounded-full px-8 py-4 transition-colors hover:bg-slate-100"
           >
             <label className="mb-0.5 text-[10px] font-extrabold uppercase tracking-widest text-slate-500 cursor-pointer">
-              Tanggal
+              {t.hero.date}
             </label>
             <div className="flex items-center">
               <input
@@ -233,7 +232,7 @@ export const HeroSection: React.FC = () => {
               className="flex h-14 w-full items-center justify-center gap-2 rounded-full bg-[#05BB75] px-8 font-extrabold text-white shadow-md transition-all duration-300 hover:scale-105 hover:bg-[#049a60] hover:shadow-lg active:scale-95 sm:w-auto"
             >
               <Search className="h-5 w-5" />
-              <span className="text-sm">{t.searchButton}</span>
+              <span className="text-sm">{t.hero.searchBtn}</span>
             </button>
           </div>
         </form>

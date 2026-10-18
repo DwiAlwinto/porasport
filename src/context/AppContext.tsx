@@ -19,6 +19,7 @@ import { validateAndProcessPaymentProof } from '../actions/paymentValidationActi
 import { parseFiltersFromQuery, serialiseFiltersToQuery } from '../lib/filterUrl';
 import { parseRouteFromUrl, buildRouteUrl, type AppView } from '../lib/navigationUrl';
 import { stripPII } from '../lib/sanitize';
+import { TRANSLATIONS, type TranslationDictionary } from '../utils/translations';
 
 interface AppContextType {
   venues: Venue[];
@@ -80,6 +81,7 @@ interface AppContextType {
   // Language
   activeLang: 'ID' | 'US';
   setActiveLang: (lang: 'ID' | 'US') => void;
+  t: TranslationDictionary;
 
   // Real User Session
   isLoggedIn: boolean;
@@ -358,7 +360,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return null;
     }
   });
-  const [activeLang, setActiveLang] = useState<'ID' | 'US'>('ID');
+  const [activeLang, setActiveLangState] = useState<'ID' | 'US'>(() => {
+    if (typeof window === 'undefined') return 'ID';
+    try {
+      const saved = localStorage.getItem('sport_bekasi_lang');
+      return saved === 'US' ? 'US' : 'ID';
+    } catch {
+      return 'ID';
+    }
+  });
+
+  const setActiveLang = (lang: 'ID' | 'US') => {
+    setActiveLangState(lang);
+    try {
+      localStorage.setItem('sport_bekasi_lang', lang);
+    } catch {
+      // ignore
+    }
+  };
+
+  const t = TRANSLATIONS[activeLang] || TRANSLATIONS.ID;
 
   // Clean up legacy localStorage venue keys
   useEffect(() => {
@@ -642,6 +663,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addNewVenue,
         activeLang,
         setActiveLang,
+        t,
         isLoggedIn,
         isSessionChecking,
         isMounted,

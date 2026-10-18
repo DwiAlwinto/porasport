@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { Venue } from '../../types';
 
 export const RecommendedVenues: React.FC = () => {
-  const { venues, setSelectedVenue, setActiveView } = useApp();
+  const { venues, setSelectedVenue, setActiveView, t, activeLang } = useApp();
 
   // Ambil 4 venue teratas
   const displayVenues = [...venues]
@@ -32,13 +32,13 @@ export const RecommendedVenues: React.FC = () => {
         {/* Header */}
         <div className="mb-6 flex items-end justify-between">
           <h2 className="text-2xl font-black text-slate-900">
-            Rekomendasi <span className="text-[#05BB75]">Venue</span>
+            {t.home.recommendedTitle}
           </h2>
           <button 
             onClick={() => setActiveView('EXPLORE')}
             className="text-sm font-bold text-slate-600 transition hover:text-slate-900"
           >
-            Selengkapnya
+            {t.home.seeAll}
           </button>
         </div>
 
@@ -71,11 +71,13 @@ export const RecommendedVenues: React.FC = () => {
                 <div className="flex items-center text-xs font-semibold text-slate-500">
                   <span>{venue.city}</span>
                   <span className="mx-1.5">•</span>
-                  <span className="text-orange-500">{venue.fields.length} Lapangan</span>
+                  <span className="text-orange-500">
+                    {venue.fields.length} {activeLang === 'ID' ? 'Lapangan' : 'Court(s)'}
+                  </span>
                 </div>
 
                 <div className="mt-1 flex items-center text-xs font-semibold text-slate-500">
-                  <span>Harga mulai</span>
+                  <span>{t.home.startFrom}</span>
                   <span className="ml-1 text-sm font-black text-[#05BB75]">
                     {formatPrice(venue.minPrice)}
                   </span>
