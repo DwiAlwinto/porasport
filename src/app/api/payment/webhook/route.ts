@@ -187,18 +187,26 @@ export async function POST(req: NextRequest) {
 
         if (booking.items && booking.items.length > 0) {
           for (const item of booking.items) {
-            await tx.fieldSlot.updateMany({
+            const slot = await tx.fieldSlot.findFirst({
               where: {
                 fieldId: item.fieldId,
                 date: item.date,
                 timeStart: item.timeStart,
               },
-              data: {
-                status: 'AVAILABLE',
-                bookingId: null,
-                bookedByUserId: null,
-              },
             });
+            if (slot) {
+              const qty = item.quantity || 1;
+              const newBooked = Math.max(0, slot.bookedCapacity - qty);
+              await tx.fieldSlot.update({
+                where: { id: slot.id },
+                data: {
+                  bookedCapacity: newBooked,
+                  status: slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : 'AVAILABLE',
+                  bookingId: newBooked === 0 ? null : slot.bookingId,
+                  bookedByUserId: newBooked === 0 ? null : slot.bookedByUserId,
+                },
+              });
+            }
           }
         }
       }, { maxWait: 10000, timeout: 20000 });

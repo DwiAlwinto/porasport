@@ -152,6 +152,7 @@ model VenueField {
   floorType      String        @default("Sintetis")
   priceNonPeak   Int           // Harga pagi-siang (06:00 - 16:00)
   pricePeak      Int           // Harga malam/weekend (16:00 - 23:00)
+  maxCapacity    Int           @default(1) // 30 untuk Kolam Renang, 1 untuk lapangan umum
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
@@ -189,22 +190,25 @@ model FieldRate {
 }
 
 model FieldSlot {
-  id             String      @id @default(uuid())
+  id             String        @id @default(uuid())
   fieldId        String
-  date           DateTime    @db.Date
-  timeStart      String      // format HH:mm (contoh: "08:00")
-  timeEnd        String      // format HH:mm (contoh: "09:00")
-  hour           Int         // 0 - 23
+  date           DateTime      @db.Date
+  timeStart      String        // format HH:mm (contoh: "08:00")
+  timeEnd        String        // format HH:mm (contoh: "09:00")
+  hour           Int           // 0 - 23
   price          Int
-  isPeakHour     Boolean     @default(false)
-  status         SlotStatus  @default(AVAILABLE)
+  isPeakHour     Boolean       @default(false)
+  maxCapacity    Int           @default(1) // 30 untuk Kolam Renang, 1 untuk lapangan biasa
+  bookedCapacity Int           @default(0) // Jumlah kumulatif kuota/perenang yang terisi
+  status         SlotStatus    @default(AVAILABLE)
   bookedByUserId String?
   bookingId      String?
-  updatedAt      DateTime    @updatedAt
+  updatedAt      DateTime      @updatedAt
 
   // Relasi
-  field          VenueField  @relation(fields: [fieldId], references: [id], onDelete: Cascade)
-  booking        Booking?    @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  field          VenueField    @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  booking        Booking?      @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  bookingItems   BookingItem[]
 
   @@unique([fieldId, date, hour])
   @@index([date, status])
@@ -248,19 +252,23 @@ model Booking {
 }
 
 model BookingItem {
-  id          String     @id @default(uuid())
+  id          String      @id @default(uuid())
   bookingId   String
   fieldId     String
-  date        DateTime   @db.Date
+  slotId      String?
+  quantity    Int         @default(1) // Jumlah perenang / tiket (default 1)
+  date        DateTime    @db.Date
   timeStart   String
   timeEnd     String
   price       Int
-  isPeakHour  Boolean    @default(false)
+  isPeakHour  Boolean     @default(false)
 
   // Relasi
-  booking     Booking    @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  field       VenueField @relation(fields: [fieldId], references: [id], onDelete: Restrict)
+  booking     Booking     @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  field       VenueField  @relation(fields: [fieldId], references: [id], onDelete: Restrict)
+  slot        FieldSlot?  @relation(fields: [slotId], references: [id], onDelete: SetNull)
 
+  @@index([slotId])
   @@map("booking_items")
 }
 

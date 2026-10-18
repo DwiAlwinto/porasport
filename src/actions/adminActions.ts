@@ -464,7 +464,6 @@ export async function getFieldSlotsForDate(fieldId: string, dateStr: string) {
   try {
     const targetDate = dateFromKey(dateStr);
 
-
     let slots = await prisma.fieldSlot.findMany({
       where: {
         fieldId,
@@ -487,6 +486,28 @@ export async function getFieldSlotsForDate(fieldId: string, dateStr: string) {
             },
           },
         },
+        bookingItems: {
+          include: {
+            booking: {
+              select: {
+                id: true,
+                status: true,
+                paymentMethod: true,
+                nik: true,
+                senderName: true,
+                adminNotes: true,
+                grandTotal: true,
+                createdAt: true,
+                user: {
+                  select: {
+                    name: true,
+                    phone: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
       orderBy: {
         hour: 'asc',
@@ -500,6 +521,7 @@ export async function getFieldSlotsForDate(fieldId: string, dateStr: string) {
         include: { rates: true },
       });
       if (field) {
+        const defaultCap = field.maxCapacity || (field.sportType === 'RENANG' ? 30 : 1);
         const slotsToCreate = [];
         for (let hour = 6; hour < 23; hour++) {
           const isPeak = hour >= 16;
@@ -519,6 +541,8 @@ export async function getFieldSlotsForDate(fieldId: string, dateStr: string) {
             hour: hour,
             price,
             isPeakHour: isPeak,
+            maxCapacity: defaultCap,
+            bookedCapacity: 0,
             status: 'AVAILABLE' as const,
           });
         }
@@ -529,7 +553,12 @@ export async function getFieldSlotsForDate(fieldId: string, dateStr: string) {
 
         slots = await prisma.fieldSlot.findMany({
           where: { fieldId, date: targetDate },
-          include: { booking: true },
+          include: {
+            booking: true,
+            bookingItems: {
+              include: { booking: { include: { user: true } } },
+            },
+          },
           orderBy: { hour: 'asc' },
         }) as any;
       }
@@ -555,11 +584,8 @@ export async function blockSlotAction(data: {
   try {
     const targetDate = dateFromKey(data.dateStr);
 
-
     const slotId = `${data.fieldId}-${data.dateStr}-${data.hour}`;
 
-    // Slot yang diblokir tidak pernah dijual, tapi harga tetap diisi dari tarif
-    // lapangan agar konsisten kalau nanti dibuka kembali.
     const field = await prisma.venueField.findUnique({
       where: { id: data.fieldId },
       include: { rates: true },
@@ -574,6 +600,8 @@ export async function blockSlotAction(data: {
           isPeak,
         }).price
       : 0;
+
+    const defaultCap = field?.maxCapacity || (field?.sportType === 'RENANG' ? 30 : 1);
 
     const slot = await prisma.fieldSlot.upsert({
       where: {
@@ -596,6 +624,8 @@ export async function blockSlotAction(data: {
         timeEnd: `${(data.hour + 1).toString().padStart(2, '0')}:00`,
         price: blockedPrice,
         isPeakHour: isPeak,
+        maxCapacity: defaultCap,
+        bookedCapacity: 0,
         status: 'MAINTENANCE',
         bookedByUserId: `BLOCKED: ${data.reason || 'Maintenance / Acara Dinas'}`,
       },
@@ -622,13 +652,13 @@ export async function directWalkInBookingAction(data: {
   nik?: string;
   paymentMethod: string;
   price?: number;
+  swimmerCount?: number;
   userCategory?: UserCategory | null;
   notes?: string;
 }) {
   await verifySuperAdmin();
   try {
     const targetDate = dateFromKey(data.dateStr);
-
 
     const field = await prisma.venueField.findUnique({
       where: { id: data.fieldId },
@@ -637,8 +667,6 @@ export async function directWalkInBookingAction(data: {
 
     if (!field) throw new UserFacingError("Lapangan tidak ditemukan.");
 
-    // Harga diturunkan dari tarif kategori; angka manual admin hanya dipakai
-    // bila admin benar-benar mengetik nominal (mis. transaksi negosiasi).
     const resolved = resolveFieldPrice({
       rates: field.rates,
       priceNonPeak: field.priceNonPeak,
@@ -646,12 +674,24 @@ export async function directWalkInBookingAction(data: {
       category: data.userCategory,
       hour: data.hour,
     });
-    const price = data.price && data.price > 0 ? data.price : resolved.price;
+
+    const isPool = field.sportType === 'RENANG';
+    const quantity = isPool ? Math.max(1, data.swimmerCount || 1) : 1;
+
+    // Hitung total harga: jika admin isi manual price > 0, gunakan itu, jika tidak gunakan tarif x quantity
+    const pricePerUnit = resolved.price;
+    const finalPrice = data.price && data.price > 0 
+      ? data.price 
+      : isPool && data.userCategory !== 'PERTANDINGAN'
+      ? pricePerUnit * quantity
+      : pricePerUnit;
+
     const bookingId = `WALKIN-${Date.now()}`;
     const timeStart = `${data.hour.toString().padStart(2, '0')}:00`;
     const timeEnd = `${(data.hour + 1).toString().padStart(2, '0')}:00`;
+    const slotId = `${field.id}-${data.dateStr}-${data.hour}`;
 
-    // Jalankan dalam transaksi
+    // Jalankan dalam transaksi aman anti overbooking
     const result = await prisma.$transaction(async (tx) => {
       // 1. Dapatkan atau buat dummy user pemesan walk-in jika belum ada user ID
       let user = await tx.user.findFirst({ where: { email: 'walkin@sportbekasi.id' } });
@@ -667,7 +707,31 @@ export async function directWalkInBookingAction(data: {
         });
       }
 
-      // 2. Buat Booking Lunas Langsung
+      // 2. Cek kuota slot terkini
+      let slot = await tx.fieldSlot.findUnique({
+        where: {
+          fieldId_date_hour: {
+            fieldId: data.fieldId,
+            date: targetDate,
+            hour: data.hour,
+          },
+        },
+      });
+
+      const maxCap = slot?.maxCapacity || field.maxCapacity || (isPool ? 30 : 1);
+      const currentBooked = slot?.bookedCapacity || 0;
+      const newBooked = currentBooked + quantity;
+
+      if (slot && slot.status === 'MAINTENANCE') {
+        throw new UserFacingError(`Slot jam ${timeStart} sedang diblokir/maintenance.`);
+      }
+
+      if (newBooked > maxCap) {
+        const sisa = Math.max(0, maxCap - currentBooked);
+        throw new UserFacingError(`Slot jam ${timeStart} hanya tersisa ${sisa} kuota orang, Anda meminta ${quantity} orang.`);
+      }
+
+      // 3. Buat Booking Lunas Langsung
       const newBooking = await tx.booking.create({
         data: {
           id: bookingId,
@@ -676,29 +740,31 @@ export async function directWalkInBookingAction(data: {
           sportCategory: field.sportType,
           status: 'PAID_SUCCESS',
           paymentMethod: data.paymentMethod || 'TUNAI_CASH',
-          totalPrice: price,
+          totalPrice: finalPrice,
           serviceFee: 0,
-          grandTotal: price,
+          grandTotal: finalPrice,
           qrCodeToken: `QR-${bookingId}`,
           expiresAt: new Date(Date.now() + 24 * 3600000),
           nik: data.nik || null,
           senderName: data.customerName,
-          adminNotes: `WALK-IN: ${data.customerName} (${data.customerPhone || '-'}) • ${data.notes || 'Bayar Tunai di Tempat'}`,
+          adminNotes: `WALK-IN: ${data.customerName} (${data.customerPhone || '-'}) • ${isPool ? `${quantity} Orang • ` : ''}${data.notes || 'Bayar Tunai di Tempat'}`,
           items: {
             create: [
               {
                 fieldId: field.id,
+                slotId: slot ? slot.id : slotId,
+                quantity: quantity,
                 date: targetDate,
                 timeStart,
                 timeEnd,
-                price,
+                price: finalPrice,
                 isPeakHour: data.hour >= 16,
               },
             ],
           },
           payment: {
             create: {
-              amount: price,
+              amount: finalPrice,
               paymentMethod: data.paymentMethod || 'TUNAI_CASH',
               status: 'PAID',
               paidAt: new Date(),
@@ -708,7 +774,9 @@ export async function directWalkInBookingAction(data: {
         },
       });
 
-      // 3. Kunci slot menjadi BOOKED
+      // 4. Update slot kuota dan status
+      const isFull = newBooked >= maxCap;
+
       await tx.fieldSlot.upsert({
         where: {
           fieldId_date_hour: {
@@ -718,20 +786,23 @@ export async function directWalkInBookingAction(data: {
           },
         },
         update: {
-          status: 'BOOKED',
-          bookingId: newBooking.id,
-          bookedByUserId: user.id,
+          bookedCapacity: newBooked,
+          status: isFull ? 'BOOKED' : 'AVAILABLE',
+          bookingId: slot?.bookingId ? slot.bookingId : newBooking.id,
+          bookedByUserId: slot?.bookedByUserId ? slot.bookedByUserId : user.id,
         },
         create: {
-          id: `${field.id}-${data.dateStr}-${data.hour}`,
+          id: slotId,
           fieldId: field.id,
           date: targetDate,
           hour: data.hour,
           timeStart,
           timeEnd,
-          price,
+          price: finalPrice,
           isPeakHour: data.hour >= 16,
-          status: 'BOOKED',
+          maxCapacity: maxCap,
+          bookedCapacity: newBooked,
+          status: isFull ? 'BOOKED' : 'AVAILABLE',
           bookingId: newBooking.id,
           bookedByUserId: user.id,
         },
@@ -760,7 +831,6 @@ export async function unblockOrReleaseSlotAction(data: {
   try {
     const targetDate = dateFromKey(data.dateStr);
 
-
     const slot = await prisma.fieldSlot.findUnique({
       where: {
         fieldId_date_hour: {
@@ -782,11 +852,12 @@ export async function unblockOrReleaseSlotAction(data: {
         });
       }
 
-      // Reset slot kembali menjadi AVAILABLE
+      // Reset slot kembali menjadi AVAILABLE dengan bookedCapacity = 0
       await tx.fieldSlot.update({
         where: { id: slot.id },
         data: {
           status: 'AVAILABLE',
+          bookedCapacity: 0,
           bookingId: null,
           bookedByUserId: null,
         },
@@ -798,5 +869,54 @@ export async function unblockOrReleaseSlotAction(data: {
   } catch (error: any) {
     console.error("Failed to unblock slot:", error);
     return { success: false, error: toPublicMessage(error, "Gagal membuka kunci slot.") };
+  }
+}
+
+/**
+ * 11. Batalkan Booking Tertentu pada Slot (Admin Kasir / Operasional)
+ */
+export async function cancelSpecificBookingInSlot(bookingId: string, slotId: string) {
+  await verifySuperAdmin();
+  try {
+    await prisma.$transaction(async (tx) => {
+      const bookingItem = await tx.bookingItem.findFirst({
+        where: { bookingId, slotId },
+      });
+
+      const qtyToRelease = bookingItem?.quantity || 1;
+
+      // Update status booking menjadi CANCELLED
+      await tx.booking.update({
+        where: { id: bookingId },
+        data: {
+          status: 'CANCELLED',
+          adminNotes: 'Dibatalkan oleh Admin Kasir / Operasional Lapangan',
+        },
+      });
+
+      // Kembalikan kuota pada slot
+      const slot = await tx.fieldSlot.findUnique({
+        where: { id: slotId },
+      });
+
+      if (slot) {
+        const newBooked = Math.max(0, slot.bookedCapacity - qtyToRelease);
+        const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : 'AVAILABLE';
+        await tx.fieldSlot.update({
+          where: { id: slotId },
+          data: {
+            bookedCapacity: newBooked,
+            status: newStatus,
+            bookingId: newBooked === 0 ? null : slot.bookingId,
+          },
+        });
+      }
+    }, { maxWait: 10000, timeout: 20000 });
+
+    revalidatePath('/');
+    return { success: true };
+  } catch (error: any) {
+    console.error("Failed to cancel specific booking in slot:", error);
+    return { success: false, error: toPublicMessage(error, "Gagal membatalkan pesanan.") };
   }
 }

@@ -121,7 +121,11 @@ async function ensureSlotsForField(fieldId: string, daysAhead = SLOT_ROLL_FORWAR
     price: number;
     isPeakHour: boolean;
     status: 'AVAILABLE';
+    maxCapacity: number;
+    bookedCapacity: number;
   }[] = [];
+
+  const defaultCapacity = field.maxCapacity || (field.sportType === 'RENANG' ? 30 : 1);
 
   for (let i = 0; i < daysAhead; i++) {
     const d = addDays(today, i);
@@ -145,6 +149,8 @@ async function ensureSlotsForField(fieldId: string, daysAhead = SLOT_ROLL_FORWAR
         price,
         isPeakHour: hour >= 16,
         status: 'AVAILABLE',
+        maxCapacity: defaultCapacity,
+        bookedCapacity: 0,
       });
     }
   }
@@ -165,6 +171,9 @@ export type PublicSlot = {
   price: number;
   isPeakHour: boolean;
   status: 'AVAILABLE' | 'BOOKED' | 'MAINTENANCE';
+  maxCapacity: number;
+  bookedCapacity: number;
+  remainingCapacity: number;
 };
 
 /**
@@ -208,6 +217,17 @@ export async function getPublicFieldSlots(params: {
         hour: r.hour,
         isPeak: r.isPeakHour,
       });
+
+      const maxCap = r.maxCapacity || (field.sportType === 'RENANG' ? 30 : 1);
+      const bookedCap = r.bookedCapacity || 0;
+      const remainingCap = Math.max(0, maxCap - bookedCap);
+      const computedStatus =
+        r.status === 'MAINTENANCE'
+          ? 'MAINTENANCE'
+          : bookedCap >= maxCap
+          ? 'BOOKED'
+          : 'AVAILABLE';
+
       return {
         id: r.id,
         fieldId: r.fieldId,
@@ -217,7 +237,10 @@ export async function getPublicFieldSlots(params: {
         timeEnd: r.timeEnd,
         price,
         isPeakHour: r.isPeakHour,
-        status: r.status,
+        status: computedStatus,
+        maxCapacity: maxCap,
+        bookedCapacity: bookedCap,
+        remainingCapacity: remainingCap,
       };
     });
 
@@ -252,6 +275,7 @@ export async function createBooking(data: {
     timeEnd: string;
     price: number;
     isPeakHour: boolean;
+    quantity?: number;
   }[];
 }) {
   try {
@@ -280,7 +304,6 @@ export async function createBooking(data: {
     // Validasi waktu: tolak slot yang jam mulainya sudah lewat (WIB / UTC+7)
     const nowTime = Date.now();
     for (const item of data.items) {
-      // item.date e.g. "2026-10-15", item.timeStart e.g. "08:00"
       const slotStartTime = new Date(`${item.date}T${item.timeStart}:00+07:00`);
       if (!Number.isNaN(slotStartTime.getTime()) && slotStartTime.getTime() <= nowTime) {
         return {
@@ -291,8 +314,6 @@ export async function createBooking(data: {
     }
 
     // Harga SELALU dihitung ulang di server dari tabel field_rates.
-    // Nilai price/totalAmount yang dikirim client hanya dipakai sebagai
-    // pembanding dan tidak pernah dipercaya.
     const fields = await prisma.venueField.findMany({
       where: { id: { in: data.items.map((i) => i.fieldId) } },
       include: { rates: true, venue: true },
@@ -304,7 +325,6 @@ export async function createBooking(data: {
       if (!field) {
         throw new UserFacingError(`Lapangan dengan id ${item.fieldId} tidak ditemukan.`);
       }
-      // Cegah mencampur lapangan dari venue berbeda dalam satu pesanan.
       if (field.venueId !== data.venueId) {
         throw new UserFacingError('Lapangan yang dipilih bukan bagian dari venue ini.');
       }
@@ -317,7 +337,12 @@ export async function createBooking(data: {
         hour,
         isPeak: item.isPeakHour,
       });
-      return { ...item, price: resolved.price };
+
+      const qty = item.quantity && item.quantity > 0 ? item.quantity : 1;
+      const isPerPerson = field.sportType === 'RENANG' && data.userCategory !== 'PERTANDINGAN';
+      const itemPrice = isPerPerson ? resolved.price * qty : resolved.price;
+
+      return { ...item, price: itemPrice, quantity: qty };
     });
 
     const allRates = fields.flatMap((f) => f.rates);
@@ -337,7 +362,7 @@ export async function createBooking(data: {
     const serviceFee = 5000;
     const grandTotal = serverTotal + serviceFee;
 
-    // Jalankan dalam transaksi agar aman: Booking Dibuat + Slot Diupdate
+    // Jalankan dalam transaksi aman anti overbooking
     const booking = await prisma.$transaction(async (tx) => {
       // 1. Buat Booking Header
       const newBooking = await tx.booking.create({
@@ -352,7 +377,7 @@ export async function createBooking(data: {
           serviceFee,
           grandTotal,
           qrCodeToken: `QR-${crypto.randomUUID().replace(/-/g, '').slice(0, 20).toUpperCase()}`,
-          expiresAt: new Date(Date.now() + 60 * 60000), // Berikan waktu 60 menit untuk transfer & upload bukti
+          expiresAt: new Date(Date.now() + 60 * 60000), // 60 menit untuk transfer & upload bukti
           nik: data.nik || null,
           npwp: data.npwp || null,
           senderName: data.senderName || null,
@@ -361,6 +386,8 @@ export async function createBooking(data: {
           items: {
             create: pricedItems.map(item => ({
               fieldId: item.fieldId,
+              slotId: item.slotId,
+              quantity: item.quantity,
               date: new Date(item.date),
               timeStart: item.timeStart,
               timeEnd: item.timeEnd,
@@ -383,36 +410,52 @@ export async function createBooking(data: {
         }
       });
 
-      // 2. Kunci slot yang dipesan.
-      //
-      // `slotId` datang dari client, jadi TIDAK boleh dipercaya apa adanya:
-      //   - selalu pastikan slot itu milik field/tanggal yang dipesan
-      //   - hanya ambil slot yang statusnya masih AVAILABLE
-      //
-      // updateMany bersifat atomik: bila dua orang memesan slot yang sama
-      // bersamaan, hanya satu yang mendapat count = 1, sisanya gagal dan
-      // seluruh transaksi dibatalkan. Dengan `update` biasa, slot yang sudah
-      // BOOKED bisa ditimpa sehingga pembayaran orang pertama jadi yatim.
-      for (const item of data.items) {
-        const claimed = await tx.fieldSlot.updateMany({
-          where: {
-            id: item.slotId,
-            fieldId: item.fieldId,
-            timeStart: item.timeStart,
-            status: 'AVAILABLE',
-          },
-          data: {
-            status: 'BOOKED',
-            bookingId: newBooking.id,
-            bookedByUserId: userId,
-          },
+      // 2. Kunci kuota slot yang dipesan secara atomik
+      for (const item of pricedItems) {
+        const slot = await tx.fieldSlot.findUnique({
+          where: { id: item.slotId },
         });
 
-        if (claimed.count !== 1) {
+        if (!slot) {
+          throw new Error(`Slot jam ${item.timeStart} tidak ditemukan.`);
+        }
+
+        if (slot.status === 'MAINTENANCE') {
+          throw new Error(`Slot jam ${item.timeStart} sedang ditutup untuk pemeliharaan/acara dinas.`);
+        }
+
+        const maxCap = slot.maxCapacity || 1;
+        const currentBooked = slot.bookedCapacity || 0;
+        const requestedQty = item.quantity || 1;
+        const isExclusive = data.userCategory === 'PERTANDINGAN' || selectedRate?.unit === 'PER_HARI';
+
+        if (isExclusive && currentBooked > 0) {
           throw new Error(
-            `Slot ${item.timeStart} sudah tidak tersedia. Silakan pilih jadwal lain.`
+            `Slot jam ${item.timeStart} tidak dapat disewa penuh (kejuaraan/event) karena sudah terisi sebagian oleh pengunjung umum.`
           );
         }
+
+        const addQty = isExclusive ? maxCap : requestedQty;
+        const newBooked = currentBooked + addQty;
+
+        if (newBooked > maxCap) {
+          const sisa = Math.max(0, maxCap - currentBooked);
+          throw new Error(
+            `Slot jam ${item.timeStart} hanya tersisa ${sisa} kuota orang, Anda meminta ${requestedQty} orang.`
+          );
+        }
+
+        const isFull = newBooked >= maxCap;
+
+        await tx.fieldSlot.update({
+          where: { id: slot.id },
+          data: {
+            bookedCapacity: newBooked,
+            status: isFull ? 'BOOKED' : 'AVAILABLE',
+            bookingId: slot.bookingId ? slot.bookingId : newBooking.id,
+            bookedByUserId: slot.bookedByUserId ? slot.bookedByUserId : userId,
+          },
+        });
       }
 
       return newBooking;

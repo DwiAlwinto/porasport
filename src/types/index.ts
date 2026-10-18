@@ -72,6 +72,9 @@ export interface FieldSlot {
   status: 'AVAILABLE' | 'BOOKED' | 'MAINTENANCE';
   bookedByUserId?: string;
   bookingId?: string;
+  maxCapacity?: number;
+  bookedCapacity?: number;
+  remainingCapacity?: number;
 }
 
 export interface VenueField {
@@ -83,6 +86,7 @@ export interface VenueField {
   floorType: string; // "Rumput Sintetis" | "Vinyl" | "Kayu Jati" | "Interlock"
   priceNonPeak: number; // cadangan, saat belum ada tarif kategori
   pricePeak: number; // cadangan, saat belum ada tarif kategori
+  maxCapacity?: number;
   rates?: FieldRate[];
 }
 
@@ -152,6 +156,7 @@ export interface BookingItem {
   timeEnd: string;
   price: number;
   isPeakHour: boolean;
+  quantity?: number;
 }
 
 export interface Booking {

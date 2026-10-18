@@ -457,7 +457,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         timeStart: i.timeStart,
         timeEnd: i.timeEnd,
         price: i.price,
-        isPeakHour: i.isPeakHour
+        isPeakHour: i.isPeakHour,
+        quantity: i.quantity || 1,
       }))
     });
 

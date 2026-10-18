@@ -294,6 +294,23 @@ export const VenueDetailPage: React.FC = () => {
   const handleSlotToggle = (slot: FieldSlot) => {
     if (slot.status !== 'AVAILABLE') return;
 
+    const isPool = activeField?.sportType === 'RENANG' && userCategory !== 'PERTANDINGAN';
+    const remCap =
+      slot.remainingCapacity ??
+      Math.max(0, (slot.maxCapacity || 30) - (slot.bookedCapacity || 0));
+
+    if (isPool && remCap <= 0) {
+      alert('Slot jam ini sudah terisi penuh (30 orang). Silakan pilih jam lain.');
+      return;
+    }
+
+    if (isPool && swimmerCount > remCap) {
+      alert(
+        `Slot jam ${slot.timeStart} hanya tersisa ${remCap} kuota orang, sedangkan Anda memilih ${swimmerCount} orang. Silakan kurangi jumlah orang terlebih dahulu.`
+      );
+      return;
+    }
+
     const exists = selectedSlots.some((s) => s.id === slot.id);
     if (exists) {
       setSelectedSlots((prev) => prev.filter((s) => s.id !== slot.id));
@@ -452,6 +469,7 @@ export const VenueDetailPage: React.FC = () => {
         timeEnd: s.timeEnd,
         price: itemPrice,
         isPeakHour: s.isPeakHour,
+        quantity: isAquaticPerson ? swimmerCount : 1,
       };
     });
 
@@ -1059,7 +1077,26 @@ export const VenueDetailPage: React.FC = () => {
                         </span>
                         <button
                           type="button"
-                          onClick={() => setSwimmerCount(swimmerCount + 1)}
+                          onClick={() => {
+                            const maxLimit =
+                              selectedSlots.length > 0
+                                ? Math.min(
+                                    ...selectedSlots.map(
+                                      (s) =>
+                                        s.remainingCapacity ??
+                                        Math.max(
+                                          0,
+                                          (s.maxCapacity || 30) - (s.bookedCapacity || 0)
+                                        )
+                                    )
+                                  )
+                                : 30;
+                            if (swimmerCount < maxLimit) {
+                              setSwimmerCount(swimmerCount + 1);
+                            } else {
+                              alert(`Batas kuota maksimal untuk slot yang Anda pilih adalah ${maxLimit} orang.`);
+                            }
+                          }}
                           className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-300 bg-white font-black text-emerald-800 shadow-sm hover:bg-emerald-50 transition"
                         >
                           +
@@ -1194,7 +1231,12 @@ export const VenueDetailPage: React.FC = () => {
                         .filter((s) => !s.isPeakHour)
                         .map((slot) => {
                           const isSelected = selectedSlots.some((s) => s.id === slot.id);
-                          const isBooked = slot.status === 'BOOKED';
+                          const isPool = activeField?.sportType === 'RENANG';
+                          const remCap =
+                            slot.remainingCapacity ??
+                            Math.max(0, (slot.maxCapacity || 30) - (slot.bookedCapacity || 0));
+                          const isPoolFull = isPool && remCap <= 0;
+                          const isBooked = slot.status === 'BOOKED' || isPoolFull;
                           const isMaintenance = slot.status === 'MAINTENANCE';
                           const isPast = isSlotPast(selectedDate, slot.hour, slot.timeStart);
                           const isDisabled = isBooked || isMaintenance || isPast;
@@ -1233,7 +1275,7 @@ export const VenueDetailPage: React.FC = () => {
                               </div>
                               {isBooked ? (
                                 <span className="mt-0.5 text-[10px] font-semibold uppercase text-slate-400">
-                                  Booked
+                                  {isPoolFull ? 'Penuh (30/30)' : 'Booked'}
                                 </span>
                               ) : isMaintenance ? (
                                 <span className="mt-0.5 text-[10px] font-semibold uppercase text-amber-600">
@@ -1244,26 +1286,47 @@ export const VenueDetailPage: React.FC = () => {
                                   Lewat
                                 </span>
                               ) : isSelected ? (
-                                <div className="mt-0.5 flex flex-col items-center">
+                                <div className="mt-0.5 flex flex-col items-center gap-0.5">
                                   <span className="text-[11px] font-bold text-emerald-100">
                                     Rp {(slot.price / 1000).toFixed(0)}k
                                   </span>
+                                  {isPool && (
+                                    <span className="rounded-full bg-emerald-800 px-1.5 py-0.2 text-[8px] font-black text-emerald-100">
+                                      Sisa {remCap} org
+                                    </span>
+                                  )}
                                   <span className="rounded-full bg-emerald-700 px-1.5 py-0.2 text-[8px] font-black uppercase text-white">
                                     ✓ Dipilih
                                   </span>
                                 </div>
                               ) : isInWindow ? (
-                                <div className="mt-0.5 flex flex-col items-center">
+                                <div className="mt-0.5 flex flex-col items-center gap-0.5">
                                   <span className="text-[11px] font-black text-emerald-700">
                                     Rp {(slot.price / 1000).toFixed(0)}k
                                   </span>
+                                  {isPool && (
+                                    <span className="rounded-full bg-emerald-100 px-1.5 py-0.2 text-[8px] font-black text-emerald-800 border border-emerald-300">
+                                      Sisa {remCap} org
+                                    </span>
+                                  )}
                                   <span className="rounded-full bg-emerald-200/90 px-1.5 py-0.2 text-[8px] font-black uppercase text-emerald-900">
                                     Waktu Pilihan
                                   </span>
                                 </div>
                               ) : (
-                                <div className="mt-0.5 text-[11px] font-bold text-slate-600">
-                                  Rp {(slot.price / 1000).toFixed(0)}k
+                                <div className="mt-0.5 flex flex-col items-center gap-0.5">
+                                  <span className="text-[11px] font-bold text-slate-600">
+                                    Rp {(slot.price / 1000).toFixed(0)}k
+                                  </span>
+                                  {isPool && (
+                                    <span className={`rounded-full px-1.5 py-0.2 text-[8px] font-extrabold ${
+                                      remCap <= 5
+                                        ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                        : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                    }`}>
+                                      Sisa {remCap} org
+                                    </span>
+                                  )}
                                 </div>
                               )}
                             </button>
@@ -1279,7 +1342,12 @@ export const VenueDetailPage: React.FC = () => {
                         .filter((s) => s.isPeakHour)
                         .map((slot) => {
                           const isSelected = selectedSlots.some((s) => s.id === slot.id);
-                          const isBooked = slot.status === 'BOOKED';
+                          const isPool = activeField?.sportType === 'RENANG';
+                          const remCap =
+                            slot.remainingCapacity ??
+                            Math.max(0, (slot.maxCapacity || 30) - (slot.bookedCapacity || 0));
+                          const isPoolFull = isPool && remCap <= 0;
+                          const isBooked = slot.status === 'BOOKED' || isPoolFull;
                           const isMaintenance = slot.status === 'MAINTENANCE';
                           const isPast = isSlotPast(selectedDate, slot.hour, slot.timeStart);
                           const isDisabled = isBooked || isMaintenance || isPast;
@@ -1318,7 +1386,7 @@ export const VenueDetailPage: React.FC = () => {
                               </div>
                               {isBooked ? (
                                 <span className="mt-0.5 text-[10px] font-semibold uppercase text-slate-400">
-                                  Booked
+                                  {isPoolFull ? 'Penuh (30/30)' : 'Booked'}
                                 </span>
                               ) : isMaintenance ? (
                                 <span className="mt-0.5 text-[10px] font-semibold uppercase text-amber-600">
@@ -1329,26 +1397,47 @@ export const VenueDetailPage: React.FC = () => {
                                   Lewat
                                 </span>
                               ) : isSelected ? (
-                                <div className="mt-0.5 flex flex-col items-center">
+                                <div className="mt-0.5 flex flex-col items-center gap-0.5">
                                   <span className="text-[11px] font-bold text-emerald-100">
                                     Rp {(slot.price / 1000).toFixed(0)}k
                                   </span>
+                                  {isPool && (
+                                    <span className="rounded-full bg-emerald-800 px-1.5 py-0.2 text-[8px] font-black text-emerald-100">
+                                      Sisa {remCap} org
+                                    </span>
+                                  )}
                                   <span className="rounded-full bg-emerald-700 px-1.5 py-0.2 text-[8px] font-black uppercase text-white">
                                     ✓ Dipilih
                                   </span>
                                 </div>
                               ) : isInWindow ? (
-                                <div className="mt-0.5 flex flex-col items-center">
+                                <div className="mt-0.5 flex flex-col items-center gap-0.5">
                                   <span className="text-[11px] font-black text-emerald-700">
                                     Rp {(slot.price / 1000).toFixed(0)}k
                                   </span>
+                                  {isPool && (
+                                    <span className="rounded-full bg-emerald-100 px-1.5 py-0.2 text-[8px] font-black text-emerald-800 border border-emerald-300">
+                                      Sisa {remCap} org
+                                    </span>
+                                  )}
                                   <span className="rounded-full bg-emerald-200/90 px-1.5 py-0.2 text-[8px] font-black uppercase text-emerald-900">
                                     Waktu Pilihan
                                   </span>
                                 </div>
                               ) : (
-                                <div className="mt-0.5 text-[11px] font-bold text-slate-600">
-                                  Rp {(slot.price / 1000).toFixed(0)}k
+                                <div className="mt-0.5 flex flex-col items-center gap-0.5">
+                                  <span className="text-[11px] font-bold text-slate-600">
+                                    Rp {(slot.price / 1000).toFixed(0)}k
+                                  </span>
+                                  {isPool && (
+                                    <span className={`rounded-full px-1.5 py-0.2 text-[8px] font-extrabold ${
+                                      remCap <= 5
+                                        ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                        : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                    }`}>
+                                      Sisa {remCap} org
+                                    </span>
+                                  )}
                                 </div>
                               )}
                             </button>
