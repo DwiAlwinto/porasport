@@ -60,17 +60,41 @@ export const PromoBannerCarousel: React.FC = () => {
           className="flex transition-transform duration-700 ease-in-out"
           style={{ transform: `translateX(-${currentIndex * 100}%)` }}
         >
-          {banners.map((banner) => (
-            <div key={banner.id} className="w-full shrink-0 relative aspect-[16/9] md:aspect-[21/9]">
-              <Image 
-                src={banner.imageUrl} 
-                alt={banner.title || 'Promo Banner'} 
-                fill 
-                className="object-cover"
-                priority={currentIndex === 0}
-              />
-            </div>
-          ))}
+          {banners.map((banner) => {
+            if (banner.linkUrl) {
+              const isExternal = banner.linkUrl.startsWith('http://') || banner.linkUrl.startsWith('https://');
+              return (
+                <a
+                  key={banner.id}
+                  href={banner.linkUrl}
+                  target={isExternal ? '_blank' : undefined}
+                  rel={isExternal ? 'noopener noreferrer' : undefined}
+                  className="w-full shrink-0 relative aspect-[16/9] md:aspect-[21/9] block cursor-pointer group/slide"
+                  title={banner.title || 'Promo Banner'}
+                >
+                  <Image 
+                    src={banner.imageUrl} 
+                    alt={banner.title || 'Promo Banner'} 
+                    fill 
+                    className="object-cover transition-transform duration-500 group-hover/slide:scale-[1.01]"
+                    priority={currentIndex === 0}
+                  />
+                </a>
+              );
+            }
+
+            return (
+              <div key={banner.id} className="w-full shrink-0 relative aspect-[16/9] md:aspect-[21/9]">
+                <Image 
+                  src={banner.imageUrl} 
+                  alt={banner.title || 'Promo Banner'} 
+                  fill 
+                  className="object-cover"
+                  priority={currentIndex === 0}
+                />
+              </div>
+            );
+          })}
         </div>
 
         {/* Navigation Arrows (Hanya tampil jika banner > 1) */}

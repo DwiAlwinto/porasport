@@ -319,6 +319,7 @@ model PromoBanner {
   id          String   @id @default(uuid())
   title       String?  // Judul opsional untuk admin
   imageUrl    String   // URL gambar dari Supabase
+  linkUrl     String?  // Link URL tujuan klik banner (opsional)
   isActive    Boolean  @default(true) // Status aktif/tidak aktif
   orderIndex  Int      @default(0) // Urutan tampilan
   createdAt   DateTime @default(now())
