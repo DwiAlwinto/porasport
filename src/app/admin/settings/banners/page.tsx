@@ -399,8 +399,8 @@ export default function AdminPromoBannersPage() {
                   <span className="text-[10px] text-slate-400 font-medium">Maks. 5 MB</span>
                 </div>
 
-                {/* Format Badges */}
-                <div className="flex items-center gap-1.5 mb-2.5">
+                {/* Format Badges & Rekomendasi Rasio */}
+                <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
                   <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
                     PNG
                   </span>
@@ -409,6 +409,9 @@ export default function AdminPromoBannersPage() {
                   </span>
                   <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-50 text-purple-700 border border-purple-200">
                     WebP
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                    Rasio Ideal: 2.4 : 1 (1920×800 px)
                   </span>
                 </div>
 
@@ -460,7 +463,7 @@ export default function AdminPromoBannersPage() {
                 ) : (
                   /* Preview Card saat file terpilih */
                   <div className="rounded-2xl border border-slate-200 overflow-hidden bg-slate-100 relative group shadow-sm">
-                    <div className="aspect-[21/9] relative">
+                    <div className="aspect-[12/5] relative">
                       <Image src={previewUrl} alt="Preview Banner" fill className="object-cover" />
                     </div>
 
@@ -605,7 +608,7 @@ export default function AdminPromoBannersPage() {
                         </div>
 
                         {/* 2. Image Preview Thumbnail */}
-                        <div className="w-full sm:w-44 aspect-[16/9] md:aspect-[21/9] rounded-2xl overflow-hidden bg-slate-100 relative shrink-0 border border-slate-200 shadow-sm">
+                        <div className="w-full sm:w-48 aspect-[12/5] rounded-xl overflow-hidden bg-slate-100 relative shrink-0 border border-slate-200 shadow-sm">
                           <Image 
                             src={banner.imageUrl} 
                             alt={banner.title || 'Banner'} 
@@ -784,7 +787,7 @@ export default function AdminPromoBannersPage() {
                 </div>
 
                 {editPreviewUrl && (
-                  <div className="rounded-2xl border border-slate-200 overflow-hidden bg-slate-100 aspect-[21/9] relative mb-3 shadow-inner">
+                  <div className="rounded-2xl border border-slate-200 overflow-hidden bg-slate-100 aspect-[12/5] relative mb-3 shadow-inner">
                     <Image src={editPreviewUrl} alt="Preview" fill className="object-cover" />
                     {editFile && editFileFormat && (
                       <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-emerald-600/90 text-white text-[10px] font-bold shadow-md">
