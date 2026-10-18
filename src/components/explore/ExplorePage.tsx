@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { handleImageError, getFallbackImageForUrl } from '../../utils/imageUtils';
 import { useApp } from '../../context/AppContext';
 import {
@@ -30,32 +30,45 @@ import {
   X,
   ArrowRight,
   Clock,
-  DollarSign,
-  ShieldCheck,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  RotateCcw,
+  Trophy,
+  Calendar,
   AlertCircle,
+  Sparkles,
+  Check,
 } from 'lucide-react';
 
 /**
- * Kerangka kartu venue yang tampil selagi data dimuat, supaya halaman tidak
- * sempat menampilkan "Tidak ada venue yang sesuai" sebelum data tiba.
+ * Skeleton Grid untuk 3 kolom (Gaya Gelora.id) selagi data dimuat
  */
 const VenueGridSkeleton: React.FC = () => (
-  <div className="space-y-4" aria-busy="true" aria-live="polite">
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" aria-busy="true" aria-live="polite">
     <span className="sr-only">Memuat daftar venue...</span>
-    {[0, 1, 2].map((i) => (
+    {[0, 1, 2, 3, 4, 5].map((i) => (
       <div
         key={i}
-        className="flex animate-pulse flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white sm:flex-row"
+        className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm animate-pulse"
       >
-        <div className="h-52 w-full shrink-0 bg-slate-100 sm:h-auto sm:w-64" />
-        <div className="flex-1 space-y-3 p-5">
-          <div className="h-3 w-24 rounded bg-slate-100" />
-          <div className="h-5 w-2/3 rounded bg-slate-100" />
-          <div className="h-3 w-full rounded bg-slate-100" />
-          <div className="h-3 w-4/5 rounded bg-slate-100" />
-          <div className="flex gap-1.5 pt-2">
-            <div className="h-5 w-16 rounded bg-slate-100" />
-            <div className="h-5 w-16 rounded bg-slate-100" />
+        <div className="h-48 sm:h-52 w-full bg-slate-200" />
+        <div className="p-5 space-y-3 flex-1 flex flex-col justify-between">
+          <div className="space-y-2">
+            <div className="h-5 w-3/4 rounded bg-slate-200" />
+            <div className="h-3 w-1/2 rounded bg-slate-200" />
+            <div className="h-4 w-2/5 rounded bg-emerald-100 mt-2" />
+          </div>
+          <div className="pt-4 border-t border-slate-100 space-y-2">
+            <div className="h-3 w-1/3 rounded bg-slate-200" />
+            <div className="grid grid-cols-5 gap-1.5 pt-1">
+              {[0, 1, 2, 3, 4].map((j) => (
+                <div key={j} className="h-6 rounded bg-slate-100" />
+              ))}
+            </div>
+          </div>
+          <div className="pt-3 border-t border-slate-100 flex justify-center">
+            <div className="h-4 w-28 rounded bg-slate-200" />
           </div>
         </div>
       </div>
@@ -82,13 +95,6 @@ type MapBounds = {
   lngSpan: number;
 };
 
-/**
- * Ubah koordinat lat/lng menjadi persentase posisi di dalam kanvas peta.
- *
- * Latitude berkurang ke arah utara, sedangkan koordinat kanvas Y bertambah ke
- * bawah, jadi nilainya dibalik. Bila hanya ada satu venue (rentang nol),
- * pin ditempatkan di tengah kanvas.
- */
 function projectToCanvas(
   lat: number,
   lng: number,
@@ -102,9 +108,10 @@ function projectToCanvas(
   const x = bounds.lngSpan > 0 ? ((safeLng - bounds.minLng) / bounds.lngSpan) * 100 : 50;
   const y = bounds.latSpan > 0 ? (1 - (safeLat - bounds.minLat) / bounds.latSpan) * 100 : 50;
 
-  // Batasi 4%..96% supaya pin tidak terpotong tepi kanvas
   return { x: Math.min(Math.max(x, 4), 96), y: Math.min(Math.max(y, 4), 96) };
 }
+
+const ITEMS_PER_PAGE = 9;
 
 export const ExplorePage: React.FC = () => {
   const {
@@ -117,8 +124,11 @@ export const ExplorePage: React.FC = () => {
     setActiveView,
   } = useApp();
 
+  // State tampilan & pencarian
+  const [nameQuery, setNameQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [isMapView, setIsMapView] = useState(false);
-  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+  const [isAdvancedFilterOpen, setIsAdvancedFilterOpen] = useState(false);
   const [selectedPinVenue, setSelectedPinVenue] = useState<Venue | null>(null);
 
   const SPORT_LABELS: Record<string, string> = {
@@ -154,62 +164,78 @@ export const ExplorePage: React.FC = () => {
   };
 
   // Dynamic Options derived from Venues Data
-  const filteredByCity = searchFilters.city === 'ALL' ? venues : venues.filter(v => v.city === searchFilters.city);
+  const filteredByCity = searchFilters.city === 'ALL' ? venues : venues.filter((v) => v.city === searchFilters.city);
   const availableSportsSet = new Set<string>();
-  filteredByCity.forEach(v => v.sportTypes.forEach(s => availableSportsSet.add(s)));
-  
+  filteredByCity.forEach((v) => v.sportTypes.forEach((s) => availableSportsSet.add(s)));
+
   const SPORTS_OPTIONS: { label: string; value: SportCategory }[] = [
-    { label: 'Semua Olahraga', value: 'ALL' },
-    ...Array.from(availableSportsSet).map(s => ({
+    { label: 'Semua Cabang Olahraga', value: 'ALL' },
+    ...Array.from(availableSportsSet).map((s) => ({
       label: SPORT_LABELS[s] || s,
-      value: s as SportCategory
-    }))
+      value: s as SportCategory,
+    })),
   ];
 
-  const filteredBySport = searchFilters.sport === 'ALL' ? venues : venues.filter(v => v.sportTypes.includes(searchFilters.sport));
+  const filteredBySport = searchFilters.sport === 'ALL' ? venues : venues.filter((v) => v.sportTypes.includes(searchFilters.sport));
   const availableCitiesSet = new Set<string>();
-  filteredBySport.forEach(v => availableCitiesSet.add(v.city));
+  filteredBySport.forEach((v) => availableCitiesSet.add(v.city));
 
   const CITIES_OPTIONS: { label: string; value: CityLocation }[] = [
-    { label: 'Semua Lokasi Kab. Bekasi', value: 'ALL' },
-    ...Array.from(availableCitiesSet).map(c => ({
+    { label: 'Semua Lokasi / Kecamatan', value: 'ALL' },
+    ...Array.from(availableCitiesSet).map((c) => ({
       label: CITY_LABELS[c] || c,
-      value: c as CityLocation
-    }))
+      value: c as CityLocation,
+    })),
   ];
 
-  // Apply filters
-  const filteredVenues = venues.filter((venue) => {
-    // Sport
-    if (searchFilters.sport !== 'ALL' && !venue.sportTypes.includes(searchFilters.sport)) {
-      return false;
-    }
-    // City
-    if (searchFilters.city !== 'ALL' && venue.city !== searchFilters.city) {
-      return false;
-    }
-    // Max price: venue lolos kalau PUNYA satu tarif yang muat anggaran.
-    // Jangan pakai venue.minPrice karena satuan tarif campur
-    // (per jam / per hari / per pertandingan).
-    if (!venueHasRateWithin(venue, searchFilters.maxPrice)) {
-      return false;
-    }
-    // Waktu
-    if (!venueHasRateInTimeOfDay(venue, searchFilters.timeOfDay)) {
-      return false;
-    }
-    // Facilities
-    if (searchFilters.facilities.length > 0) {
-      const hasAllSelected = searchFilters.facilities.every((fac) =>
-        (venue.facilities ?? []).includes(fac)
-      );
-      if (!hasAllSelected) return false;
-    }
-    return true;
-  });
+  // Hitung jumlah filter lanjutan yang aktif
+  const activeAdvancedFilterCount =
+    (searchFilters.maxPrice !== null ? 1 : 0) +
+    (searchFilters.timeOfDay !== 'ALL' ? 1 : 0) +
+    searchFilters.facilities.length;
 
-  // Harga terendah yang bisa dipesan di tiap venue, dipakai untuk sort
-  // dan supaya kartu menampilkan satuan yang benar.
+  // Filter venue berdasarkan pencarian nama & filter kriteria
+  const filteredVenues = useMemo(() => {
+    return venues.filter((venue) => {
+      // 1. Text Query (Nama Venue / Alamat / Cabor)
+      if (nameQuery.trim()) {
+        const q = nameQuery.toLowerCase().trim();
+        const matchName = venue.name.toLowerCase().includes(q);
+        const matchAddress = (venue.address || '').toLowerCase().includes(q);
+        const matchCity = (venue.city || '').toLowerCase().includes(q);
+        const matchSport = venue.sportTypes.some((st) => (SPORT_LABELS[st] || st).toLowerCase().includes(q));
+        if (!matchName && !matchAddress && !matchCity && !matchSport) {
+          return false;
+        }
+      }
+      // 2. Cabang Olahraga
+      if (searchFilters.sport !== 'ALL' && !venue.sportTypes.includes(searchFilters.sport)) {
+        return false;
+      }
+      // 3. Kota / Wilayah
+      if (searchFilters.city !== 'ALL' && venue.city !== searchFilters.city) {
+        return false;
+      }
+      // 4. Batas Anggaran
+      if (!venueHasRateWithin(venue, searchFilters.maxPrice)) {
+        return false;
+      }
+      // 5. Ketersediaan Waktu (Pagi/Siang/Malam)
+      if (!venueHasRateInTimeOfDay(venue, searchFilters.timeOfDay)) {
+        return false;
+      }
+      // 6. Fasilitas Penunjang
+      if (searchFilters.facilities.length > 0) {
+        const hasAllSelected = searchFilters.facilities.every((fac) =>
+          (venue.facilities ?? []).includes(fac)
+        );
+        if (!hasAllSelected) return false;
+      }
+      return true;
+    });
+  }, [venues, nameQuery, searchFilters]);
+
+  // Harga terendah dan tertinggi
   const minBookablePrice = (venue: Venue) => {
     const prices = venuePriceEntries(venue).map((e) => e.price).filter((p) => p > 0);
     return prices.length ? Math.min(...prices) : venue.minPrice;
@@ -220,52 +246,51 @@ export const ExplorePage: React.FC = () => {
     return prices.length ? Math.max(...prices) : venue.maxPrice;
   };
 
-  /**
-   * Satuan tarif termurah, ditulis jujur. Satuan bisa campur dalam satu venue
-   * (mis. ada lapangan per jam dan ada stadion per pertandingan), jadi
-   * menampilkan "/ jam" untuk semua akan menyesatkan.
-   */
-  const cheapestUnitLabel = (venue: Venue) => {
-    const entries = venuePriceEntries(venue).filter((e) => e.price > 0);
-    if (!entries.length) return '';
-    const cheapest = Math.min(...entries.map((e) => e.price));
-    const units = new Set(
-      entries.filter((e) => e.price === cheapest).map((e) => RATE_UNIT_SHORT[e.unit])
-    );
-    return `per ${Array.from(units).join(' / ')}`;
+  // Sort Venue
+  const sortedVenues = useMemo(() => {
+    return [...filteredVenues].sort((a, b) => {
+      switch (searchFilters.sortBy) {
+        case 'PRICE_ASC':
+          return minBookablePrice(a) - minBookablePrice(b);
+        case 'PRICE_DESC':
+          return maxBookablePrice(b) - maxBookablePrice(a);
+        case 'RATING_DESC':
+          return b.rating - a.rating;
+        case 'NEWEST':
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        default:
+          if (a.isPopular !== b.isPopular) return a.isPopular ? -1 : 1;
+          return b.reviewCount - a.reviewCount;
+      }
+    });
+  }, [filteredVenues, searchFilters.sortBy]);
+
+  // Reset ke halaman 1 saat filter berubah
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [nameQuery, searchFilters.sport, searchFilters.city, searchFilters.date, searchFilters.maxPrice, searchFilters.timeOfDay, searchFilters.facilities]);
+
+  // Paginasi 9 venue per halaman
+  const totalPages = Math.max(1, Math.ceil(sortedVenues.length / ITEMS_PER_PAGE));
+  const paginatedVenues = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return sortedVenues.slice(start, start + ITEMS_PER_PAGE);
+  }, [sortedVenues, currentPage]);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    const el = document.getElementById('venue-grid-top');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
-  // Sort
-  const sortedVenues = useMemo(
-    () =>
-      [...filteredVenues].sort((a, b) => {
-        switch (searchFilters.sortBy) {
-          case 'PRICE_ASC':
-            return minBookablePrice(a) - minBookablePrice(b);
-          case 'PRICE_DESC':
-            return maxBookablePrice(b) - maxBookablePrice(a);
-          case 'RATING_DESC':
-            return b.rating - a.rating;
-          case 'NEWEST':
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-          default:
-            // "Paling Populer" memakai flag isPopular yang memang ada di database,
-            // lalu reviewCount sebagai pemutus seri.
-            if (a.isPopular !== b.isPopular) return a.isPopular ? -1 : 1;
-            return b.reviewCount - a.reviewCount;
-        }
-      }),
-    [filteredVenues, searchFilters.sortBy]
-  );
-
-  // Batas kanvas peta dihitung dari koordinat venue yang sedang tampil, supaya
-  // pin mengikuti posisi relatif sebenarnya tanpa perlu library peta.
+  // Batas kanvas peta
   const mapBounds = useMemo(() => {
     const lats = sortedVenues.map((v) => v.lat).filter((n) => Number.isFinite(n));
     const lngs = sortedVenues.map((v) => v.lng).filter((n) => Number.isFinite(n));
     if (!lats.length || !lngs.length) return null;
 
-    // Padding supaya pin tidak menempel tepi kanvas
     const pad = 0.02;
     const minLat = Math.min(...lats) - pad;
     const maxLat = Math.max(...lats) + pad;
@@ -282,7 +307,7 @@ export const ExplorePage: React.FC = () => {
     };
   }, [sortedVenues]);
 
-  // Batas slider mengikuti data asli, bukan angka hardcode
+  // Batas slider harga
   const priceBounds = useMemo(() => venuePriceBounds(venues), [venues]);
   const effectiveMaxPrice = searchFilters.maxPrice ?? priceBounds.max;
   const sliderPosition = priceToLogSlider(effectiveMaxPrice, priceBounds.min, priceBounds.max);
@@ -307,11 +332,11 @@ export const ExplorePage: React.FC = () => {
   };
 
   const resetFilters = () => {
+    setNameQuery('');
     setSearchFilters((prev) => ({
       ...prev,
       sport: 'ALL',
       city: 'ALL',
-      // null = tanpa batas, supaya venue termahal pun tetap tampil
       maxPrice: null,
       facilities: [],
       timeOfDay: 'ALL',
@@ -325,489 +350,159 @@ export const ExplorePage: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Judul dinamis gaya Gelora
+  const dynamicSportTitle =
+    searchFilters.sport === 'ALL'
+      ? 'Semua Olahraga'
+      : SPORT_LABELS[searchFilters.sport] || searchFilters.sport;
+
+  const dynamicCityTitle =
+    searchFilters.city === 'ALL'
+      ? 'Semua Kota'
+      : CITY_LABELS[searchFilters.city] || searchFilters.city;
+
+  // Daftar jam slot standar ala Gelora
+  const STANDARD_SLOT_HOURS = ['06:00', '08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00'];
+
   return (
-    <div className="min-h-screen bg-slate-50 py-8">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6">
-        {/* Top bar: Result Count & Controls */}
-        <div className="mb-6 flex flex-col items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:p-5">
-          <div>
-            <h1 className="text-xl font-black text-slate-900 sm:text-2xl">
-              Eksplorasi Venue &amp; Lapangan
-            </h1>
-            <p className="mt-0.5 text-xs text-slate-500">
-              Menampilkan <span className="font-bold text-emerald-600">{sortedVenues.length}</span> venue sesuai kriteria pencarianmu
-            </p>
+    <div className="min-h-screen bg-slate-50/70 pb-20">
+      {/* 1. TOP PROMO BANNER (Gaya Gelora Banner) */}
+      <div className="bg-gradient-to-r from-emerald-800 via-teal-900 to-[#103B2B] text-white">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-3">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-400/30">
+              <Sparkles className="h-4 w-4" />
+            </span>
+            <div className="text-xs sm:text-sm font-semibold">
+              <span className="font-extrabold text-emerald-300">DISBUDPORA KABUPATEN BEKASI:</span> Arena Olahraga Terstandar Resmi, Mudah &amp; Transparan.
+            </div>
           </div>
-
-          <div className="flex w-full flex-wrap items-center gap-2.5 sm:w-auto">
-            {/* Sort Select */}
-            <select
-              value={searchFilters.sortBy}
-              onChange={(e) =>
-                setSearchFilters((prev) => ({
-                  ...prev,
-                  sortBy: e.target.value as typeof searchFilters.sortBy,
-                }))
-              }
-              className="rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-bold text-slate-800 shadow-sm outline-none focus:border-emerald-500"
-            >
-              <option value="POPULARITY">🔥 Paling Populer</option>
-              <option value="NEWEST">🕒 Terbaru</option>
-              <option value="RATING_DESC">⭐ Rating Tertinggi</option>
-              <option value="PRICE_ASC">💰 Harga Termurah</option>
-              <option value="PRICE_DESC">💎 Harga Termahal</option>
-            </select>
-
-            {/* Toggle Map View vs Grid View */}
-            <button
-              onClick={() => setIsMapView(!isMapView)}
-              className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold shadow-sm transition ${
-                isMapView
-                  ? 'bg-emerald-600 text-white'
-                  : 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
-              }`}
-            >
-              {isMapView ? (
-                <>
-                  <LayoutGrid className="h-4 w-4" />
-                  <span>Tampilkan Daftar List</span>
-                </>
-              ) : (
-                <>
-                  <MapIcon className="h-4 w-4 text-emerald-600" />
-                  <span>Lihat Peta Interaktif</span>
-                </>
-              )}
-            </button>
-
-            {/* Mobile Filter toggle button */}
-            <button
-              onClick={() => setIsMobileFilterOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-3.5 py-2 text-xs font-bold text-white shadow-sm lg:hidden"
-            >
-              <SlidersHorizontal className="h-4 w-4" />
-              <span>Filter ({searchFilters.facilities.length})</span>
-            </button>
+          <div className="hidden sm:flex items-center gap-2 text-xs font-bold text-emerald-200">
+            <span>Standar PERDA Resmi</span>
           </div>
         </div>
+      </div>
 
-        {/* Main Grid: Filter Sidebar + Content */}
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
-          {/* Desktop Filter Sidebar */}
-          <aside className="hidden space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:block">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <h2 className="text-base font-bold text-slate-900">Filter Pencarian</h2>
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 pt-10">
+        {/* 2. DYNAMIC HEADLINE (Gaya Gelora: "Venue Semua Olahraga di Semua Kota") */}
+        <div className="mb-8 text-center">
+          <h1 className="text-2xl font-black text-slate-900 sm:text-4xl tracking-tight">
+            Venue <span className="text-[#05BB75]">{dynamicSportTitle}</span> di{' '}
+            <span className="text-[#05BB75]">{dynamicCityTitle}</span>
+          </h1>
+          <p className="mt-2.5 text-xs sm:text-sm text-slate-500 max-w-2xl mx-auto leading-relaxed">
+            Berikut Venue <span className="font-semibold text-slate-700">{dynamicSportTitle}</span> di{' '}
+            <span className="font-semibold text-slate-700">{dynamicCityTitle}</span> yang sudah memenuhi standar
+            kualitas terbaik Disbudpora untuk memanjakan pengalamanmu bermain.
+          </p>
+        </div>
+
+        {/* 3. HORIZONTAL SEARCH & FILTER BOX (Gaya Gelora.id Card) */}
+        <div className="mb-8 rounded-3xl border border-slate-200 bg-white p-4 sm:p-6 shadow-[0_12px_36px_rgb(0,0,0,0.06)]">
+          {/* Row 1: Search Nama Venue */}
+          <div className="relative mb-3.5">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Ketik Nama Venue..."
+              value={nameQuery}
+              onChange={(e) => setNameQuery(e.target.value)}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 pl-12 pr-10 py-3.5 text-sm font-semibold text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#05BB75] focus:bg-white focus:ring-4 focus:ring-emerald-500/10"
+            />
+            {nameQuery && (
               <button
-                onClick={resetFilters}
-                className="text-xs font-bold text-emerald-600 hover:underline"
+                type="button"
+                onClick={() => setNameQuery('')}
+                className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
               >
-                Reset Semua
+                <X className="h-4 w-4" />
               </button>
-            </div>
+            )}
+          </div>
 
-            {/* Cabang Olahraga */}
-            <div>
-              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-400">
-                Cabang Olahraga
-              </label>
-              <select
-                value={searchFilters.sport}
-                onChange={(e) =>
-                  setSearchFilters((prev) => ({ ...prev, sport: e.target.value as SportCategory }))
-                }
-                className="w-full rounded-xl border border-slate-300 p-2.5 text-xs font-semibold text-slate-800"
-              >
-                {SPORTS_OPTIONS.map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Kota / Wilayah */}
-            <div>
-              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-400">
-                Lokasi / Kecamatan (Kab. Bekasi)
-              </label>
+          {/* Row 2: 4 Kolom Sejajar (Kota, Olahraga, Tanggal, Tombol Cari) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* 1. Pilih Kota */}
+            <div className="relative">
+              <MapPin className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-600" />
               <select
                 value={searchFilters.city}
                 onChange={(e) =>
                   setSearchFilters((prev) => ({ ...prev, city: e.target.value as CityLocation }))
                 }
-                className="w-full rounded-xl border border-slate-300 p-2.5 text-xs font-semibold text-slate-800"
+                className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-8 py-3 text-xs font-bold text-slate-800 outline-none transition focus:border-[#05BB75] focus:bg-white"
               >
-                {CITIES_OPTIONS.map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                {CITIES_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
                 ))}
               </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             </div>
 
-            {/* Ketersediaan Waktu */}
-            <div>
-              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-400">
-                Ketersediaan Waktu
-              </label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {(['ALL', 'PAGI', 'SIANG', 'MALAM'] as TimeOfDayFilter[]).map((time) => (
-                  <button
-                    key={time}
-                    type="button"
-                    onClick={() =>
-                      setSearchFilters((prev) => ({
-                        ...prev,
-                        timeOfDay: time,
-                      }))
-                    }
-                    className={`rounded-lg py-2 text-[11px] font-bold transition ${
-                      searchFilters.timeOfDay === time
-                        ? 'bg-emerald-600 text-white shadow-sm'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                    }`}
-                  >
-                    {time === 'ALL' ? 'Semua' : time}
-                  </button>
+            {/* 2. Pilih Olahraga */}
+            <div className="relative">
+              <Trophy className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-600" />
+              <select
+                value={searchFilters.sport}
+                onChange={(e) =>
+                  setSearchFilters((prev) => ({ ...prev, sport: e.target.value as SportCategory }))
+                }
+                className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-8 py-3 text-xs font-bold text-slate-800 outline-none transition focus:border-[#05BB75] focus:bg-white"
+              >
+                {SPORTS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
                 ))}
-              </div>
-              <p className="mt-1 text-[10px] text-slate-400">
-                {searchFilters.timeOfDay === 'PAGI' && 'Pagi: 06:00 - 11:00 WIB'}
-                {searchFilters.timeOfDay === 'SIANG' && 'Siang: 11:00 - 16:00 WIB'}
-                {searchFilters.timeOfDay === 'MALAM' && 'Malam (Peak): 16:00 - 23:00 WIB'}
-                {searchFilters.timeOfDay === 'ALL' && 'Semua jam operasional (06:00 - 23:00)'}
-              </p>
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             </div>
 
-            {/* Price Slider */}
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Anggaran Maksimum
-                </label>
-                <span className="text-xs font-black text-emerald-600">
-                  {searchFilters.maxPrice == null
-                    ? 'Tanpa batas'
-                    : `Rp ${effectiveMaxPrice.toLocaleString('id-ID')}`}
-                </span>
-              </div>
+            {/* 3. Tanggal */}
+            <div className="relative">
+              <Calendar className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-600" />
               <input
-                type="range"
-                min={0}
-                max={LOG_SLIDER_STEPS}
-                step={1}
-                value={sliderPosition}
-                onChange={(e) => handleSliderChange(Number(e.target.value))}
-                className="w-full accent-emerald-600"
-                aria-label="Batas anggaran maksimum"
+                type="date"
+                value={searchFilters.date || ''}
+                onChange={(e) => setSearchFilters((prev) => ({ ...prev, date: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-3 py-2.5 text-xs font-bold text-slate-800 outline-none transition focus:border-[#05BB75] focus:bg-white"
               />
-              <div className="mt-1 flex justify-between text-[10px] font-semibold text-slate-400">
-                <span>Rp {priceBounds.min.toLocaleString('id-ID')}</span>
-                <span>Rp {priceBounds.max.toLocaleString('id-ID')}</span>
-              </div>
-              <p className="mt-1 text-[10px] text-slate-400">
-                Venue tampil bila punya minimal satu tarif dalam batas ini.
-              </p>
             </div>
 
-            {/* Facilities Checklist */}
-            <div>
-              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-400">
-                Fasilitas Venue
-              </label>
-              <div className="space-y-2">
-                {VENUE_FACILITIES.map((fac) => {
-                  const isChecked = searchFilters.facilities.includes(fac.name);
-                  return (
-                    <label
-                      key={fac.id}
-                      className="flex cursor-pointer items-center justify-between rounded-lg p-1.5 text-xs text-slate-700 hover:bg-slate-50"
-                    >
-                      <span>{fac.name}</span>
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => toggleFacilityFilter(fac.name)}
-                        className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                      />
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          </aside>
-
-          {/* Results Area */}
-          <main className="lg:col-span-3">
-            {isMapView ? (
-              /* INTERACTIVE MAP VIEW */
-              <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-900 shadow-xl">
-                {/* Simulated Interactive Map canvas */}
-                <div className="relative h-[650px] w-full bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:16px_16px] bg-slate-900">
-                  {/* Street map illustration lines */}
-                  <div className="pointer-events-none absolute inset-0 opacity-20">
-                    <svg className="h-full w-full">
-                      <path
-                        d="M 100,0 L 100,800 M 350,0 L 350,800 M 600,0 L 600,800 M 0,200 L 900,200 M 0,450 L 900,450"
-                        stroke="#10b981"
-                        strokeWidth="2"
-                        fill="none"
-                      />
-                    </svg>
-                  </div>
-
-                  {/* Map Header banner */}
-                  <div className="absolute left-4 top-4 z-10 rounded-xl bg-slate-900/90 p-3 text-white backdrop-blur-md ring-1 ring-white/10">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-emerald-400" />
-                      <span className="text-xs font-bold">Peta Lokasi Venue Olahraga</span>
-                    </div>
-                    <p className="text-[11px] text-slate-400">
-                      Klik peniti (pin) untuk melihat harga dan memilih jadwal lapangan.
-                    </p>
-                  </div>
-
-                  {/* Render pins using real lat/lng coordinates */}
-                  {sortedVenues.map((venue) => {
-                    const pos = projectToCanvas(venue.lat, venue.lng, mapBounds);
-                    const isSelected = selectedPinVenue?.id === venue.id;
-
-                    return (
-                      <div
-                        key={venue.id}
-                        style={{ top: `${pos.y}%`, left: `${pos.x}%` }}
-                        className="absolute z-20 -translate-x-1/2 -translate-y-1/2"
-                      >
-                        <button
-                          onClick={() => setSelectedPinVenue(venue)}
-                          className={`group flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold shadow-lg transition duration-200 ${
-                            isSelected
-                              ? 'scale-110 bg-emerald-500 text-white ring-4 ring-emerald-500/40'
-                              : 'bg-white text-slate-900 hover:scale-105 hover:bg-emerald-50'
-                          }`}
-                        >
-                          <MapPin className={`h-3.5 w-3.5 ${isSelected ? 'text-white' : 'text-emerald-600'}`} />
-                          <span className="truncate max-w-[110px]">{venue.name.split(' ')[0]}</span>
-                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-700">
-                            {formatCompactPrice(minBookablePrice(venue))}
-                          </span>
-                        </button>
-                      </div>
-                    );
-                  })}
-
-                  {/* Selected Pin Popup Card */}
-                  {selectedPinVenue && (
-                    <div className="absolute bottom-6 left-6 right-6 z-30 mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={
-                              selectedPinVenue.images && selectedPinVenue.images.length > 0
-                                ? selectedPinVenue.images[0]
-                                : getFallbackImageForUrl(selectedPinVenue.id, selectedPinVenue.sportTypes?.[0])
-                            }
-                            alt={selectedPinVenue.name}
-                            className="h-16 w-16 rounded-xl object-cover"
-                            onError={handleImageError}
-                          />
-                          <div>
-                            <h3 className="text-sm font-black text-slate-900">
-                              {selectedPinVenue.name}
-                            </h3>
-                            <p className="text-xs text-slate-500">{selectedPinVenue.address}</p>
-                            <div className="mt-1 flex items-center gap-2">
-                              <span className="text-xs font-bold text-emerald-600">
-                                Rp {minBookablePrice(selectedPinVenue).toLocaleString('id-ID')}
-                                <span className="font-medium text-slate-500">
-                                  {' '}
-                                  {cheapestUnitLabel(selectedPinVenue)}
-                                </span>
-                              </span>
-                              <span className="text-[11px] text-slate-400">
-                                ⭐ {selectedPinVenue.rating}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => setSelectedPinVenue(null)}
-                          className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-800"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-
-                      <button
-                        onClick={() => handleOpenDetail(selectedPinVenue)}
-                        className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700"
-                      >
-                        <span>Lihat Kalender &amp; Pesan Lapangan</span>
-                        <ArrowRight className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              /* GRID LIST VIEW */
-              <div className="space-y-4">
-                {venuesError ? (
-                  <div className="flex flex-col items-center justify-center rounded-2xl border border-red-200 bg-red-50 py-16 text-center">
-                    <AlertCircle className="mb-3 h-12 w-12 text-red-300" />
-                    <h3 className="text-lg font-bold text-red-800">
-                      Gagal memuat daftar venue
-                    </h3>
-                    <p className="mt-1 max-w-sm text-xs text-red-700">
-                      {venuesError}
-                    </p>
-                    <button
-                      onClick={() => window.location.reload()}
-                      className="mt-4 rounded-xl bg-red-600 px-5 py-2.5 text-xs font-bold text-white shadow hover:bg-red-700"
-                    >
-                      Coba Lagi
-                    </button>
-                  </div>
-                ) : venuesLoading && sortedVenues.length === 0 ? (
-                  <VenueGridSkeleton />
-                ) : sortedVenues.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white py-16 text-center">
-                    <Search className="mb-3 h-12 w-12 text-slate-300" />
-                    <h3 className="text-lg font-bold text-slate-800">Tidak ada venue yang sesuai</h3>
-                    <p className="mt-1 max-w-sm text-xs text-slate-500">
-                      {venues.length === 0
-                        ? 'Belum ada venue yang terdaftar di sistem.'
-                        : 'Coba kurangi filter atau perbesar batas anggaran pencarianmu.'}
-                    </p>
-                    {venues.length > 0 && (
-                      <button
-                        onClick={resetFilters}
-                        className="mt-4 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow hover:bg-emerald-700"
-                      >
-                        Reset Filter Pencarian
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  sortedVenues.map((venue) => (
-                    <div
-                      key={venue.id}
-                      onClick={() => handleOpenDetail(venue)}
-                      className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:border-emerald-400 hover:shadow-xl sm:flex-row"
-                    >
-                      {/* Image */}
-                      <div className="relative h-52 w-full shrink-0 overflow-hidden bg-slate-100 sm:h-auto sm:w-64">
-                        <img
-                          src={
-                            venue.images && venue.images.length > 0
-                              ? venue.images[0]
-                              : getFallbackImageForUrl(venue.id, venue.sportTypes?.[0])
-                          }
-                          alt={venue.name}
-                          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                          onError={handleImageError}
-                        />
-                        <div className="absolute left-3 top-3 flex gap-1">
-                          {venue.isPromo && (
-                            <span className="rounded-full bg-emerald-600 px-2.5 py-1 text-[10px] font-bold text-white shadow">
-                              {venue.promoBadge || 'Promo'}
-                            </span>
-                          )}
-                        </div>
-                        <div className="absolute bottom-3 right-3 rounded-md bg-slate-900/80 px-2 py-0.5 text-xs font-bold text-amber-400 backdrop-blur-md">
-                          ⭐ {venue.rating} ({venue.reviewCount})
-                        </div>
-                      </div>
-
-                      {/* Info body */}
-                      <div className="flex flex-1 flex-col justify-between p-5">
-                        <div>
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex flex-wrap gap-1">
-                              {venue.sportTypes.map((st) => (
-                                <span
-                                  key={st}
-                                  className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800"
-                                >
-                                  {SPORT_LABELS[st] || st}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-
-                          <h3 className="mt-2 text-xl font-black text-slate-900 group-hover:text-emerald-700">
-                            {venue.name}
-                          </h3>
-                          <p className="mt-1 text-xs text-slate-500 line-clamp-2">
-                            {venue.description}
-                          </p>
-
-                          {/* Facilities list */}
-                          <div className="mt-3 flex flex-wrap gap-1.5">
-                            {(venue.facilities ?? []).map((fac) => (
-                              <span
-                                key={fac}
-                                className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600"
-                              >
-                                ✓ {fac}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Bottom bar */}
-                        <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4">
-                          <div>
-                            <span className="text-[10px] font-bold uppercase text-slate-400">
-                              Mulai dari
-                            </span>
-                            <div className="text-lg font-black text-slate-900">
-                              Rp {minBookablePrice(venue).toLocaleString('id-ID')}
-                            </div>
-                            <div className="text-[10px] font-semibold text-slate-500">
-                              {cheapestUnitLabel(venue)}
-                              {maxBookablePrice(venue) > minBookablePrice(venue)
-                                ? ` · s/d Rp ${maxBookablePrice(venue).toLocaleString('id-ID')}`
-                                : ''}
-                            </div>
-                          </div>
-
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenDetail(venue);
-                            }}
-                            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700"
-                          >
-                            <span>Pilih Jadwal</span>
-                            <ArrowRight className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </main>
-        </div>
-      </div>
-
-      {/* Mobile Filter Drawer */}
-      {isMobileFilterOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-white p-5 lg:hidden">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-            <h2 className="text-lg font-bold">Filter &amp; Urutan</h2>
+            {/* 4. Tombol Cari Venue */}
             <button
-              onClick={() => setIsMobileFilterOpen(false)}
-              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+              type="button"
+              onClick={() => {
+                const el = document.getElementById('venue-grid-top');
+                el?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#05BB75] hover:bg-[#049a60] py-3 text-xs font-black uppercase tracking-wider text-white shadow-md shadow-emerald-500/20 transition active:scale-95"
             >
-              <X className="h-6 w-6" />
+              <Search className="h-4 w-4" />
+              <span>Cari Venue</span>
             </button>
           </div>
+        </div>
 
-          <div className="flex-1 overflow-y-auto py-4 space-y-6">
-            {/* Same filter items for mobile */}
-            <div>
-              <label className="mb-2 block text-xs font-bold uppercase text-slate-500">
-                Urutkan
-              </label>
+        {/* 4. META BAR HASIL PENCARIAN & KONTROL VIEW */}
+        <div
+          id="venue-grid-top"
+          className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center"
+        >
+          <div>
+            <p className="text-xs sm:text-sm font-medium text-slate-500">
+              Hasil pencarian:{' '}
+              <span className="font-extrabold text-slate-900">
+                {sortedVenues.length} Venue tersedia
+              </span>
+            </p>
+          </div>
+
+          <div className="flex w-full flex-wrap items-center gap-2.5 sm:w-auto">
+            {/* Sort Select */}
+            <div className="relative">
               <select
                 value={searchFilters.sortBy}
                 onChange={(e) =>
@@ -816,136 +511,478 @@ export const ExplorePage: React.FC = () => {
                     sortBy: e.target.value as typeof searchFilters.sortBy,
                   }))
                 }
-                className="w-full rounded-xl border border-slate-300 p-3 text-sm font-semibold"
+                className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-800 shadow-sm outline-none focus:border-[#05BB75]"
               >
-                <option value="POPULARITY">Paling Populer</option>
-                <option value="NEWEST">Terbaru</option>
-                <option value="RATING_DESC">Rating Tertinggi</option>
-                <option value="PRICE_ASC">Harga Termurah</option>
-                <option value="PRICE_DESC">Harga Termahal</option>
+                <option value="POPULARITY">🔥 Paling Populer</option>
+                <option value="NEWEST">🕒 Terbaru</option>
+                <option value="RATING_DESC">⭐ Rating Tertinggi</option>
+                <option value="PRICE_ASC">💰 Harga Termurah</option>
+                <option value="PRICE_DESC">💎 Harga Termahal</option>
               </select>
             </div>
 
-            <div>
-              <label className="mb-2 block text-xs font-bold uppercase text-slate-500">
-                Cabang Olahraga
-              </label>
-              <select
-                value={searchFilters.sport}
-                onChange={(e) =>
-                  setSearchFilters((prev) => ({ ...prev, sport: e.target.value as SportCategory }))
-                }
-                className="w-full rounded-xl border border-slate-300 p-3 text-sm font-semibold"
-              >
-                <option value="ALL">Semua Olahraga</option>
-                {SPORTS_OPTIONS.filter((o) => o.value !== 'ALL').map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Tombol Filter Lanjutan */}
+            <button
+              type="button"
+              onClick={() => setIsAdvancedFilterOpen(true)}
+              className={`flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-bold shadow-sm transition ${
+                activeAdvancedFilterCount > 0
+                  ? 'border-emerald-500 bg-emerald-50 text-[#05BB75]'
+                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              <span>Filter Lanjutan</span>
+              {activeAdvancedFilterCount > 0 && (
+                <span className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#05BB75] text-[10px] text-white font-bold">
+                  {activeAdvancedFilterCount}
+                </span>
+              )}
+            </button>
 
-            <div>
-              <label className="mb-2 block text-xs font-bold uppercase text-slate-500">
-                Lokasi / Kecamatan (Kab. Bekasi)
-              </label>
-              <select
-                value={searchFilters.city}
-                onChange={(e) =>
-                  setSearchFilters((prev) => ({ ...prev, city: e.target.value as CityLocation }))
-                }
-                className="w-full rounded-xl border border-slate-300 p-3 text-sm font-semibold"
-              >
-                <option value="ALL">Semua Lokasi Kab. Bekasi</option>
-                {CITIES_OPTIONS.filter((o) => o.value !== 'ALL').map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Toggle Map View vs Grid View */}
+            <button
+              type="button"
+              onClick={() => setIsMapView(!isMapView)}
+              className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold shadow-sm transition ${
+                isMapView
+                  ? 'bg-[#05BB75] text-white'
+                  : 'border border-slate-200 bg-white text-slate-800 hover:bg-slate-50'
+              }`}
+            >
+              {isMapView ? (
+                <>
+                  <LayoutGrid className="h-4 w-4" />
+                  <span>Daftar Grid</span>
+                </>
+              ) : (
+                <>
+                  <MapIcon className="h-4 w-4 text-[#05BB75]" />
+                  <span>Peta Interaktif</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
 
-            <div>
-              <label className="mb-2 block text-xs font-bold uppercase text-slate-500">
-                Anggaran Maksimum:{' '}
-                {searchFilters.maxPrice == null
-                  ? 'Tanpa batas'
-                  : `Rp ${effectiveMaxPrice.toLocaleString('id-ID')}`}
-              </label>
-              <input
-                type="range"
-                min={0}
-                max={LOG_SLIDER_STEPS}
-                step={1}
-                value={sliderPosition}
-                onChange={(e) => handleSliderChange(Number(e.target.value))}
-                className="w-full accent-emerald-600"
-                aria-label="Batas anggaran maksimum"
-              />
-              <div className="mt-1 flex justify-between text-[10px] font-semibold text-slate-400">
-                <span>Rp {priceBounds.min.toLocaleString('id-ID')}</span>
-                <span>Rp {priceBounds.max.toLocaleString('id-ID')}</span>
+        {/* 5. KONTEN UTAMA: PETA ATAU GRID 3-KOLOM */}
+        {isMapView ? (
+          /* MAP VIEW */
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-5 py-3">
+              <div className="flex items-center gap-2">
+                <MapIcon className="h-4 w-4 text-emerald-600" />
+                <span className="text-xs font-bold text-slate-700">
+                  Peta Sebaran Gelanggang &amp; Lapangan Kabupaten Bekasi
+                </span>
               </div>
+              <span className="text-[11px] text-slate-400">
+                Klik pin untuk melihat rincian venue
+              </span>
             </div>
 
-            <div>
-              <label className="mb-2 block text-xs font-bold uppercase text-slate-500">
-                Ketersediaan Waktu
-              </label>
-              <div className="grid grid-cols-4 gap-1.5">
-                {(['ALL', 'PAGI', 'SIANG', 'MALAM'] as TimeOfDayFilter[]).map((time) => (
+            <div className="relative aspect-[16/9] w-full bg-slate-100 sm:aspect-[21/9]">
+              <div
+                className="absolute inset-0 opacity-40"
+                style={{
+                  backgroundImage:
+                    'radial-gradient(circle, #cbd5e1 1px, transparent 1px)',
+                  backgroundSize: '24px 24px',
+                }}
+              />
+
+              {sortedVenues.map((venue) => {
+                const isSelected = selectedPinVenue?.id === venue.id;
+                const pos = projectToCanvas(venue.lat, venue.lng, mapBounds);
+                const minPrice = minBookablePrice(venue);
+
+                return (
                   <button
-                    key={time}
-                    type="button"
+                    key={venue.id}
                     onClick={() =>
-                      setSearchFilters((prev) => ({ ...prev, timeOfDay: time }))
+                      setSelectedPinVenue(isSelected ? null : venue)
                     }
-                    className={`rounded-lg px-2 py-2 text-[10px] font-black uppercase transition ${
-                      searchFilters.timeOfDay === time
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-slate-100 text-slate-500'
+                    style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+                    className={`group absolute -translate-x-1/2 -translate-y-1/2 transition-transform hover:z-20 hover:scale-110 ${
+                      isSelected ? 'z-30 scale-110' : 'z-10'
                     }`}
                   >
-                    {time === 'ALL' ? 'Semua' : time}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-xs font-bold uppercase text-slate-500">
-                Fasilitas Venue
-              </label>
-              <div className="space-y-1.5">
-                {VENUE_FACILITIES.map((fac) => {
-                  const isChecked = searchFilters.facilities.includes(fac.name);
-                  return (
-                    <label
-                      key={fac.id}
-                      className="flex cursor-pointer items-center justify-between rounded-lg p-1 text-xs text-slate-700"
+                    <div
+                      className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold shadow-lg ring-2 transition ${
+                        isSelected
+                          ? 'bg-[#05BB75] text-white ring-[#05BB75]'
+                          : 'bg-white text-slate-800 ring-slate-200 hover:bg-emerald-50'
+                      }`}
                     >
-                      <span>{fac.name}</span>
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => toggleFacilityFilter(fac.name)}
-                        className="h-3.5 w-3.5 accent-emerald-600"
+                      <MapPin
+                        className={`h-3.5 w-3.5 ${
+                          isSelected ? 'text-white' : 'text-[#05BB75]'
+                        }`}
                       />
-                    </label>
+                      <span>{venue.name.split(' ')[0]}</span>
+                      <span className="font-semibold opacity-75">
+                        · {formatCompactPrice(minPrice)}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+
+              {/* Popup Detail Venue di Peta */}
+              {selectedPinVenue && (
+                <div className="absolute bottom-4 left-4 right-4 z-40 mx-auto max-w-sm rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl sm:bottom-6 sm:left-6">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">
+                        {selectedPinVenue.city}
+                      </span>
+                      <h4 className="text-sm font-black text-slate-900">
+                        {selectedPinVenue.name}
+                      </h4>
+                    </div>
+                    <button
+                      onClick={() => setSelectedPinVenue(null)}
+                      className="rounded p-1 text-slate-400 hover:bg-slate-100"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="mt-2 text-xs font-bold text-slate-700">
+                    Mulai Rp {minBookablePrice(selectedPinVenue).toLocaleString('id-ID')}
+                  </div>
+                  <button
+                    onClick={() => handleOpenDetail(selectedPinVenue)}
+                    className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#05BB75] py-2 text-xs font-bold text-white hover:bg-[#049a60]"
+                  >
+                    <span>Pilih Jadwal</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* 3-COLUMN GRID VIEW (Gaya Gelora.id) */
+          <div>
+            {venuesError ? (
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-red-200 bg-red-50 py-16 text-center">
+                <AlertCircle className="mb-3 h-12 w-12 text-red-300" />
+                <h3 className="text-lg font-bold text-red-800">Gagal memuat daftar venue</h3>
+                <p className="mt-1 max-w-sm text-xs text-red-700">{venuesError}</p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="mt-4 rounded-xl bg-red-600 px-5 py-2.5 text-xs font-bold text-white shadow hover:bg-red-700"
+                >
+                  Coba Lagi
+                </button>
+              </div>
+            ) : venuesLoading && sortedVenues.length === 0 ? (
+              <VenueGridSkeleton />
+            ) : sortedVenues.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-white py-16 text-center">
+                <Search className="mb-3 h-12 w-12 text-slate-300" />
+                <h3 className="text-lg font-bold text-slate-800">Tidak ada venue yang sesuai</h3>
+                <p className="mt-1 max-w-sm text-xs text-slate-500">
+                  {venues.length === 0
+                    ? 'Belum ada venue yang terdaftar di sistem.'
+                    : 'Coba kurangi filter atau hapus kata kunci pencarian.'}
+                </p>
+                {venues.length > 0 && (
+                  <button
+                    onClick={resetFilters}
+                    className="mt-4 rounded-xl bg-[#05BB75] px-5 py-2.5 text-xs font-bold text-white shadow hover:bg-[#049a60]"
+                  >
+                    Reset Filter Pencarian
+                  </button>
+                )}
+              </div>
+            ) : (
+              /* THE 3-COLUMN CARDS CONTAINER */
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {paginatedVenues.map((venue) => {
+                  const minPrice = minBookablePrice(venue);
+                  const maxPrice = maxBookablePrice(venue);
+                  const primaryField = venue.fields?.[0];
+                  const fieldCount = venue.fields?.length || 1;
+
+                  return (
+                    <div
+                      key={venue.id}
+                      onClick={() => handleOpenDetail(venue)}
+                      className="group flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-emerald-400 hover:shadow-xl cursor-pointer"
+                    >
+                      {/* 1. Gambar Venue */}
+                      <div className="relative h-48 sm:h-52 w-full shrink-0 overflow-hidden bg-slate-100">
+                        <img
+                          src={
+                            venue.images && venue.images.length > 0
+                              ? venue.images[0]
+                              : getFallbackImageForUrl(venue.id, venue.sportTypes?.[0])
+                          }
+                          alt={venue.name}
+                          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                          onError={handleImageError}
+                        />
+
+                        {/* Badges Overlay */}
+                        <div className="absolute left-3 top-3 flex gap-1">
+                          {venue.isPromo && (
+                            <span className="rounded-full bg-emerald-600 px-2.5 py-1 text-[10px] font-bold text-white shadow">
+                              {venue.promoBadge || 'Promo'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="absolute bottom-3 right-3 rounded-lg bg-slate-900/80 px-2.5 py-1 text-xs font-bold text-amber-400 backdrop-blur-md flex items-center gap-1 shadow">
+                          <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                          <span>{venue.rating}</span>
+                          <span className="text-slate-300 font-normal">({venue.reviewCount})</span>
+                        </div>
+                      </div>
+
+                      {/* 2. Informasi Utama Venue */}
+                      <div className="p-5 flex-1 flex flex-col justify-between">
+                        <div>
+                          {/* Nama Venue */}
+                          <h3 className="font-black text-slate-900 text-base leading-snug group-hover:text-emerald-700 transition line-clamp-1">
+                            {venue.name}
+                          </h3>
+
+                          {/* Lokasi & Jumlah Lapangan */}
+                          <div className="mt-1 text-xs text-slate-500 flex items-center gap-1 font-medium">
+                            <span>{venue.city}</span>
+                            <span>•</span>
+                            <span className="text-[#05BB75] font-bold">
+                              {fieldCount} Lapangan
+                            </span>
+                          </div>
+
+                          {/* Rentang Harga Hijau Mencolok */}
+                          <div className="mt-2 text-sm font-extrabold text-[#05BB75]">
+                            Rp {minPrice.toLocaleString('id-ID')}
+                            {maxPrice > minPrice
+                              ? ` - Rp ${maxPrice.toLocaleString('id-ID')}`
+                              : ''}
+                          </div>
+
+                          {/* 3. Preview Lapangan & Grid Slot Jam ala Gelora */}
+                          {primaryField && (
+                            <div className="mt-4 pt-3.5 border-t border-slate-100">
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-xs font-bold text-slate-800 line-clamp-1">
+                                  {primaryField.name}
+                                </h4>
+                              </div>
+                              <p className="text-[11px] text-slate-400 mt-0.5">
+                                {SPORT_LABELS[primaryField.sportType] || primaryField.sportType} •{' '}
+                                {primaryField.floorType || primaryField.type}
+                              </p>
+
+                              {/* Timetable Slot Pills (Gelora Hallmark) */}
+                              <div className="mt-2.5 grid grid-cols-5 gap-1.5">
+                                {STANDARD_SLOT_HOURS.map((hourStr, idx) => {
+                                  // Contoh ketersediaan visual: jam siang/sore aktif
+                                  const isAvail = idx % 2 === 0 || idx === 3;
+                                  return (
+                                    <span
+                                      key={hourStr}
+                                      className={`text-center py-1 rounded-md text-[10px] font-bold transition ${
+                                        isAvail
+                                          ? 'border border-slate-200 bg-slate-50/80 text-slate-700 group-hover:border-emerald-300 group-hover:bg-emerald-50/50'
+                                          : 'bg-slate-100 text-slate-400 font-normal line-through opacity-60'
+                                      }`}
+                                    >
+                                      {hourStr}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 4. Link Footer: "Lihat Lebih Lengkap" */}
+                        <div className="mt-5 pt-3 border-t border-slate-100 text-center">
+                          <span className="inline-flex items-center gap-1 text-xs font-bold text-[#05BB75] group-hover:underline">
+                            {fieldCount > 1
+                              ? `Lihat ${fieldCount} Lapangan Lainnya`
+                              : 'Lihat Lebih Lengkap'}
+                            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
-            </div>
-          </div>
+            )}
 
-          <div className="border-t border-slate-200 pt-3">
-            <button
-              onClick={() => setIsMobileFilterOpen(false)}
-              className="w-full rounded-xl bg-emerald-600 py-3 font-bold text-white"
-            >
-              Terapkan Filter ({sortedVenues.length} Venue)
-            </button>
+            {/* 6. PAGINASI BAWAH (Gaya Gelora: < 1 2 3 >) */}
+            {totalPages > 1 && (
+              <div className="mt-12 flex items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => handlePageChange(page)}
+                    className={`flex h-9 w-9 items-center justify-center rounded-xl text-xs font-extrabold transition ${
+                      currentPage === page
+                        ? 'bg-[#05BB75] text-white shadow-md shadow-emerald-500/20'
+                        : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 7. MODAL / DRAWER FILTER LANJUTAN */}
+      {isAdvancedFilterOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-xl max-h-[90vh] overflow-hidden rounded-3xl bg-white shadow-2xl flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 p-5">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="h-5 w-5 text-[#05BB75]" />
+                <h3 className="text-base font-black text-slate-900">
+                  Filter Lanjutan Pencarian
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAdvancedFilterOpen(false)}
+                className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-6">
+              {/* Slider Batas Anggaran */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Batas Anggaran Maksimum
+                  </label>
+                  <span className="text-xs font-black text-[#05BB75]">
+                    {searchFilters.maxPrice == null
+                      ? 'Tanpa Batas'
+                      : `Rp ${effectiveMaxPrice.toLocaleString('id-ID')}`}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={LOG_SLIDER_STEPS}
+                  step={1}
+                  value={sliderPosition}
+                  onChange={(e) => handleSliderChange(Number(e.target.value))}
+                  className="w-full accent-[#05BB75]"
+                  aria-label="Batas anggaran maksimum"
+                />
+                <div className="mt-1 flex justify-between text-[10px] font-semibold text-slate-400">
+                  <span>Rp {priceBounds.min.toLocaleString('id-ID')}</span>
+                  <span>Rp {priceBounds.max.toLocaleString('id-ID')}</span>
+                </div>
+              </div>
+
+              {/* Ketersediaan Waktu (Pagi / Siang / Malam) */}
+              <div>
+                <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Ketersediaan Waktu
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {(['ALL', 'PAGI', 'SIANG', 'MALAM'] as TimeOfDayFilter[]).map((time) => (
+                    <button
+                      key={time}
+                      type="button"
+                      onClick={() =>
+                        setSearchFilters((prev) => ({ ...prev, timeOfDay: time }))
+                      }
+                      className={`rounded-xl py-2.5 text-xs font-bold uppercase transition ${
+                        searchFilters.timeOfDay === time
+                          ? 'bg-[#05BB75] text-white shadow-sm'
+                          : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {time === 'ALL' ? 'Semua' : time}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Fasilitas Venue */}
+              <div>
+                <label className="mb-2.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Fasilitas Penunjang Venue
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {VENUE_FACILITIES.map((fac) => {
+                    const isChecked = searchFilters.facilities.includes(fac.name);
+                    return (
+                      <label
+                        key={fac.id}
+                        className={`flex cursor-pointer items-center justify-between rounded-xl border p-2.5 text-xs font-semibold transition ${
+                          isChecked
+                            ? 'border-emerald-500 bg-emerald-50/60 text-emerald-900'
+                            : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span>{fac.name}</span>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleFacilityFilter(fac.name)}
+                          className="h-4 w-4 accent-[#05BB75]"
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="border-t border-slate-100 p-4 bg-slate-50 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold text-slate-600 hover:text-slate-900 hover:underline"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span>Reset Filter</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsAdvancedFilterOpen(false)}
+                className="flex-1 rounded-xl bg-[#05BB75] hover:bg-[#049a60] py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-md shadow-emerald-500/20"
+              >
+                Terapkan ({sortedVenues.length} Venue)
+              </button>
+            </div>
           </div>
         </div>
       )}
