@@ -5,8 +5,69 @@ import { getAdminSession } from './authActions';
 import { toPublicMessage } from '../lib/userFacingError';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 
 const BUCKET_NAME = 'promo-banners';
+const MAX_BANNER_SIZE = 5 * 1024 * 1024; // 5 MB
+
+interface ValidatedImage {
+  buffer: Buffer;
+  extension: 'png' | 'jpg' | 'webp';
+  contentType: 'image/png' | 'image/jpeg' | 'image/webp';
+}
+
+/**
+ * Validasi mendalam untuk memastikan berkas benar-benar gambar PNG, JPG/JPEG, atau WebP.
+ * Memeriksa Magic Bytes (file signature) di level buffer sehingga tidak bergantung pada
+ * akurasi MIME type dari browser pengguna.
+ */
+function detectImageFormat(buffer: Buffer, fileName: string, clientMimeType?: string): ValidatedImage | null {
+  if (!buffer || buffer.length < 12) return null;
+
+  // 1. JPEG / JPG: Header FF D8 FF
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return {
+      buffer,
+      extension: 'jpg',
+      contentType: 'image/jpeg',
+    };
+  }
+
+  // 2. PNG: Header 89 50 4E 47 0D 0A 1A 0A
+  if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    return {
+      buffer,
+      extension: 'png',
+      contentType: 'image/png',
+    };
+  }
+
+  // 3. WebP: Header RIFF .... WEBP
+  if (
+    buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    buffer.subarray(8, 12).toString('ascii') === 'WEBP'
+  ) {
+    return {
+      buffer,
+      extension: 'webp',
+      contentType: 'image/webp',
+    };
+  }
+
+  // Fallback: periksa ekstensi dan MIME type browser jika varian RIFF WebP
+  const ext = (fileName.split('.').pop() || '').toLowerCase();
+  if (ext === 'webp' || clientMimeType === 'image/webp') {
+    if (buffer.subarray(0, 4).toString('ascii') === 'RIFF') {
+      return {
+        buffer,
+        extension: 'webp',
+        contentType: 'image/webp',
+      };
+    }
+  }
+
+  return null;
+}
 
 function getSupabaseClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -16,7 +77,8 @@ function getSupabaseClient() {
 }
 
 /**
- * Upload banner promo ke Supabase Storage dan simpan ke database
+ * Upload banner promo ke Supabase Storage dan simpan ke database.
+ * Mendukung penuh format PNG, JPG/JPEG, dan WebP hingga ukuran 5 MB.
  */
 export async function uploadPromoBannerAction(formData: FormData) {
   const session = await getAdminSession();
@@ -31,13 +93,19 @@ export async function uploadPromoBannerAction(formData: FormData) {
     return { success: false, error: 'File gambar banner tidak ditemukan.' };
   }
 
-  const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
-  if (!allowedTypes.includes(file.type)) {
-    return { success: false, error: 'Format file harus PNG, JPG, atau WebP.' };
+  if (file.size > MAX_BANNER_SIZE) {
+    return { success: false, error: 'Ukuran file maksimal 5 MB. Silakan kompres atau pilih file lain.' };
   }
 
-  if (file.size > 5 * 1024 * 1024) {
-    return { success: false, error: 'Ukuran file maksimal 5 MB.' };
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+
+  const validatedImage = detectImageFormat(buffer, file.name, file.type);
+  if (!validatedImage) {
+    return {
+      success: false,
+      error: 'Format file tidak valid. Harap gunakan gambar berformat PNG, JPG, atau WebP.',
+    };
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -55,22 +123,21 @@ export async function uploadPromoBannerAction(formData: FormData) {
   }
 
   try {
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
-    const fileName = `banner-${Date.now()}.${ext}`;
-    const bytes = await file.arrayBuffer();
+    const randomHex = crypto.randomBytes(4).toString('hex');
+    const fileName = `banner-${Date.now()}-${randomHex}.${validatedImage.extension}`;
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const { error: uploadError } = await supabase
       .storage
       .from(BUCKET_NAME)
-      .upload(fileName, bytes, {
-        contentType: file.type,
-        upsert: true
+      .upload(fileName, validatedImage.buffer, {
+        contentType: validatedImage.contentType,
+        upsert: true,
       });
 
     if (uploadError) {
-      throw new Error(`Gagal upload gambar: ${uploadError.message}`);
+      throw new Error(`Gagal upload gambar ke cloud: ${uploadError.message}`);
     }
 
     const { data: publicUrlData } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
@@ -156,12 +223,19 @@ export async function updatePromoBannerAction(formData: FormData) {
 
     // Jika user mengunggah gambar pengganti baru
     if (file && file.size > 0) {
-      const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
-      if (!allowedTypes.includes(file.type)) {
-        return { success: false, error: 'Format file harus PNG, JPG, atau WebP.' };
-      }
-      if (file.size > 5 * 1024 * 1024) {
+      if (file.size > MAX_BANNER_SIZE) {
         return { success: false, error: 'Ukuran file gambar baru maksimal 5 MB.' };
+      }
+
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      const validatedImage = detectImageFormat(buffer, file.name, file.type);
+      if (!validatedImage) {
+        return {
+          success: false,
+          error: 'Format file tidak valid. Harap gunakan gambar berformat PNG, JPG, atau WebP.',
+        };
       }
 
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -171,16 +245,15 @@ export async function updatePromoBannerAction(formData: FormData) {
       }
 
       const supabase = createClient(supabaseUrl, serviceRoleKey);
-      const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
-      const fileName = `banner-${Date.now()}.${ext}`;
-      const bytes = await file.arrayBuffer();
+      const randomHex = crypto.randomBytes(4).toString('hex');
+      const fileName = `banner-${Date.now()}-${randomHex}.${validatedImage.extension}`;
 
       const { error: uploadError } = await supabase
         .storage
         .from(BUCKET_NAME)
-        .upload(fileName, bytes, {
-          contentType: file.type,
-          upsert: true
+        .upload(fileName, validatedImage.buffer, {
+          contentType: validatedImage.contentType,
+          upsert: true,
         });
 
       if (uploadError) {

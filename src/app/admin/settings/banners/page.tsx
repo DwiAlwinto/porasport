@@ -48,6 +48,8 @@ export default function AdminPromoBannersPage() {
 
   // Upload Form State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFileFormat, setSelectedFileFormat] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
@@ -62,6 +64,8 @@ export default function AdminPromoBannersPage() {
   const [editOrderIndex, setEditOrderIndex] = useState<number>(1);
   const [editIsActive, setEditIsActive] = useState<boolean>(true);
   const [editFile, setEditFile] = useState<File | null>(null);
+  const [editFileFormat, setEditFileFormat] = useState<string | null>(null);
+  const [isEditDragging, setIsEditDragging] = useState(false);
   const [editPreviewUrl, setEditPreviewUrl] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
@@ -92,15 +96,59 @@ export default function AdminPromoBannersPage() {
     setLoading(false);
   }
 
-  // Handle upload file select
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Helper validasi file gambar di sisi client
+  const validateClientFile = (file: File): { valid: boolean; error?: string; format?: string } => {
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    const validExts = ['png', 'jpg', 'jpeg', 'webp'];
+    const validMimes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+
+    const hasValidExt = validExts.includes(ext);
+    const hasValidMime = !file.type || validMimes.includes(file.type.toLowerCase());
+
+    if (!hasValidExt && !hasValidMime) {
+      return {
+        valid: false,
+        error: 'Format file tidak didukung. Harap pilih berkas gambar berformat PNG, JPG, JPEG, atau WebP.',
+      };
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      const sizeInMb = (file.size / (1024 * 1024)).toFixed(1);
+      return {
+        valid: false,
+        error: `Ukuran file terlalu besar (${sizeInMb} MB). Maksimal yang diperbolehkan adalah 5 MB.`,
+      };
+    }
+
+    const format = ext === 'jpeg' ? 'JPG' : ext.toUpperCase();
+    return { valid: true, format };
+  };
+
+  // Process file upload baru
+  const processSelectedFile = (file: File) => {
+    const check = validateClientFile(file);
+    if (!check.valid) {
+      setUploadResult({ success: false, message: check.error || 'File tidak valid.' });
+      setSelectedFile(null);
+      setSelectedFileFormat(null);
+      setPreviewUrl(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     setSelectedFile(file);
+    setSelectedFileFormat(check.format || 'GAMBAR');
     setUploadResult(null);
     const reader = new FileReader();
     reader.onload = () => setPreviewUrl(reader.result as string);
     reader.readAsDataURL(file);
+  };
+
+  // Handle upload file select via input
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processSelectedFile(file);
   };
 
   // Handle submit upload baru
@@ -119,6 +167,7 @@ export default function AdminPromoBannersPage() {
       if (res.success) {
         setUploadResult({ success: true, message: 'Banner berhasil diunggah dan disimpan!' });
         setSelectedFile(null);
+        setSelectedFileFormat(null);
         setPreviewUrl(null);
         setTitle('');
         setLinkUrl('');
@@ -138,6 +187,7 @@ export default function AdminPromoBannersPage() {
     setEditOrderIndex(banner.orderIndex ?? 1);
     setEditIsActive(banner.isActive);
     setEditFile(null);
+    setEditFileFormat(null);
     setEditPreviewUrl(banner.imageUrl);
     setEditError(null);
   };
@@ -146,19 +196,35 @@ export default function AdminPromoBannersPage() {
   const closeEditModal = () => {
     setEditingBanner(null);
     setEditFile(null);
+    setEditFileFormat(null);
     setEditPreviewUrl(null);
     setEditError(null);
+  };
+
+  // Process file edit
+  const processEditFile = (file: File) => {
+    const check = validateClientFile(file);
+    if (!check.valid) {
+      setEditError(check.error || 'File tidak valid.');
+      setEditFile(null);
+      setEditFileFormat(null);
+      if (editFileInputRef.current) editFileInputRef.current.value = '';
+      return;
+    }
+
+    setEditFile(file);
+    setEditFileFormat(check.format || 'GAMBAR');
+    setEditError(null);
+    const reader = new FileReader();
+    reader.onload = () => setEditPreviewUrl(reader.result as string);
+    reader.readAsDataURL(file);
   };
 
   // Handle Edit file change
   const handleEditFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setEditFile(file);
-    setEditError(null);
-    const reader = new FileReader();
-    reader.onload = () => setEditPreviewUrl(reader.result as string);
-    reader.readAsDataURL(file);
+    processEditFile(file);
   };
 
   // Save Edit Banner
@@ -324,43 +390,118 @@ export default function AdminPromoBannersPage() {
                 </div>
               </div>
 
-              {/* File Upload */}
+              {/* File Upload Dropzone */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                  File Gambar Banner <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="file"
-                  accept="image/png, image/jpeg, image/jpg, image/webp"
-                  onChange={handleFileChange}
-                  ref={fileInputRef}
-                  className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer"
-                />
-                <p className="text-[11px] text-slate-400 mt-1.5">
-                  Format: PNG, JPG, WebP. Maks 5MB. Rasio disarankan 16:9 atau 21:9.
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    File Gambar Banner <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-medium">Maks. 5 MB</span>
+                </div>
+
+                {/* Format Badges */}
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    PNG
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-sky-50 text-sky-700 border border-sky-200">
+                    JPG / JPEG
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-50 text-purple-700 border border-purple-200">
+                    WebP
+                  </span>
+                </div>
+
+                {/* Dropzone Container */}
+                {!previewUrl ? (
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragging(true);
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault();
+                      setIsDragging(false);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDragging(false);
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) processSelectedFile(file);
+                    }}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`relative rounded-2xl border-2 border-dashed p-5 text-center cursor-pointer transition-all duration-200 ${
+                      isDragging
+                        ? 'border-emerald-500 bg-emerald-50/70 scale-[0.99]'
+                        : 'border-slate-300 bg-slate-50/60 hover:border-emerald-400 hover:bg-emerald-50/30'
+                    }`}
+                  >
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+                      onChange={handleFileChange}
+                      ref={fileInputRef}
+                      className="hidden"
+                    />
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 shadow-sm">
+                        <Upload className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-800">
+                          Klik untuk memilih berkas
+                        </p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          atau seret dan lepas gambar PNG, JPG, atau WebP ke sini
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Preview Card saat file terpilih */
+                  <div className="rounded-2xl border border-slate-200 overflow-hidden bg-slate-100 relative group shadow-sm">
+                    <div className="aspect-[21/9] relative">
+                      <Image src={previewUrl} alt="Preview Banner" fill className="object-cover" />
+                    </div>
+
+                    {/* Metadata Overlay Bar */}
+                    <div className="flex items-center justify-between bg-slate-900/90 text-white px-3 py-2 text-[11px]">
+                      <div className="flex items-center gap-2 truncate">
+                        {selectedFileFormat && (
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-500 text-white font-black text-[9px]">
+                            {selectedFileFormat}
+                          </span>
+                        )}
+                        <span className="truncate max-w-[170px] font-medium" title={selectedFile?.name}>
+                          {selectedFile?.name}
+                        </span>
+                        {selectedFile && (
+                          <span className="text-slate-400 text-[10px]">
+                            ({(selectedFile.size / 1024).toFixed(0)} KB)
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedFile(null);
+                          setSelectedFileFormat(null);
+                          setPreviewUrl(null);
+                          if (fileInputRef.current) fileInputRef.current.value = '';
+                        }}
+                        className="p-1 rounded-lg text-slate-300 hover:text-white hover:bg-white/20 transition-colors shrink-0"
+                        title="Hapus berkas"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <p className="text-[11px] text-slate-400 mt-2">
+                  Format gambar: <strong>PNG, JPG, WebP</strong>. Rasio ideal: <strong>16:9</strong> atau <strong>21:9</strong>.
                 </p>
               </div>
-
-              {/* Preview */}
-              {previewUrl && (
-                <div className="mt-3 rounded-2xl border border-slate-200 overflow-hidden bg-slate-100 relative group">
-                  <div className="aspect-[21/9] relative">
-                    <Image src={previewUrl} alt="Preview" fill className="object-cover" />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedFile(null);
-                      setPreviewUrl(null);
-                      if (fileInputRef.current) fileInputRef.current.value = '';
-                    }}
-                    className="absolute top-2 right-2 p-1 rounded-full bg-slate-900/70 text-white hover:bg-slate-900 transition-colors"
-                    title="Hapus gambar"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
 
               {uploadResult && (
                 <div className={`flex items-start gap-2 rounded-xl p-3 text-sm ${
@@ -635,24 +776,62 @@ export default function AdminPromoBannersPage() {
 
               {/* Preview Gambar Saat Ini / Gambar Baru */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                  Tampilan Gambar Banner
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Tampilan Gambar Banner
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-medium">PNG, JPG, WebP (Maks. 5 MB)</span>
+                </div>
+
                 {editPreviewUrl && (
-                  <div className="rounded-2xl border border-slate-200 overflow-hidden bg-slate-100 aspect-[21/9] relative mb-2 shadow-inner">
+                  <div className="rounded-2xl border border-slate-200 overflow-hidden bg-slate-100 aspect-[21/9] relative mb-3 shadow-inner">
                     <Image src={editPreviewUrl} alt="Preview" fill className="object-cover" />
+                    {editFile && editFileFormat && (
+                      <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-emerald-600/90 text-white text-[10px] font-bold shadow-md">
+                        Gambar Baru ({editFileFormat})
+                      </span>
+                    )}
                   </div>
                 )}
-                <div className="flex items-center gap-3">
+
+                {/* Dropzone / File input for edit modal */}
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsEditDragging(true);
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    setIsEditDragging(false);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsEditDragging(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) processEditFile(file);
+                  }}
+                  onClick={() => editFileInputRef.current?.click()}
+                  className={`rounded-2xl border-2 border-dashed p-3.5 text-center cursor-pointer transition-all duration-200 ${
+                    isEditDragging
+                      ? 'border-emerald-500 bg-emerald-50/70'
+                      : 'border-slate-300 bg-slate-50/60 hover:border-emerald-400 hover:bg-emerald-50/30'
+                  }`}
+                >
                   <input
                     type="file"
-                    accept="image/png, image/jpeg, image/jpg, image/webp"
+                    accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
                     onChange={handleEditFileChange}
                     ref={editFileInputRef}
-                    className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer"
+                    className="hidden"
                   />
+                  <div className="flex items-center justify-center gap-2 text-xs font-bold text-slate-700">
+                    <Upload className="h-4 w-4 text-emerald-600" />
+                    <span>
+                      {editFile ? `Ganti berkas: ${editFile.name}` : 'Klik / Tarik gambar baru ke sini untuk mengganti'}
+                    </span>
+                  </div>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">
+                <p className="text-[11px] text-slate-400 mt-1.5">
                   Biarkan kosong jika tidak ingin mengganti file gambar yang sudah ada.
                 </p>
               </div>
