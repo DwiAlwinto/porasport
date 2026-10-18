@@ -155,7 +155,7 @@ model Booking {
   venueId          String
   sportCategory    SportCategory
   totalPrice       Int
-  serviceFee       Int           @default(5000)
+  serviceFee       Int           @default(0)
   grandTotal       Int
   status           BookingStatus @default(PENDING_PAYMENT)
   paymentMethod    String        // "QRIS" | "VA_BCA" | "EWALLET_GOPAY", dll.
@@ -287,7 +287,7 @@ CREATE TABLE bookings (
     venue_id UUID NOT NULL REFERENCES venues(id),
     sport_category sport_category_enum NOT NULL,
     total_price INTEGER NOT NULL,
-    service_fee INTEGER DEFAULT 5000,
+    service_fee INTEGER DEFAULT 0,
     grand_total INTEGER NOT NULL,
     status booking_status_enum DEFAULT 'PENDING_PAYMENT',
     payment_method VARCHAR(50) NOT NULL,

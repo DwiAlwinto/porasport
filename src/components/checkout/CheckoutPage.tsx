@@ -105,8 +105,8 @@ export const CheckoutPage: React.FC = () => {
 
   const venue = venues.find((v) => v.id === activeBookingDraft.venueId);
   const subtotal = activeBookingDraft.items.reduce((sum, item) => sum + item.price, 0);
-  const serviceFee = 5000;
-  const grandTotal = subtotal + serviceFee;
+  const serviceFee = 0;
+  const grandTotal = subtotal;
 
   // Format MM:SS
   const mins = Math.floor(secondsLeft / 60);
@@ -775,10 +775,6 @@ export const CheckoutPage: React.FC = () => {
                       <div className="flex justify-between text-sm">
                         <span className="text-slate-600">{t.checkout.rentalPrice}</span>
                         <span className="font-bold text-slate-900">{formatRupiah(subtotal)}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-slate-600">{t.checkout.platformFee}</span>
-                        <span className="font-bold text-slate-900">{formatRupiah(serviceFee)}</span>
                       </div>
                     </div>
 

@@ -345,8 +345,8 @@ export async function createBooking(data: {
       serverTotal = pricedItems.reduce((sum, i) => sum + i.price, 0);
     }
 
-    const serviceFee = 5000;
-    const grandTotal = serverTotal + serviceFee;
+    const serviceFee = 0;
+    const grandTotal = serverTotal;
 
     // Jalankan dalam transaksi aman anti overbooking
     const booking = await prisma.$transaction(async (tx) => {

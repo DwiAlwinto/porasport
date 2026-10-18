@@ -114,8 +114,8 @@ export const CheckoutModal: React.FC = () => {
 
   const venue = venues.find((v) => v.id === activeBookingDraft.venueId);
   const subtotal = activeBookingDraft.items.reduce((sum, item) => sum + item.price, 0);
-  const serviceFee = 5000;
-  const grandTotal = subtotal + serviceFee;
+  const serviceFee = 0;
+  const grandTotal = subtotal;
 
   // Format MM:SS
   const mins = Math.floor(secondsLeft / 60);
@@ -458,7 +458,6 @@ export const CheckoutModal: React.FC = () => {
                     <div className="text-lg font-black text-emerald-700">
                       {formatRupiah(grandTotal)}
                     </div>
-                    <span className="text-[10px] text-slate-500">Termasuk biaya admin Rp 5.000</span>
                   </div>
                 </div>
               </div>

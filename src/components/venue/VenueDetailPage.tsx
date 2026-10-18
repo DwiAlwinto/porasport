@@ -1589,23 +1589,11 @@ export const VenueDetailPage: React.FC = () => {
 
                 {/* Price Calculation */}
                 <div className="mt-5 border-t border-slate-200 pt-4">
-                  <div className="flex items-center justify-between text-xs text-slate-600">
-                    <span>
-                      {activeLang === 'ID' ? `Subtotal Sewa (${selectedSlots.length} jam)` : `Rental Subtotal (${selectedSlots.length} hr)`}
-                    </span>
-                    <span className="font-bold text-slate-900">
-                      Rp {selectedTotalPrice.toLocaleString('id-ID')}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex items-center justify-between text-xs text-slate-600">
-                    <span>{activeLang === 'ID' ? 'Biaya Layanan Wibawa Mukti' : 'Wibawa Mukti Service Fee'}</span>
-                    <span>Rp {selectedSlots.length > 0 ? '5.000' : '0'}</span>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3 text-base font-black text-slate-900">
+                  <div className="flex items-center justify-between text-base font-black text-slate-900">
                     <span>{t.venueDetail.totalCost}</span>
                     <span className="text-emerald-600">
                       Rp{' '}
-                      {(selectedSlots.length > 0 ? selectedTotalPrice + 5000 : 0).toLocaleString(
+                      {(selectedSlots.length > 0 ? selectedTotalPrice : 0).toLocaleString(
                         'id-ID'
                       )}
                     </span>
@@ -1680,7 +1668,7 @@ export const VenueDetailPage: React.FC = () => {
                     {selectedSlots.map(s => `${s.timeStart}–${s.timeEnd}`).join(', ')} WIB
                   </div>
                   <div className="mt-1.5 font-black text-emerald-700 text-sm">
-                    {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(selectedTotalPrice + 5000)}
+                    {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(selectedTotalPrice)}
                   </div>
                 </div>
               )}

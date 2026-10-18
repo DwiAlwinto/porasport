@@ -224,7 +224,7 @@ model Booking {
   venueId          String
   sportCategory    SportCategory
   totalPrice       Int
-  serviceFee       Int           @default(5000)
+  serviceFee       Int           @default(0)
   grandTotal       Int
   status           BookingStatus @default(PENDING_PAYMENT)
   paymentMethod    String        // "QRIS" | "VA_BCA" | "EWALLET_GOPAY", dll.
