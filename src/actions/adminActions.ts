@@ -468,7 +468,7 @@ export async function getFieldSlotsForDate(fieldId: string, dateStr: string) {
       where: {
         fieldId,
         date: targetDate,
-        hour: { gte: 8, lt: 20 },
+        hour: { gte: 8, lt: 21 },
       },
       include: {
         booking: {
@@ -515,7 +515,7 @@ export async function getFieldSlotsForDate(fieldId: string, dateStr: string) {
       },
     });
 
-    // Jika slot untuk tanggal tersebut belum digenerate di DB, buat otomatis 08:00 - 20:00
+    // Jika slot untuk tanggal tersebut belum digenerate di DB, buat otomatis 08:00 - 21:00
     if (slots.length === 0) {
       const field = await prisma.venueField.findUnique({
         where: { id: fieldId },
@@ -524,7 +524,7 @@ export async function getFieldSlotsForDate(fieldId: string, dateStr: string) {
       if (field) {
         const defaultCap = field.maxCapacity || (field.sportType === 'RENANG' ? 30 : 1);
         const slotsToCreate = [];
-        for (let hour = 8; hour < 20; hour++) {
+        for (let hour = 8; hour < 21; hour++) {
           const isPeak = hour >= 16;
           const { price } = resolveFieldPrice({
             rates: field.rates,
@@ -553,7 +553,7 @@ export async function getFieldSlotsForDate(fieldId: string, dateStr: string) {
         });
 
         slots = await prisma.fieldSlot.findMany({
-          where: { fieldId, date: targetDate, hour: { gte: 8, lt: 20 } },
+          where: { fieldId, date: targetDate, hour: { gte: 8, lt: 21 } },
           include: {
             booking: true,
             bookingItems: {
@@ -565,7 +565,7 @@ export async function getFieldSlotsForDate(fieldId: string, dateStr: string) {
       }
     }
 
-    return (slots as any[]).filter((s) => s.hour >= 8 && s.hour < 20);
+    return (slots as any[]).filter((s) => s.hour >= 8 && s.hour < 21);
   } catch (error) {
     console.error("Failed to fetch slots for date:", error);
     return [];

@@ -64,10 +64,10 @@ export async function getVenueBySlug(slug: string) {
 /* ------------------------------------------------------------------ */
 
 const SLOT_START_HOUR = 8;
-const SLOT_END_HOUR = 20; // exclusive (08:00 - 20:00 WIB, slot terakhir adalah 19:00 - 20:00)
+const SLOT_END_HOUR = 21; // exclusive (08:00 - 21:00 WIB, slot terakhir adalah 20:00 - 21:00)
 
 /**
- * Buat slot jadwal untuk tanggal yang dituju jika belum tersedia (jam 08:00 - 20:00).
+ * Buat slot jadwal untuk tanggal yang dituju jika belum tersedia (jam 08:00 - 21:00).
  */
 async function generateSlotsForDate(field: {
   id: string;

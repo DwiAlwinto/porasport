@@ -361,7 +361,7 @@ export const ExplorePage: React.FC = () => {
       ? t.hero.allLocations
       : CITY_LABELS[searchFilters.city] || searchFilters.city;
 
-  // Daftar jam slot standar fasilitas (08:00 - 20:00 WIB)
+  // Daftar jam slot standar fasilitas (08:00 - 21:00 WIB)
   const STANDARD_SLOT_HOURS = ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'];
 
   return (

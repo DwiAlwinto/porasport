@@ -35,7 +35,7 @@ export const TIME_OF_DAY_WINDOWS: Record<
 > = {
   PAGI: { startHour: 8, endHour: 12, label: 'Pagi: 08:00 - 12:00 WIB' },
   SIANG: { startHour: 12, endHour: 16, label: 'Siang: 12:00 - 16:00 WIB' },
-  MALAM: { startHour: 16, endHour: 20, label: 'Sore / Malam: 16:00 - 20:00 WIB' },
+  MALAM: { startHour: 16, endHour: 21, label: 'Sore / Malam: 16:00 - 21:00 WIB' },
 };
 
 /**
@@ -118,7 +118,7 @@ export function categoriesForSport(_sportType?: string): UserCategory[] {
 /** Rentang waktu yang lazim dipakai untuk lapangan stadion. */
 export const STANDARD_TIME_WINDOWS = [
   { timeStart: '08:00', timeEnd: '17:00', label: 'Siang (08:00 - 17:00)' },
-  { timeStart: '18:00', timeEnd: '20:00', label: 'Malam (18:00 - 20:00)' },
+  { timeStart: '18:00', timeEnd: '21:00', label: 'Malam (18:00 - 21:00)' },
 ];
 
 export function minutesFromHHmm(value: string): number {
