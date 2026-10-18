@@ -42,7 +42,8 @@ const qs = serialiseFiltersToQuery(chosen, defaults);
 console.log(`      query: ${qs}`);
 check('round trip kembali ke filter yang sama', parseFiltersFromQuery(qs, defaults), chosen);
 
-console.log('\n--- nilai yang tidak sah diabaikan ---');
+check('sport PANJAT_TEBING valid', parseFiltersFromQuery('?sport=PANJAT_TEBING', defaults).sport, 'PANJAT_TEBING');
+check('sport MENEMBAK valid', parseFiltersFromQuery('?sport=MENEMBAK', defaults).sport, 'MENEMBAK');
 check('sport ngawur -> ALL', parseFiltersFromQuery('?sport=HAKIM', defaults).sport, 'ALL');
 check('city ngawur -> ALL', parseFiltersFromQuery('?city=Planet-Mars', defaults).city, 'ALL');
 check('tanggal salah format -> default', parseFiltersFromQuery('?date=31-12-2026', defaults).date, defaults.date);

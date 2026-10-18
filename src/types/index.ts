@@ -14,7 +14,8 @@ export type SportCategory =
   | 'ATLETIK'
   | 'ROLLER_SPORT'
   | 'PADEL'
-  | 'SQUASH';
+  | 'SQUASH'
+  | 'PANJAT_TEBING';
 
 export type CityLocation =
   | 'ALL'

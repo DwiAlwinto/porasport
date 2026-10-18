@@ -15,6 +15,7 @@ export const SPORT_FALLBACK_IMAGES: Record<string, string> = {
   SKATEPARK: '/images/skatepark-1.jpeg',
   PADEL: '/images/badminton-1.jpeg',
   TENIS: '/images/badminton-1.jpeg',
+  PANJAT_TEBING: 'https://images.unsplash.com/photo-1522163182402-834f871fd851?w=800&auto=format&fit=crop&q=80',
   default: '/images/stadion-1.jpg',
 };
 
@@ -25,7 +26,8 @@ export function getFallbackImageForUrl(urlOrName: string = '', sportHint?: strin
   if (text.includes('basket')) return SPORT_FALLBACK_IMAGES.BASKET;
   if (text.includes('voli')) return SPORT_FALLBACK_IMAGES.VOLI;
   if (text.includes('badminton')) return SPORT_FALLBACK_IMAGES.BADMINTON;
-  if (text.includes('shooter') || text.includes('menembak')) return SPORT_FALLBACK_IMAGES.MENEMBAK;
+  if (text.includes('shooter') || text.includes('menembak') || text.includes('tembak') || text.includes('perbakin')) return SPORT_FALLBACK_IMAGES.MENEMBAK;
+  if (text.includes('panjat') || text.includes('climb') || text.includes('tebing') || text.includes('boulder')) return SPORT_FALLBACK_IMAGES.PANJAT_TEBING;
   if (text.includes('atletik') || text.includes('track')) return SPORT_FALLBACK_IMAGES.ATLETIK;
   if (text.includes('futsal')) return SPORT_FALLBACK_IMAGES.FUTSAL;
   if (text.includes('minisoccer') || text.includes('mini_soccer') || text.includes('soccer')) return SPORT_FALLBACK_IMAGES.MINI_SOCCER;

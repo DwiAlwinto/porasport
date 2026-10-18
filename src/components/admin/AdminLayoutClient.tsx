@@ -53,6 +53,13 @@ export const AdminLayoutClient: React.FC<AdminLayoutClientProps> = ({ session, c
       active: pathname === '/admin',
     },
     {
+      name: 'Banner Promo Homepage',
+      href: '/admin/settings/banners',
+      icon: Sparkles,
+      badge: 'UI',
+      active: pathname.startsWith('/admin/settings/banners'),
+    },
+    {
       name: 'CMS Fasilitas & Venue',
       href: '/admin/venues',
       icon: Building2,
@@ -71,13 +78,6 @@ export const AdminLayoutClient: React.FC<AdminLayoutClientProps> = ({ session, c
       active: pathname.startsWith('/admin/schedule'),
     },
     {
-      name: 'Kelola Petugas Admin',
-      href: '/admin/users/admins',
-      icon: ShieldCheck,
-      badge: 'Superadmin',
-      active: pathname === '/admin/users/admins' || pathname === '/admin/users',
-    },
-    {
       name: 'Data User Penyewa',
       href: '/admin/users/customers',
       icon: Users,
@@ -85,18 +85,18 @@ export const AdminLayoutClient: React.FC<AdminLayoutClientProps> = ({ session, c
       active: pathname === '/admin/users/customers',
     },
     {
+      name: 'Kelola Petugas Admin',
+      href: '/admin/users/admins',
+      icon: ShieldCheck,
+      badge: 'Superadmin',
+      active: pathname === '/admin/users/admins' || pathname === '/admin/users',
+    },
+    {
       name: 'Pengaturan QRIS',
       href: '/admin/settings/qris',
       icon: QrCode,
       badge: 'Pembayaran',
       active: pathname.startsWith('/admin/settings/qris'),
-    },
-    {
-      name: 'Banner Promo Homepage',
-      href: '/admin/settings/banners',
-      icon: Sparkles,
-      badge: 'UI',
-      active: pathname.startsWith('/admin/settings/banners'),
     },
   ];
 

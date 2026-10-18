@@ -100,6 +100,7 @@ const SPORT_OPTIONS: { label: string; value: SportCategory }[] = [
   { label: 'Trek Sepatu Roda', value: 'ROLLER_SPORT' },
   { label: 'Lapangan Squash', value: 'SQUASH' },
   { label: 'Padel Tennis', value: 'PADEL' },
+  { label: 'Panjat Tebing', value: 'PANJAT_TEBING' },
 ];
 
 // Daftar fasilitas venue memakai satu sumber kebenaran agar nama yang ditulis
@@ -252,6 +253,8 @@ export default function AdminVenuesPage() {
     const res = await getCmsVenues();
     if (res.success) {
       setVenues(res.venues);
+    } else if (res.error) {
+      showToast(res.error);
     }
     setLoading(false);
   };

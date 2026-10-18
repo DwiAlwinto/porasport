@@ -18,7 +18,8 @@ const bekasiVenues = [
       "RENANG",
       "SKATEPARK",
       "BADMINTON",
-      "MINI_SOCCER"
+      "MINI_SOCCER",
+      "PANJAT_TEBING"
     ],
     city: "Wibawa Mukti",
     address: "Jl. Science Boulevard, Sertajaya, Kec. Cikarang Tim., Kabupaten Bekasi, Jawa Barat",
@@ -128,6 +129,15 @@ const bekasiVenues = [
         floorType: "Rumput Sintetis Monofilament 50mm",
         priceNonPeak: 300000,
         pricePeak: 450000
+      },
+      {
+        id: "field-wm-panjat-tebing",
+        name: "Arena Panjat Tebing FPTI Wibawa Mukti",
+        sportType: "PANJAT_TEBING",
+        type: "Outdoor",
+        floorType: "Wall Climbing Standar FPTI (Lead, Speed, Boulder)",
+        priceNonPeak: 15000,
+        pricePeak: 25000
       }
     ],
     pricingTiers: [

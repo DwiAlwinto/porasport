@@ -127,6 +127,14 @@ const CATEGORY_CARDS: SportCard[] = [
     desc: 'Padel Glass Court',
     gradient: 'from-teal-500/10 to-teal-600/20 border-teal-500/30 text-teal-700',
   },
+  {
+    id: 'PANJAT_TEBING',
+    name: 'Panjat Tebing',
+    emoji: '🧗',
+    desc: 'Lead, Speed & Boulder Wibawa Mukti',
+    badge: 'FPTI',
+    gradient: 'from-orange-500/10 to-amber-600/20 border-orange-500/30 text-orange-700',
+  },
 ];
 
 export const CategoryGrid: React.FC = () => {

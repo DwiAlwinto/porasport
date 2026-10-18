@@ -231,16 +231,200 @@ async function main() {
     },
   });
 
-  // Pindahkan field-wibawa-menembak ke menembakVenue
-  await prisma.venueField.updateMany({
+  // 3. BUAT/UPDATE VENUE & FIELD: LAPANGAN MENEMBAK PERBAKIN WIBAWA MUKTI
+  const menembakField = await prisma.venueField.upsert({
     where: { id: 'field-wibawa-menembak' },
-    data: { venueId: menembakVenue.id, name: 'Lapangan Menembak Perbakin' },
+    update: {
+      venueId: menembakVenue.id,
+      name: 'Lapangan Menembak Perbakin (10m & 25m)',
+      sportType: SportCategory.MENEMBAK,
+      type: 'Indoor',
+      floorType: 'Standar Perbakin 10m & 25m',
+      priceNonPeak: 75000,
+      pricePeak: 100000,
+    },
+    create: {
+      id: 'field-wibawa-menembak',
+      venueId: menembakVenue.id,
+      name: 'Lapangan Menembak Perbakin (10m & 25m)',
+      sportType: SportCategory.MENEMBAK,
+      type: 'Indoor',
+      floorType: 'Standar Perbakin 10m & 25m',
+      priceNonPeak: 75000,
+      pricePeak: 100000,
+    },
   });
-  console.log('  -> Pindahkan field-wibawa-menembak ke Lapangan Menembak Perbakin Wibawa Mukti');
 
-  // 4. UPDATE VENUE: STADION UTAMA WIBAWA MUKTI (HANYA STADION/SEPAK BOLA)
-  console.log('\n[4/4] Memperbarui Venue: Stadion Utama Wibawa Mukti (Khusus Sepak Bola / Stadion)...');
-  await prisma.venue.update({
+  // Hapus tarif lama untuk reset bersih
+  await prisma.fieldRate.deleteMany({ where: { fieldId: menembakField.id } });
+
+  // 4 TARIF RESMI LAPANGAN MENEMBAK
+  const menembakRates = [
+    {
+      category: UserCategory.SOSIAL,
+      label: 'Latihan Individu / Umum / Rekreasi',
+      price: 75000,
+      unit: RateUnit.PER_JAM,
+      sortOrder: 0,
+    },
+    {
+      category: UserCategory.AMATIR,
+      label: 'Latihan Klub Amatir / Pelajar',
+      price: 150000,
+      unit: RateUnit.PER_JAM,
+      sortOrder: 1,
+    },
+    {
+      category: UserCategory.PROFESIONAL,
+      label: 'Latihan Atlet / Klub Profesional',
+      price: 250000,
+      unit: RateUnit.PER_JAM,
+      sortOrder: 2,
+    },
+    {
+      category: UserCategory.PERTANDINGAN,
+      label: 'Pertandingan / Kejuaraan Perbakin',
+      price: 2500000,
+      unit: RateUnit.PER_HARI,
+      sortOrder: 3,
+    },
+  ];
+
+  for (const r of menembakRates) {
+    await prisma.fieldRate.create({
+      data: {
+        fieldId: menembakField.id,
+        category: r.category,
+        label: r.label,
+        price: r.price,
+        unit: r.unit,
+        sortOrder: r.sortOrder,
+        isActive: true,
+      },
+    });
+  }
+  console.log('  -> Lapangan & 4 tarif Lapangan Menembak Perbakin berhasil dibuat');
+
+  // 4. BUAT/UPDATE VENUE & FIELD: PANJAT TEBING WIBAWA MUKTI (FPTI)
+  console.log('\n[4/5] Membuat/Update Venue: Panjat Tebing Wibawa Mukti...');
+  const panjatVenue = await prisma.venue.upsert({
+    where: { slug: 'panjat-tebing-wibawa-mukti' },
+    update: {
+      name: 'Panjat Tebing Wibawa Mukti',
+      city: 'Wibawa Mukti',
+      address: 'Kompleks Stadion Wibawa Mukti, Jl. Science Boulevard, Sertajaya, Cikarang Timur, Kab. Bekasi',
+      lat: -6.3025,
+      lng: 107.1681,
+      description: 'Arena Panjat Tebing standar nasional FPTI di Kompleks Stadion Wibawa Mukti. Dilengkapi dinding Lead, Speed World Record, dan Boulder untuk atlet serta latihan umum.',
+      openingHours: '08:00 - 20:00 WIB',
+      images: [
+        'https://images.unsplash.com/photo-1522163182402-834f871fd851?w=800&auto=format&fit=crop&q=80',
+      ],
+      facilities: ['Parkir Luas', 'Toilet & Shower', 'Mushola', 'Loker Pakaian'],
+      minPrice: 15000,
+      maxPrice: 1500000,
+    },
+    create: {
+      name: 'Panjat Tebing Wibawa Mukti',
+      slug: 'panjat-tebing-wibawa-mukti',
+      ownerId,
+      city: 'Wibawa Mukti',
+      address: 'Kompleks Stadion Wibawa Mukti, Jl. Science Boulevard, Sertajaya, Cikarang Timur, Kab. Bekasi',
+      lat: -6.3025,
+      lng: 107.1681,
+      description: 'Arena Panjat Tebing standar nasional FPTI di Kompleks Stadion Wibawa Mukti. Dilengkapi dinding Lead, Speed World Record, dan Boulder untuk atlet serta latihan umum.',
+      openingHours: '08:00 - 20:00 WIB',
+      images: [
+        'https://images.unsplash.com/photo-1522163182402-834f871fd851?w=800&auto=format&fit=crop&q=80',
+      ],
+      facilities: ['Parkir Luas', 'Toilet & Shower', 'Mushola', 'Loker Pakaian'],
+      minPrice: 15000,
+      maxPrice: 1500000,
+      isPopular: false,
+      rating: 5.0,
+      reviewCount: 12,
+    },
+  });
+
+  // Pastikan field panjat tebing memakai sportType PANJAT_TEBING
+  const existingPanjatField = await prisma.venueField.findFirst({
+    where: { venueId: panjatVenue.id },
+  });
+
+  const panjatField = await prisma.venueField.upsert({
+    where: { id: existingPanjatField?.id || 'field-wm-panjat-tebing' },
+    update: {
+      venueId: panjatVenue.id,
+      name: 'Arena Panjat Tebing FPTI (Lead, Speed & Boulder)',
+      sportType: SportCategory.PANJAT_TEBING,
+      type: 'Outdoor',
+      floorType: 'Wall Climbing Standar FPTI',
+      priceNonPeak: 15000,
+      pricePeak: 25000,
+    },
+    create: {
+      id: 'field-wm-panjat-tebing',
+      venueId: panjatVenue.id,
+      name: 'Arena Panjat Tebing FPTI (Lead, Speed & Boulder)',
+      sportType: SportCategory.PANJAT_TEBING,
+      type: 'Outdoor',
+      floorType: 'Wall Climbing Standar FPTI',
+      priceNonPeak: 15000,
+      pricePeak: 25000,
+    },
+  });
+
+  await prisma.fieldRate.deleteMany({ where: { fieldId: panjatField.id } });
+
+  const panjatRates = [
+    {
+      category: UserCategory.SOSIAL,
+      label: 'Latihan Individu / Umum / Perorangan',
+      price: 15000,
+      unit: RateUnit.PER_JAM,
+      sortOrder: 0,
+    },
+    {
+      category: UserCategory.AMATIR,
+      label: 'Latihan Klub / Sekolah / Pelajar',
+      price: 50000,
+      unit: RateUnit.PER_JAM,
+      sortOrder: 1,
+    },
+    {
+      category: UserCategory.PROFESIONAL,
+      label: 'Latihan Atlet FPTI / Profesional',
+      price: 100000,
+      unit: RateUnit.PER_JAM,
+      sortOrder: 2,
+    },
+    {
+      category: UserCategory.PERTANDINGAN,
+      label: 'Kejuaraan / Sirkuit Panjat Tebing',
+      price: 1500000,
+      unit: RateUnit.PER_HARI,
+      sortOrder: 3,
+    },
+  ];
+
+  for (const r of panjatRates) {
+    await prisma.fieldRate.create({
+      data: {
+        fieldId: panjatField.id,
+        category: r.category,
+        label: r.label,
+        price: r.price,
+        unit: r.unit,
+        sortOrder: r.sortOrder,
+        isActive: true,
+      },
+    });
+  }
+  console.log('  -> Lapangan & 4 tarif Panjat Tebing berhasil diperbarui');
+
+  // 5. UPDATE VENUE: STADION UTAMA WIBAWA MUKTI (HANYA STADION/SEPAK BOLA)
+  console.log('\n[5/5] Memperbarui Venue: Stadion Utama Wibawa Mukti (Khusus Sepak Bola / Stadion)...');
+  await prisma.venue.updateMany({
     where: { slug: 'stadion-wibawa-mukti' },
     data: {
       name: 'Stadion Utama Wibawa Mukti',

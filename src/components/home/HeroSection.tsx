@@ -33,6 +33,7 @@ export const HeroSection: React.FC = () => {
     'ROLLER_SPORT': 'Trek Sepatu Roda',
     'PADEL': 'Padel Tennis',
     'SQUASH': 'Lapangan Squash',
+    'PANJAT_TEBING': 'Panjat Tebing',
   };
 
   const CITY_LABELS: Record<string, string> = {

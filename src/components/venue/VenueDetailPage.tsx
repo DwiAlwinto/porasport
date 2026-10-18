@@ -91,6 +91,25 @@ const isSlotPast = (slotDate: string, slotHour: number, slotTimeStart?: string):
   return currentHour > startH || (currentHour === startH && currentMinute >= startM);
 };
 
+const SPORT_LABELS: Record<string, string> = {
+  MINI_SOCCER: 'Mini Soccer',
+  SEPAK_BOLA: 'Sepak Bola',
+  FUTSAL: 'Lapangan Futsal',
+  VOLI: 'Lapangan Voli',
+  MENEMBAK: 'Lapangan Tembak',
+  TENIS: 'Lapangan Tenis',
+  BASKET: 'Bola Basket',
+  RENANG: 'Kolam Renang',
+  SKATEPARK: 'Skateboard',
+  BADMINTON: 'Bulu Tangkis',
+  STADION: 'Stadion',
+  ATLETIK: 'Trek Lari / Atletik',
+  ROLLER_SPORT: 'Trek Sepatu Roda',
+  PADEL: 'Padel Tennis',
+  SQUASH: 'Lapangan Squash',
+  PANJAT_TEBING: 'Panjat Tebing',
+};
+
 export const VenueDetailPage: React.FC = () => {
   const {
     selectedVenue,
@@ -573,7 +592,7 @@ export const VenueDetailPage: React.FC = () => {
                     key={st}
                     className="rounded-md bg-emerald-100 px-2.5 py-1 text-xs font-bold uppercase text-emerald-800"
                   >
-                    {st}
+                    {SPORT_LABELS[st] || st}
                   </span>
                 ))}
                 <span className="flex items-center gap-1 rounded-md bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 ring-1 ring-amber-300">
@@ -640,7 +659,7 @@ export const VenueDetailPage: React.FC = () => {
                       >
                         <div className="flex w-full items-center justify-between">
                           <span className="text-xs font-bold uppercase text-emerald-700">
-                            {f.sportType}
+                            {SPORT_LABELS[f.sportType] || f.sportType}
                           </span>
                           {isSelected && (
                             <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
@@ -677,7 +696,7 @@ export const VenueDetailPage: React.FC = () => {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px] uppercase px-2.5 py-0.5">
-                        {activeField.sportType}
+                        {SPORT_LABELS[activeField.sportType] || activeField.sportType}
                       </span>
                       <span className="text-xs text-slate-400">Fasilitas Utama</span>
                     </div>

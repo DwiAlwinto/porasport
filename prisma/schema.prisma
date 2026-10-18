@@ -31,6 +31,7 @@ enum SportCategory {
   STADION
   ATLETIK
   ROLLER_SPORT
+  PANJAT_TEBING
 }
 
 enum SlotStatus {
