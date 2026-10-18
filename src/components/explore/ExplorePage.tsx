@@ -34,8 +34,6 @@ import {
   ChevronLeft,
   ChevronRight,
   RotateCcw,
-  Trophy,
-  Calendar,
   AlertCircle,
   Sparkles,
   Check,
@@ -407,13 +405,12 @@ export const ExplorePage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {/* 1. Pilih Kota */}
             <div className="relative">
-              <MapPin className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-600" />
               <select
                 value={searchFilters.city}
                 onChange={(e) =>
                   setSearchFilters((prev) => ({ ...prev, city: e.target.value as CityLocation }))
                 }
-                className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-8 py-3 text-xs font-bold text-slate-800 outline-none transition focus:border-[#05BB75] focus:bg-white"
+                className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/70 px-4 pr-8 py-3 text-xs font-bold text-slate-800 outline-none transition focus:border-[#05BB75] focus:bg-white"
               >
                 {CITIES_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -426,13 +423,12 @@ export const ExplorePage: React.FC = () => {
 
             {/* 2. Pilih Olahraga */}
             <div className="relative">
-              <Trophy className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-600" />
               <select
                 value={searchFilters.sport}
                 onChange={(e) =>
                   setSearchFilters((prev) => ({ ...prev, sport: e.target.value as SportCategory }))
                 }
-                className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-8 py-3 text-xs font-bold text-slate-800 outline-none transition focus:border-[#05BB75] focus:bg-white"
+                className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/70 px-4 pr-8 py-3 text-xs font-bold text-slate-800 outline-none transition focus:border-[#05BB75] focus:bg-white"
               >
                 {SPORTS_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -445,12 +441,11 @@ export const ExplorePage: React.FC = () => {
 
             {/* 3. Tanggal */}
             <div className="relative">
-              <Calendar className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-600" />
               <input
                 type="date"
                 value={searchFilters.date || ''}
                 onChange={(e) => setSearchFilters((prev) => ({ ...prev, date: e.target.value }))}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-3 py-2.5 text-xs font-bold text-slate-800 outline-none transition focus:border-[#05BB75] focus:bg-white"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-2.5 text-xs font-bold text-slate-800 outline-none transition focus:border-[#05BB75] focus:bg-white cursor-pointer"
               />
             </div>
 
