@@ -76,9 +76,43 @@ function looksLikeImageBuffer(buffer: Buffer): boolean {
   return false;
 }
 
+/**
+ * Server Action upload bukti bayar menggunakan native FormData.
+ * Lebih andal dan standar untuk transfer berkas antar browser dan server action.
+ */
+export async function uploadPaymentProofAction(formData: FormData): Promise<ValidationResult> {
+  try {
+    const bookingId = formData.get('bookingId');
+    const file = formData.get('file');
+
+    if (!bookingId || typeof bookingId !== 'string') {
+      return { success: false, error: 'ID Pesanan wajib disertakan.' };
+    }
+
+    if (!file || !(file instanceof File) || file.size === 0) {
+      return { success: false, error: 'Berkas bukti transfer tidak ditemukan atau kosong.' };
+    }
+
+    if (file.size > MAX_PROOF_BYTES) {
+      return { success: false, error: 'Ukuran berkas maksimal 5 MB.' };
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    return await validateAndProcessPaymentProof(bookingId, buffer, file.name, file.type);
+  } catch (err: unknown) {
+    console.error('[UploadPaymentProofAction] Error:', err);
+    return {
+      success: false,
+      error: toPublicMessage(err, 'Terjadi kendala saat mengunggah berkas bukti bayar.'),
+    };
+  }
+}
+
 export async function validateAndProcessPaymentProof(
   bookingId: string,
-  proofFile: Buffer,
+  proofFile: Buffer | Uint8Array | ArrayBuffer | any,
   fileName: string,
   mimeType: string
 ): Promise<ValidationResult> {
@@ -108,20 +142,32 @@ export async function validateAndProcessPaymentProof(
       return { success: false, error: `Booking sudah berstatus ${booking.status}` }
     }
 
-    if (!proofFile || proofFile.length === 0) {
+    // Pastikan berkas diubah ke Node.js Buffer asli
+    let buffer: Buffer;
+    if (Buffer.isBuffer(proofFile)) {
+      buffer = proofFile;
+    } else if (proofFile instanceof Uint8Array || proofFile instanceof ArrayBuffer) {
+      buffer = Buffer.from(proofFile as any);
+    } else if (typeof proofFile === 'object' && proofFile !== null && 'data' in proofFile && Array.isArray((proofFile as any).data)) {
+      buffer = Buffer.from((proofFile as any).data);
+    } else {
+      return { success: false, error: 'Format berkas tidak valid.' };
+    }
+
+    if (!buffer || buffer.length === 0) {
       return { success: false, error: 'Berkas bukti pembayaran kosong.' }
     }
-    if (proofFile.length > MAX_PROOF_BYTES) {
+    if (buffer.length > MAX_PROOF_BYTES) {
       return { success: false, error: 'Ukuran berkas maksimal 5 MB.' }
     }
     if (!ALLOWED_PROOF_MIME.includes(String(mimeType).toLowerCase())) {
       return { success: false, error: 'Format berkas harus JPG, PNG, atau WEBP.' }
     }
-    if (!looksLikeImageBuffer(proofFile)) {
-      return { success: false, error: 'Isi berkas bukan gambar yang valid.' }
+    if (!looksLikeImageBuffer(buffer)) {
+      return { success: false, error: 'Isi berkas bukan gambar yang valid (harus JPG, PNG, atau WEBP asli).' }
     }
 
-    const uploadResult = await uploadPaymentProof(proofFile, fileName, bookingId)
+    const uploadResult = await uploadPaymentProof(buffer, fileName, bookingId)
 
     // Yang disimpan ke database adalah PATH di dalam bucket, bukan URL publik.
     // URL bertanda tangan dibuatkan server saat admin membuka daftar booking.

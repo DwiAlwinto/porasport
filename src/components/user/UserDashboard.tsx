@@ -20,6 +20,7 @@ import {
   Mail,
   Building2,
   ArrowRight,
+  Upload,
 } from 'lucide-react';
 
 export const UserDashboard: React.FC = () => {
@@ -28,6 +29,7 @@ export const UserDashboard: React.FC = () => {
     setActiveUser,
     bookings,
     cancelBooking,
+    uploadPaymentProofForBooking,
     addReview,
     setActiveView,
     venues,
@@ -40,6 +42,14 @@ export const UserDashboard: React.FC = () => {
   const [rating, setRating] = useState<number>(5);
   const [comment, setComment] = useState<string>('');
   const [activeQrModalBooking, setActiveQrModalBooking] = useState<Booking | null>(null);
+
+  // Upload proof modal state
+  const [selectedUploadBooking, setSelectedUploadBooking] = useState<Booking | null>(null);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFileName, setUploadFileName] = useState<string>('');
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [uploadSuccessToast, setUploadSuccessToast] = useState<string | null>(null);
 
   // Filter user bookings
   const userBookings = bookings.filter((b) => b.userId === activeUser?.id);
@@ -66,8 +76,40 @@ export const UserDashboard: React.FC = () => {
     setReviewModalBooking(null);
   };
 
+  const handleUploadProofSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUploadBooking || !uploadFile) return;
+
+    setIsUploading(true);
+    setUploadError(null);
+    try {
+      const res = await uploadPaymentProofForBooking(selectedUploadBooking.id, uploadFile);
+      if (res.success) {
+        setUploadSuccessToast(`Bukti transfer #${selectedUploadBooking.id} berhasil diunggah!`);
+        setSelectedUploadBooking(null);
+        setUploadFile(null);
+        setUploadFileName('');
+        setTimeout(() => setUploadSuccessToast(null), 4000);
+      } else {
+        setUploadError(res.error || 'Gagal mengunggah bukti pembayaran.');
+      }
+    } catch (err: any) {
+      setUploadError(err.message || 'Terjadi kesalahan saat unggah bukti.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 py-8">
+      {/* Toast Notifikasi Sukses */}
+      {uploadSuccessToast && (
+        <div className="fixed top-20 right-6 z-50 flex items-center gap-2 rounded-2xl border border-emerald-300 bg-emerald-50 px-5 py-3 text-xs font-bold text-emerald-700 shadow-xl shadow-slate-200/60 animate-in fade-in slide-in-from-top-4">
+          <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+          <span>{uploadSuccessToast}</span>
+        </div>
+      )}
+
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         {/* Top Profile Header */}
         <div className="mb-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -279,12 +321,26 @@ export const UserDashboard: React.FC = () => {
                       )}
 
                       {booking.status === 'PENDING_PAYMENT' && (
-                        <button
-                          onClick={() => cancelBooking(booking.id)}
-                          className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-100"
-                        >
-                          {t.userDashboard.cancelOrder}
-                        </button>
+                        <>
+                          <button
+                            onClick={() => {
+                              setSelectedUploadBooking(booking);
+                              setUploadFile(null);
+                              setUploadFileName('');
+                              setUploadError(null);
+                            }}
+                            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow hover:bg-emerald-700 transition"
+                          >
+                            <Upload className="h-4 w-4" />
+                            <span>{booking.paymentProofUrl ? 'Ganti Bukti Bayar' : 'Unggah Bukti Bayar'}</span>
+                          </button>
+                          <button
+                            onClick={() => cancelBooking(booking.id)}
+                            className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-100 transition"
+                          >
+                            {t.userDashboard.cancelOrder}
+                          </button>
+                        </>
                       )}
 
                       {booking.status === 'COMPLETED' && !booking.hasReviewed && (
@@ -438,6 +494,113 @@ export const UserDashboard: React.FC = () => {
               >
                 {t.userDashboard.submitReview}
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* MODAL UPLOAD BUKTI BAYAR */}
+      {selectedUploadBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                  <Upload className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Unggah Bukti Bayar #{selectedUploadBooking.id}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {selectedUploadBooking.venueName} • {selectedUploadBooking.items[0]?.date}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedUploadBooking(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUploadProofSubmit} className="mt-4 space-y-4">
+              <div className="rounded-2xl bg-slate-50 p-3 border border-slate-200/60 text-xs flex justify-between items-center">
+                <span className="text-slate-500">Total Nominal:</span>
+                <span className="font-black text-emerald-700">
+                  {new Intl.NumberFormat(activeLang === 'US' ? 'en-US' : 'id-ID', {
+                    style: 'currency',
+                    currency: 'IDR',
+                    maximumFractionDigits: 0,
+                  }).format(selectedUploadBooking.grandTotal)}
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Pilih Berkas Struk / Tangkapan Layar (JPG, PNG, WebP)
+                </label>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (!file.type.startsWith('image/')) {
+                      setUploadError('Hanya berkas gambar (JPG, PNG, WEBP) yang diperbolehkan.');
+                      return;
+                    }
+                    if (file.size > 5 * 1024 * 1024) {
+                      setUploadError('Ukuran berkas maksimal 5 MB.');
+                      return;
+                    }
+                    setUploadError(null);
+                    setUploadFile(file);
+                    setUploadFileName(file.name);
+                  }}
+                  className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer"
+                />
+              </div>
+
+              {uploadFile && (
+                <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-3">
+                  <img
+                    src={URL.createObjectURL(uploadFile)}
+                    alt="Preview"
+                    className="h-14 w-14 rounded-xl object-cover border border-emerald-300 shrink-0"
+                  />
+                  <div className="overflow-hidden text-xs">
+                    <div className="font-bold text-slate-800 truncate">{uploadFileName}</div>
+                    <div className="text-[11px] text-emerald-700">
+                      {(uploadFile.size / 1024).toFixed(1)} KB • Siap diunggah
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {uploadError && (
+                <div className="flex items-center gap-2 rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-600 border border-red-200">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{uploadError}</span>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedUploadBooking(null)}
+                  className="w-1/2 rounded-xl border border-slate-200 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={!uploadFile || isUploading}
+                  className="w-1/2 rounded-xl bg-emerald-600 py-2.5 text-xs font-bold text-white shadow hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {isUploading ? 'Mengunggah...' : 'Kirim Bukti'}
+                </button>
+              </div>
             </form>
           </div>
         </div>

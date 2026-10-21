@@ -407,7 +407,7 @@ export default function AdminBookingsPage() {
                 </div>
               </div>
 
-              {selectedBooking.paymentProofUrl && (
+              {selectedBooking.paymentProofUrl ? (
                 <div className="rounded-2xl border border-line bg-field p-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-bold text-fg">Foto Struk Transfer QRIS:</span>
@@ -430,6 +430,30 @@ export default function AdminBookingsPage() {
                       <div>Nama Pemilik Rekening: <strong className="text-fg">{selectedBooking.senderName || '-'}</strong></div>
                       <div>NIK: <strong className="text-fg font-mono">{selectedBooking.nik || '-'}</strong></div>
                       {selectedBooking.npwp && <div>NPWP: <strong className="text-fg font-mono">{selectedBooking.npwp}</strong></div>}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-amber-300 bg-amber-50/80 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
+                      <FileText className="h-5 w-5" />
+                    </div>
+                    <div className="space-y-1.5 text-xs">
+                      <div className="font-bold text-amber-900 flex items-center gap-1.5">
+                        <span>⚠️ Struk Pembayaran Belum Tersedia / Gagal Diunggah</span>
+                      </div>
+                      <p className="text-amber-800 text-[11px] leading-relaxed">
+                        Penyewa belum berhasil melampirkan berkas bukti pembayaran yang sah (harus JPG/PNG/WEBP). Berkas mungkin gagal diunggah saat pemesanan atau belum dikirim oleh penyewa.
+                      </p>
+                      <div className="mt-2 pt-2 border-t border-amber-200/60 space-y-1 text-fg-subtle">
+                        <div>Nama Pemesan: <strong className="text-fg">{selectedBooking.senderName || selectedBooking.user?.name || '-'}</strong></div>
+                        <div>NIK: <strong className="text-fg font-mono">{selectedBooking.nik || '-'}</strong></div>
+                        {selectedBooking.npwp && <div>NPWP: <strong className="text-fg font-mono">{selectedBooking.npwp}</strong></div>}
+                      </div>
+                      <p className="text-[10px] text-amber-700 italic pt-1">
+                        * Catatan: Petugas tetap dapat menekan <strong>Setujui Lunas</strong> apabila mutasi kas/rekening DISBUDPORA sudah terkonfirmasi masuk, atau <strong>Tolak</strong> jika pembayaran belum diselesaikan.
+                      </p>
                     </div>
                   </div>
                 </div>

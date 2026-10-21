@@ -15,7 +15,7 @@ import {
 import type { UserCategory } from '@prisma/client';
 import { getVenues, createBooking } from '../actions/venueActions';
 import { getCurrentUserAction, logoutUserAction } from '../actions/userAuthActions';
-import { validateAndProcessPaymentProof } from '../actions/paymentValidationActions';
+import { validateAndProcessPaymentProof, uploadPaymentProofAction } from '../actions/paymentValidationActions';
 import { getSystemSettings } from '../actions/settingsActions';
 import { parseFiltersFromQuery, serialiseFiltersToQuery } from '../lib/filterUrl';
 import { parseRouteFromUrl, buildRouteUrl, type AppView } from '../lib/navigationUrl';
@@ -74,6 +74,7 @@ interface AppContextType {
       paymentProofFile?: File;
     }
   ) => Promise<Booking | null>;
+  uploadPaymentProofForBooking: (bookingId: string, file: File) => Promise<{ success: boolean; error?: string }>;
   cancelBooking: (bookingId: string) => void;
   addReview: (venueId: string, rating: number, comment: string, sportType: string) => void;
   
@@ -511,15 +512,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Step 2: If proof file provided, upload and validate
     if (verificationData?.paymentProofFile) {
       const file = verificationData.paymentProofFile;
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
+      const formData = new FormData();
+      formData.append('bookingId', newBookingId);
+      formData.append('file', file);
       
-      const validationResult = await validateAndProcessPaymentProof(
-        newBookingId,
-        buffer,
-        file.name,
-        file.type
-      );
+      const validationResult = await uploadPaymentProofAction(formData);
+
+      if (!validationResult.success) {
+        throw new Error(validationResult.error || 'Gagal mengunggah dan memvalidasi bukti pembayaran.');
+      }
 
       // Refresh venues to get updated slots
       const data = await getVenues();
@@ -538,7 +539,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         totalPrice: totalAmount,
         serviceFee: 0,
         grandTotal: totalAmount,
-        status: validationResult.newStatus === 'PAID_SUCCESS' ? 'PAID_SUCCESS' : 'MENUNGGU_VALIDASI',
+        status: validationResult.newStatus === 'PAID_SUCCESS' ? 'PAID_SUCCESS' : 'PENDING_PAYMENT',
         paymentMethod: method,
         createdAt: res.booking.createdAt.toString(),
         expiresAt: new Date(Date.now() + 60 * 60000).toISOString(),
@@ -547,7 +548,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         nik: verificationData?.nik,
         npwp: verificationData?.npwp,
         senderName: verificationData?.senderName,
-        paymentProofUrl: validationResult.ocrResult ? 'uploaded' : undefined,
+        paymentProofUrl: 'uploaded',
         ocrValidationResult: validationResult.ocrResult,
         ocrProcessedAt: new Date().toISOString(),
       };
@@ -595,6 +596,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setActiveBookingDraft(null);
     return mappedBooking;
   }
+
+  const uploadPaymentProofForBooking = async (
+    bookingId: string,
+    file: File
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const formData = new FormData();
+      formData.append('bookingId', bookingId);
+      formData.append('file', file);
+      const res = await uploadPaymentProofAction(formData);
+      if (res.success) {
+        setBookings((prev) =>
+          prev.map((b) =>
+            b.id === bookingId
+              ? {
+                  ...b,
+                  paymentProofUrl: 'uploaded',
+                  status: res.newStatus === 'PAID_SUCCESS' ? 'PAID_SUCCESS' : b.status,
+                  ocrValidationResult: res.ocrResult,
+                }
+              : b
+          )
+        );
+        return { success: true };
+      }
+      return { success: false, error: res.error || 'Gagal mengunggah bukti pembayaran.' };
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Terjadi kesalahan sistem saat unggah bukti.' };
+    }
+  };
 
   const cancelBooking = (bookingId: string) => {
     setBookings((prev) =>
@@ -678,6 +709,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         handleSearchSubmit,
         startBookingCheckout,
         completePayment,
+        uploadPaymentProofForBooking,
         cancelBooking,
         addReview,
         toggleFieldMaintenanceSlot,

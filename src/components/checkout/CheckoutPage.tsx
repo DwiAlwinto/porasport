@@ -219,10 +219,9 @@ export const CheckoutPage: React.FC = () => {
         setOcrStatus('failed');
       }
     } catch (err: unknown) {
-      console.error(err);
-      // Pesan dari server action yang dilempar sudah disanitasi di sisi server.
-      // Tampilkan teks generik agar detail internal tidak masuk ke DOM publik.
-      setFormError('Terjadi kendala saat memproses pembayaran. Silakan coba lagi.');
+      console.error('[CheckoutPage] Error:', err);
+      const msg = err instanceof Error ? err.message : 'Terjadi kendala saat memproses pembayaran. Silakan coba lagi.';
+      setFormError(msg);
       setOcrStatus('failed');
     } finally {
       setIsProcessing(false);
