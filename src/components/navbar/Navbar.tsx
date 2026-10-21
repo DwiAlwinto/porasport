@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { TRANSLATIONS } from '../../utils/translations';
 import { LoginGateModal } from '../auth/LoginGateModal';
+import { UserAvatar } from '../common/UserAvatar';
 
 export const Navbar: React.FC = () => {
   const {
@@ -168,10 +169,10 @@ export const Navbar: React.FC = () => {
                   onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
                   className="flex items-center gap-2.5 rounded-full border border-slate-200 bg-white py-1 px-3 shadow-sm hover:border-emerald-500/50 transition group"
                 >
-                  <img
-                    src={activeUser?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(activeUser?.name || 'user')}`}
-                    alt={activeUser?.name || 'User'}
-                    className="h-7 w-7 rounded-full object-cover ring-2 ring-[#05BB75]"
+                  <UserAvatar
+                    src={activeUser?.avatar}
+                    name={activeUser?.name}
+                    sizeClassName="h-7 w-7"
                   />
                   <div className="text-left hidden lg:block">
                     <div className="text-xs font-bold text-slate-800 truncate max-w-[110px] leading-tight">
@@ -307,10 +308,10 @@ export const Navbar: React.FC = () => {
             {isLoggedIn ? (
               <div className="space-y-3">
                 <div className="flex items-center gap-3 p-2 bg-slate-50 rounded-xl border border-slate-200">
-                  <img
-                    src={activeUser?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(activeUser?.name || 'user')}`}
-                    className="h-10 w-10 rounded-full object-cover ring-2 ring-[#05BB75]"
-                    alt=""
+                  <UserAvatar
+                    src={activeUser?.avatar}
+                    name={activeUser?.name}
+                    sizeClassName="h-10 w-10"
                   />
                   <div className="flex-1 overflow-hidden">
                     <div className="font-black text-xs text-slate-900 truncate">{activeUser?.name || 'User'}</div>

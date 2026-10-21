@@ -88,7 +88,7 @@ function buildCsp(nonce: string): string {
     // React dan Tailwind menyuntikkan style inline, jadi tetap perlu
     // 'unsafe-inline' di directive style.
     "style-src 'self' 'unsafe-inline'",
-    `img-src 'self' data: blob: https://${supabaseHost()}`,
+    `img-src 'self' data: blob: https://${supabaseHost()} https://*.googleusercontent.com https://lh3.googleusercontent.com https://api.dicebear.com`,
     "font-src 'self' data:",
     isDev
       ? "connect-src 'self' ws: wss: http://localhost:* http://192.168.*:*"

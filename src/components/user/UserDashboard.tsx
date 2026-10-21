@@ -22,6 +22,7 @@ import {
   ArrowRight,
   Upload,
 } from 'lucide-react';
+import { UserAvatar } from '../common/UserAvatar';
 
 export const UserDashboard: React.FC = () => {
   const {
@@ -116,10 +117,12 @@ export const UserDashboard: React.FC = () => {
           <div className="bg-gradient-to-r from-slate-900 to-slate-800 px-6 py-6 text-white sm:px-8">
             <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
               <div className="flex items-center gap-4">
-                <img
-                  src={activeUser?.avatar || ''}
-                  alt={activeUser?.name || 'User'}
-                  className="h-16 w-16 rounded-2xl object-cover ring-2 ring-white/20"
+                <UserAvatar
+                  src={activeUser?.avatar}
+                  name={activeUser?.name}
+                  sizeClassName="h-16 w-16"
+                  className="rounded-2xl text-xl"
+                  ringColor="ring-white/20"
                 />
                 <div>
                   <div className="flex items-center gap-2">
