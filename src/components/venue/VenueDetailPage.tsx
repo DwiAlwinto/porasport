@@ -76,18 +76,8 @@ const getWibDateTime = () => {
 };
 
 const isSlotPast = (slotDate: string, slotHour: number, slotTimeStart?: string): boolean => {
-  const { todayKey, currentHour, currentMinute } = getWibDateTime();
-  if (slotDate < todayKey) return true;
-  if (slotDate > todayKey) return false;
-
-  let startH = slotHour;
-  let startM = 0;
-  if (slotTimeStart) {
-    const [h, m] = slotTimeStart.split(':').map((v) => parseInt(v, 10));
-    if (!Number.isNaN(h)) startH = h;
-    if (!Number.isNaN(m)) startM = m;
-  }
-  return currentHour > startH || (currentHour === startH && currentMinute >= startM);
+  // [TESTING MODE] Lock jam dibuka sementara atas permintaan pengujian
+  return false;
 };
 
 const SPORT_LABELS: Record<string, string> = {
