@@ -8,6 +8,7 @@ import { toDateKey, parseDateKey } from '../lib/dateKeys';
 import { getCurrentUserSession } from '../lib/userAuth';
 import { rateLimit } from '../lib/rateLimit';
 import { toPublicMessage, UserFacingError } from '../lib/userFacingError';
+import { getSignedProofUrl } from '../lib/storage';
 import crypto from 'crypto';
 
 export async function getVenues() {
@@ -534,3 +535,175 @@ export async function submitPaymentProofAction(bookingId: string, proofData: {
     };
   }
 }
+
+/**
+ * Mengambil seluruh riwayat pesanan (booking) milik user yang sedang aktif login.
+ * Menghubungkan langsung data PostgreSQL ke antarmuka dashboard customer secara real-time.
+ */
+export async function getMyBookingsAction() {
+  try {
+    const session = await getCurrentUserSession();
+    if (!session || !session.userId) {
+      return { success: false, bookings: [], error: 'Sesi login tidak ditemukan.' };
+    }
+
+    const bookings = await prisma.booking.findMany({
+      where: { userId: session.userId },
+      include: {
+        venue: {
+          select: {
+            id: true,
+            name: true,
+            address: true,
+            city: true,
+            images: true,
+          },
+        },
+        items: {
+          include: {
+            field: {
+              select: {
+                id: true,
+                name: true,
+                sportType: true,
+              },
+            },
+          },
+        },
+        payment: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const mapped = await Promise.all(
+      bookings.map(async (b) => {
+        let signedUrl: string | undefined = undefined;
+        if (b.paymentProofUrl) {
+          try {
+            signedUrl = (await getSignedProofUrl(b.paymentProofUrl)) || undefined;
+          } catch {
+            signedUrl = undefined;
+          }
+        }
+
+        return {
+          id: b.id,
+          userId: b.userId,
+          venueId: b.venueId,
+          venueName: b.venue?.name || 'Venue Olahraga',
+          venueAddress: b.venue?.address || b.venue?.city || 'Bekasi',
+          venueImage: b.venue?.images?.[0] || '',
+          sportCategory: b.sportCategory,
+          items: b.items.map((i) => ({
+            slotId: i.slotId || '',
+            fieldId: i.fieldId,
+            fieldName: i.field?.name,
+            date: i.date.toISOString().split('T')[0],
+            timeStart: i.timeStart,
+            timeEnd: i.timeEnd,
+            price: i.price,
+            isPeakHour: i.isPeakHour,
+            quantity: i.quantity,
+          })),
+          totalPrice: b.totalPrice,
+          serviceFee: b.serviceFee,
+          grandTotal: b.grandTotal,
+          status: b.status as any,
+          paymentMethod: b.paymentMethod as any,
+          createdAt: b.createdAt.toISOString(),
+          expiresAt: b.expiresAt.toISOString(),
+          qrCodeToken: b.qrCodeToken,
+          hasReviewed: false,
+          nik: b.nik || undefined,
+          npwp: b.npwp || undefined,
+          senderName: b.senderName || undefined,
+          senderPhone: b.senderPhone || undefined,
+          paymentProofUrl: signedUrl || b.paymentProofUrl || undefined,
+          adminNotes: b.adminNotes || undefined,
+          ocrExtractedText: b.ocrExtractedText || undefined,
+          ocrValidationResult: (b.ocrValidationResult as any) || undefined,
+          ocrProcessedAt: b.ocrProcessedAt ? b.ocrProcessedAt.toISOString() : undefined,
+        };
+      })
+    );
+
+    return { success: true, bookings: mapped };
+  } catch (error: any) {
+    console.error('[getMyBookingsAction] Gagal mengambil pesanan user:', error);
+    return {
+      success: false,
+      bookings: [],
+      error: toPublicMessage(error, 'Gagal memuat daftar pesanan.'),
+    };
+  }
+}
+
+/**
+ * Batalkan pesanan mandiri oleh user penyewa (hanya jika masih PENDING_PAYMENT).
+ */
+export async function cancelUserBookingAction(bookingId: string) {
+  try {
+    const session = await getCurrentUserSession();
+    if (!session || !session.userId) {
+      return { success: false, error: 'Silakan login terlebih dahulu.' };
+    }
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { items: true },
+    });
+
+    if (!booking) {
+      return { success: false, error: 'Pesanan tidak ditemukan.' };
+    }
+
+    if (booking.userId !== session.userId) {
+      return { success: false, error: 'Akses ditolak.' };
+    }
+
+    if (booking.status !== 'PENDING_PAYMENT') {
+      return { success: false, error: 'Pesanan yang sudah diproses atau lunas tidak dapat dibatalkan.' };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Bebaskan kuota slot
+      for (const item of booking.items) {
+        const slot = await tx.fieldSlot.findFirst({
+          where: {
+            fieldId: item.fieldId,
+            date: item.date,
+            timeStart: item.timeStart,
+          },
+        });
+
+        if (slot) {
+          const qty = item.quantity || 1;
+          const newBooked = Math.max(0, slot.bookedCapacity - qty);
+          const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (newBooked >= slot.maxCapacity ? 'BOOKED' : 'AVAILABLE');
+          await tx.fieldSlot.update({
+            where: { id: slot.id },
+            data: {
+              bookedCapacity: newBooked,
+              status: newStatus,
+              bookingId: newBooked === 0 ? null : slot.bookingId,
+              bookedByUserId: newBooked === 0 ? null : slot.bookedByUserId,
+            },
+          });
+        }
+      }
+
+      // 2. Update status booking menjadi CANCELLED
+      await tx.booking.update({
+        where: { id: bookingId },
+        data: { status: 'CANCELLED' },
+      });
+    }, { maxWait: 10000, timeout: 20000 });
+
+    revalidatePath('/');
+    return { success: true };
+  } catch (error: any) {
+    console.error('[cancelUserBookingAction] Gagal membatalkan pesanan:', error);
+    return { success: false, error: toPublicMessage(error, 'Gagal membatalkan pesanan.') };
+  }
+}
+

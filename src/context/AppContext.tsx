@@ -13,7 +13,7 @@ import {
   PaymentMethodType,
 } from '../types';
 import type { UserCategory } from '@prisma/client';
-import { getVenues, createBooking } from '../actions/venueActions';
+import { getVenues, createBooking, getMyBookingsAction, cancelUserBookingAction } from '../actions/venueActions';
 import { getCurrentUserAction, logoutUserAction } from '../actions/userAuthActions';
 import { validateAndProcessPaymentProof, uploadPaymentProofAction } from '../actions/paymentValidationActions';
 import { getSystemSettings } from '../actions/settingsActions';
@@ -78,7 +78,9 @@ interface AppContextType {
     }
   ) => Promise<Booking | null>;
   uploadPaymentProofForBooking: (bookingId: string, file: File) => Promise<{ success: boolean; error?: string }>;
-  cancelBooking: (bookingId: string) => void;
+  cancelBooking: (bookingId: string) => Promise<void>;
+  refreshBookings: () => Promise<void>;
+  bookingsLoading: boolean;
   addReview: (venueId: string, rating: number, comment: string, sportType: string) => void;
   
   // Mitra actions
@@ -246,6 +248,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return [];
     }
   });
+  const [bookingsLoading, setBookingsLoading] = useState(false);
+
+  const refreshBookings = async () => {
+    try {
+      setBookingsLoading(true);
+      const res = await getMyBookingsAction();
+      if (res.success && res.bookings) {
+        setBookings(res.bookings as Booking[]);
+        try {
+          localStorage.setItem(STORAGE_KEYS.BOOKINGS, JSON.stringify(stripPII(res.bookings as object[])));
+        } catch {}
+      }
+    } catch (err) {
+      console.error('[AppContext] Gagal memuat pesanan pengguna dari server:', err);
+    } finally {
+      setBookingsLoading(false);
+    }
+  };
+
+  // Sinkronisasi pesanan pengguna dari database saat login aktif
+  useEffect(() => {
+    if (isLoggedIn && activeUser) {
+      refreshBookings();
+    }
+  }, [isLoggedIn, activeUser?.id]);
 
   const [reviews, setReviews] = useState<VenueReview[]>(() => {
     try {
@@ -562,6 +589,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       try {
         sessionStorage.removeItem('gelora_checkout_draft_v1');
       } catch {}
+      await refreshBookings();
       // Draft tidak langsung diset null di sini agar CheckoutPage dan CheckoutModal
       // tidak mengalami glitch/flash "Tidak Ada Pesanan Aktif" sebelum selesai me-render completedBooking
       return mappedBooking;
@@ -613,18 +641,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       formData.append('file', file);
       const res = await uploadPaymentProofAction(formData);
       if (res.success) {
-        setBookings((prev) =>
-          prev.map((b) =>
-            b.id === bookingId
-              ? {
-                  ...b,
-                  paymentProofUrl: 'uploaded',
-                  status: res.newStatus === 'PAID_SUCCESS' ? 'PAID_SUCCESS' : ((res.newStatus as any) || 'MENUNGGU_VALIDASI'),
-                  ocrValidationResult: res.ocrResult,
-                }
-              : b
-          )
-        );
+        await refreshBookings();
         return { success: true };
       }
       return { success: false, error: res.error || 'Gagal mengunggah bukti pembayaran.' };
@@ -633,17 +650,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const cancelBooking = (bookingId: string) => {
-    setBookings((prev) =>
-      prev.map((b) =>
-        b.id === bookingId
-          ? {
-              ...b,
-              status: 'CANCELLED',
-            }
-          : b
-      )
-    );
+  const cancelBooking = async (bookingId: string) => {
+    try {
+      const res = await cancelUserBookingAction(bookingId);
+      if (res.success) {
+        await refreshBookings();
+      } else {
+        alert(res.error || 'Gagal membatalkan pesanan.');
+      }
+    } catch {
+      alert('Terjadi kesalahan saat membatalkan pesanan.');
+    }
   };
 
   const addReview = (venueId: string, rating: number, comment: string, sportType: string) => {
@@ -718,6 +735,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         completePayment,
         uploadPaymentProofForBooking,
         cancelBooking,
+        refreshBookings,
+        bookingsLoading,
         addReview,
         toggleFieldMaintenanceSlot,
         addNewVenue,

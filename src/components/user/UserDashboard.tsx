@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { handleImageError, getFallbackImageForUrl } from '../../utils/imageUtils';
 import { useApp } from '../../context/AppContext';
 import {
@@ -21,6 +21,7 @@ import {
   Building2,
   ArrowRight,
   Upload,
+  RefreshCw,
 } from 'lucide-react';
 import { UserAvatar } from '../common/UserAvatar';
 
@@ -29,6 +30,8 @@ export const UserDashboard: React.FC = () => {
     activeUser,
     setActiveUser,
     bookings,
+    bookingsLoading,
+    refreshBookings,
     cancelBooking,
     uploadPaymentProofForBooking,
     addReview,
@@ -61,6 +64,25 @@ export const UserDashboard: React.FC = () => {
     }
     return b.status === statusTab;
   });
+
+  // 1. Sync data terbaru langsung dari server database saat dashboard dibuka
+  useEffect(() => {
+    refreshBookings();
+  }, []);
+
+  // 2. Auto-polling setiap 10 detik jika masih ada pesanan yang menunggu validasi admin
+  useEffect(() => {
+    const hasPending = userBookings.some(
+      (b) => b.status === 'PENDING_PAYMENT' || b.status === 'MENUNGGU_VALIDASI'
+    );
+    if (!hasPending) return;
+
+    const interval = setInterval(() => {
+      refreshBookings();
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [userBookings]);
 
   const handleOpenReviewModal = (booking: Booking) => {
     setReviewModalBooking(booking);
@@ -148,6 +170,16 @@ export const UserDashboard: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => refreshBookings()}
+                  disabled={bookingsLoading}
+                  className="flex items-center gap-1.5 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2 text-xs font-bold text-white hover:bg-white/20 transition disabled:opacity-60"
+                  title="Sinkronkan status tiket dengan data terbaru server"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${bookingsLoading ? 'animate-spin' : ''}`} />
+                  <span>{bookingsLoading ? 'Memeriksa...' : 'Perbarui Status'}</span>
+                </button>
                 <button
                   onClick={() => setActiveView('EXPLORE')}
                   className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-emerald-700"
