@@ -575,6 +575,45 @@ export async function getMyBookingsAction() {
       orderBy: { createdAt: 'desc' },
     });
 
+    // 1. Auto-complete: Jika waktu jadwal bermain sudah lewat, otomatis update ke COMPLETED di PostgreSQL
+    const now = Date.now();
+    const toCompleteIds: string[] = [];
+
+    for (const b of bookings) {
+      if (b.status === 'PAID_SUCCESS' && b.items.length > 0) {
+        let latestEndTime = 0;
+        for (const item of b.items) {
+          try {
+            const dateStr = item.date.toISOString().split('T')[0];
+            const endMs = new Date(`${dateStr}T${item.timeEnd}:00+07:00`).getTime();
+            if (endMs > latestEndTime) {
+              latestEndTime = endMs;
+            }
+          } catch {
+            // abaikan format gagal
+          }
+        }
+        if (latestEndTime > 0 && now >= latestEndTime) {
+          toCompleteIds.push(b.id);
+          b.status = 'COMPLETED';
+        }
+      }
+    }
+
+    if (toCompleteIds.length > 0) {
+      await prisma.booking.updateMany({
+        where: { id: { in: toCompleteIds } },
+        data: { status: 'COMPLETED' },
+      });
+    }
+
+    // 2. Ambil daftar venueId yang sudah pernah diulas oleh user ini
+    const userReviews = await prisma.review.findMany({
+      where: { userId: session.userId },
+      select: { venueId: true },
+    });
+    const reviewedVenueIds = new Set(userReviews.map((r) => r.venueId));
+
     const mapped = await Promise.all(
       bookings.map(async (b) => {
         let signedUrl: string | undefined = undefined;
@@ -613,7 +652,7 @@ export async function getMyBookingsAction() {
           createdAt: b.createdAt.toISOString(),
           expiresAt: b.expiresAt.toISOString(),
           qrCodeToken: b.qrCodeToken,
-          hasReviewed: false,
+          hasReviewed: reviewedVenueIds.has(b.venueId),
           nik: b.nik || undefined,
           npwp: b.npwp || undefined,
           senderName: b.senderName || undefined,
@@ -639,7 +678,7 @@ export async function getMyBookingsAction() {
 }
 
 /**
- * Batalkan pesanan mandiri oleh user penyewa (hanya jika masih PENDING_PAYMENT).
+ * Batalkan pesanan mandiri oleh user penyewa (hanya jika masih PENDING_PAYMENT atau MENUNGGU_VALIDASI).
  */
 export async function cancelUserBookingAction(bookingId: string) {
   try {
@@ -661,8 +700,8 @@ export async function cancelUserBookingAction(bookingId: string) {
       return { success: false, error: 'Akses ditolak.' };
     }
 
-    if (booking.status !== 'PENDING_PAYMENT') {
-      return { success: false, error: 'Pesanan yang sudah diproses atau lunas tidak dapat dibatalkan.' };
+    if (booking.status !== 'PENDING_PAYMENT' && booking.status !== 'MENUNGGU_VALIDASI') {
+      return { success: false, error: 'Pesanan yang sudah diproses atau selesai tidak dapat dibatalkan.' };
     }
 
     await prisma.$transaction(async (tx) => {
@@ -695,15 +734,119 @@ export async function cancelUserBookingAction(bookingId: string) {
       // 2. Update status booking menjadi CANCELLED
       await tx.booking.update({
         where: { id: bookingId },
-        data: { status: 'CANCELLED' },
+        data: {
+          status: 'CANCELLED',
+          adminNotes: booking.adminNotes || 'Dibatalkan oleh pemesan',
+        },
       });
     }, { maxWait: 10000, timeout: 20000 });
 
     revalidatePath('/');
+    revalidatePath('/dashboard');
     return { success: true };
   } catch (error: any) {
     console.error('[cancelUserBookingAction] Gagal membatalkan pesanan:', error);
     return { success: false, error: toPublicMessage(error, 'Gagal membatalkan pesanan.') };
+  }
+}
+
+/**
+ * Selesaikan pesanan mandiri oleh user penyewa (untuk pesanan yang sudah PAID_SUCCESS).
+ */
+export async function completeUserBookingAction(bookingId: string) {
+  try {
+    const session = await getCurrentUserSession();
+    if (!session || !session.userId) {
+      return { success: false, error: 'Silakan login terlebih dahulu.' };
+    }
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
+
+    if (!booking) {
+      return { success: false, error: 'Pesanan tidak ditemukan.' };
+    }
+
+    if (booking.userId !== session.userId) {
+      return { success: false, error: 'Akses ditolak.' };
+    }
+
+    if (booking.status !== 'PAID_SUCCESS') {
+      return { success: false, error: 'Hanya pesanan yang sudah lunas yang dapat diselesaikan.' };
+    }
+
+    await prisma.booking.update({
+      where: { id: bookingId },
+      data: { status: 'COMPLETED' },
+    });
+
+    revalidatePath('/');
+    revalidatePath('/dashboard');
+    return { success: true };
+  } catch (error: any) {
+    console.error('[completeUserBookingAction] Gagal menyelesaikan pesanan:', error);
+    return { success: false, error: toPublicMessage(error, 'Gagal menyelesaikan pesanan.') };
+  }
+}
+
+/**
+ * Simpan ulasan dan rating venue ke PostgreSQL dan hitung ulang rating venue.
+ */
+export async function submitVenueReviewAction(data: {
+  bookingId?: string;
+  venueId: string;
+  rating: number;
+  comment: string;
+  sportType: string;
+}) {
+  try {
+    const session = await getCurrentUserSession();
+    if (!session || !session.userId) {
+      return { success: false, error: 'Silakan login terlebih dahulu untuk memberikan ulasan.' };
+    }
+
+    const { venueId, rating, comment, sportType } = data;
+    if (!venueId || !rating || !comment?.trim()) {
+      return { success: false, error: 'Mohon lengkapi rating bintang dan ulasan komentar Anda.' };
+    }
+
+    const validRating = Math.max(1, Math.min(5, Math.round(rating)));
+
+    // 1. Simpan review ke database PostgreSQL
+    await prisma.review.create({
+      data: {
+        venueId,
+        userId: session.userId,
+        rating: validRating,
+        comment: comment.trim(),
+        sportType: sportType || 'UMUM',
+      },
+    });
+
+    // 2. Hitung ulang rata-rata rating venue
+    const allReviews = await prisma.review.findMany({
+      where: { venueId },
+      select: { rating: true },
+    });
+
+    const totalStars = allReviews.reduce((sum, r) => sum + r.rating, 0);
+    const avgRating = allReviews.length > 0 ? Number((totalStars / allReviews.length).toFixed(1)) : 5.0;
+
+    await prisma.venue.update({
+      where: { id: venueId },
+      data: {
+        rating: avgRating,
+        reviewCount: allReviews.length,
+      },
+    });
+
+    revalidatePath('/');
+    revalidatePath('/dashboard');
+    return { success: true };
+  } catch (error: any) {
+    console.error('[submitVenueReviewAction] Gagal menyimpan ulasan:', error);
+    return { success: false, error: toPublicMessage(error, 'Gagal mengirimkan ulasan.') };
   }
 }
 

@@ -39,6 +39,7 @@ export const UserDashboard: React.FC = () => {
     bookingsLoading,
     refreshBookings,
     cancelBooking,
+    completeBooking,
     uploadPaymentProofForBooking,
     addReview,
     setActiveView,
@@ -60,6 +61,20 @@ export const UserDashboard: React.FC = () => {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadSuccessToast, setUploadSuccessToast] = useState<string | null>(null);
+
+  // Modal konfirmasi pembatalan pesanan
+  const [bookingToCancel, setBookingToCancel] = useState<Booking | null>(null);
+  const [isCancelling, setIsCancelling] = useState<boolean>(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
+  // Modal konfirmasi selesai bermain
+  const [bookingToComplete, setBookingToComplete] = useState<Booking | null>(null);
+  const [isCompleting, setIsCompleting] = useState<boolean>(false);
+  const [completeError, setCompleteError] = useState<string | null>(null);
+
+  // State proses review
+  const [isSubmittingReview, setIsSubmittingReview] = useState<boolean>(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   // Real QR Code state & actions
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
@@ -143,18 +158,76 @@ export const UserDashboard: React.FC = () => {
     setReviewModalBooking(booking);
     setRating(5);
     setComment('');
+    setReviewError(null);
   };
 
-  const handleSendReview = (e: React.FormEvent) => {
+  const handleSendReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reviewModalBooking) return;
-    addReview(
-      reviewModalBooking.venueId,
-      rating,
-      comment,
-      reviewModalBooking.sportCategory
-    );
-    setReviewModalBooking(null);
+    setIsSubmittingReview(true);
+    setReviewError(null);
+    try {
+      const ok = await addReview(
+        reviewModalBooking.venueId,
+        rating,
+        comment,
+        reviewModalBooking.sportCategory,
+        reviewModalBooking.id
+      );
+      if (ok) {
+        setUploadSuccessToast('Terima kasih! Ulasan & rating berhasil disimpan.');
+        setReviewModalBooking(null);
+        setTimeout(() => setUploadSuccessToast(null), 4000);
+      } else {
+        setReviewError('Gagal mengirimkan ulasan. Silakan coba lagi.');
+      }
+    } catch (err: any) {
+      setReviewError(err.message || 'Terjadi kesalahan sistem.');
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!bookingToCancel) return;
+    setIsCancelling(true);
+    setCancelError(null);
+    try {
+      const res = await cancelBooking(bookingToCancel.id);
+      if (res.success) {
+        setUploadSuccessToast(`Pesanan #${bookingToCancel.id} berhasil dibatalkan.`);
+        setBookingToCancel(null);
+        setTimeout(() => setUploadSuccessToast(null), 4000);
+      } else {
+        setCancelError(res.error || 'Gagal membatalkan pesanan.');
+      }
+    } catch (err: any) {
+      setCancelError(err.message || 'Terjadi kesalahan sistem.');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const handleConfirmComplete = async () => {
+    if (!bookingToComplete) return;
+    setIsCompleting(true);
+    setCompleteError(null);
+    try {
+      const res = await completeBooking(bookingToComplete.id);
+      if (res.success) {
+        setUploadSuccessToast(`Sesi bermain #${bookingToComplete.id} telah diselesaikan!`);
+        const completedBooking = bookingToComplete;
+        setBookingToComplete(null);
+        setTimeout(() => setUploadSuccessToast(null), 4000);
+        handleOpenReviewModal(completedBooking);
+      } else {
+        setCompleteError(res.error || 'Gagal menyelesaikan pesanan.');
+      }
+    } catch (err: any) {
+      setCompleteError(err.message || 'Terjadi kesalahan sistem.');
+    } finally {
+      setIsCompleting(false);
+    }
   };
 
   const handleUploadProofSubmit = async (e: React.FormEvent) => {
@@ -343,18 +416,21 @@ export const UserDashboard: React.FC = () => {
                       </span>
                     )}
                     {booking.status === 'PAID_SUCCESS' && (
-                      <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">
-                        {t.userDashboard.statusPaidSuccess}
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                        <span>{t.userDashboard.statusPaidSuccess}</span>
                       </span>
                     )}
                     {booking.status === 'COMPLETED' && (
-                      <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-800">
-                        {t.userDashboard.statusCompleted}
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-800">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-blue-600" />
+                        <span>{t.userDashboard.statusCompleted}</span>
                       </span>
                     )}
                     {booking.status === 'CANCELLED' && (
-                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">
-                        {t.userDashboard.statusCancelled}
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-700">
+                        <XCircle className="h-3.5 w-3.5 text-rose-600" />
+                        <span>{t.userDashboard.statusCancelled}</span>
                       </span>
                     )}
                   </div>
@@ -385,6 +461,18 @@ export const UserDashboard: React.FC = () => {
                           {booking.items.length} {t.userDashboard.hours})
                         </span>
                       </div>
+
+                      {booking.status === 'CANCELLED' && (
+                        <div className="mt-2.5 rounded-xl border border-rose-200 bg-rose-50/70 p-2.5 text-xs text-rose-800">
+                          <div className="flex items-start gap-2">
+                            <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                            <div>
+                              <span className="font-bold">Alasan Dibatalkan: </span>
+                              <span>{booking.adminNotes || 'Dibatalkan oleh pemesan / Waktu pembayaran telah habis'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -404,13 +492,26 @@ export const UserDashboard: React.FC = () => {
 
                     <div className="flex flex-wrap items-center gap-2">
                       {booking.status === 'PAID_SUCCESS' && (
-                        <button
-                          onClick={() => setActiveQrModalBooking(booking)}
-                          className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow hover:bg-slate-800"
-                        >
-                          <QrCode className="h-4 w-4 text-emerald-400" />
-                          <span>{t.userDashboard.viewTicket}</span>
-                        </button>
+                        <>
+                          <button
+                            onClick={() => setActiveQrModalBooking(booking)}
+                            className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow hover:bg-slate-800 transition"
+                          >
+                            <QrCode className="h-4 w-4 text-emerald-400" />
+                            <span>{t.userDashboard.viewTicket}</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setBookingToComplete(booking);
+                              setCompleteError(null);
+                            }}
+                            className="flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-3.5 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition shadow-sm"
+                            title="Tandai sesi bermain ini telah selesai"
+                          >
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                            <span>Selesai Bermain</span>
+                          </button>
+                        </>
                       )}
 
                       {(booking.status === 'PENDING_PAYMENT' || booking.status === 'MENUNGGU_VALIDASI') && (
@@ -427,31 +528,53 @@ export const UserDashboard: React.FC = () => {
                             <Upload className="h-4 w-4" />
                             <span>{booking.paymentProofUrl || booking.status === 'MENUNGGU_VALIDASI' ? 'Ganti Bukti Bayar' : 'Unggah Bukti Bayar'}</span>
                           </button>
-                          {booking.status === 'PENDING_PAYMENT' && (
+                          <button
+                            onClick={() => {
+                              setBookingToCancel(booking);
+                              setCancelError(null);
+                            }}
+                            className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-100 transition"
+                          >
+                            {t.userDashboard.cancelOrder}
+                          </button>
+                        </>
+                      )}
+
+                      {booking.status === 'COMPLETED' && (
+                        <>
+                          <button
+                            onClick={() => setActiveQrModalBooking(booking)}
+                            className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-sm"
+                          >
+                            <QrCode className="h-3.5 w-3.5 text-slate-500" />
+                            <span>Riwayat e-Ticket</span>
+                          </button>
+
+                          {!booking.hasReviewed ? (
                             <button
-                              onClick={() => cancelBooking(booking.id)}
-                              className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-100 transition"
+                              onClick={() => handleOpenReviewModal(booking)}
+                              className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-white shadow hover:bg-amber-600 transition"
                             >
-                              {t.userDashboard.cancelOrder}
+                              <Star className="h-4 w-4 fill-white" />
+                              <span>{t.userDashboard.giveReview}</span>
                             </button>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-xs font-bold text-emerald-700">
+                              <Check className="h-3.5 w-3.5 text-emerald-600" />
+                              <span>{t.userDashboard.reviewSubmitted}</span>
+                            </span>
                           )}
                         </>
                       )}
 
-                      {booking.status === 'COMPLETED' && !booking.hasReviewed && (
+                      {booking.status === 'CANCELLED' && (
                         <button
-                          onClick={() => handleOpenReviewModal(booking)}
-                          className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-white shadow hover:bg-amber-600"
+                          onClick={() => setActiveView('EXPLORE')}
+                          className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow hover:bg-slate-800 transition"
                         >
-                          <Star className="h-4 w-4 fill-white" />
-                          <span>{t.userDashboard.giveReview}</span>
+                          <RefreshCw className="h-3.5 w-3.5 text-emerald-400" />
+                          <span>Pesan Jadwal Baru</span>
                         </button>
-                      )}
-
-                      {booking.status === 'COMPLETED' && booking.hasReviewed && (
-                        <span className="text-xs font-semibold text-emerald-600">
-                          {t.userDashboard.reviewSubmitted}
-                        </span>
                       )}
                     </div>
                   </div>
@@ -664,11 +787,19 @@ export const UserDashboard: React.FC = () => {
                 />
               </div>
 
+              {reviewError && (
+                <div className="flex items-center gap-2 rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-600 border border-red-200">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{reviewError}</span>
+                </div>
+              )}
+
               <button
                 type="submit"
-                className="w-full rounded-xl bg-emerald-600 py-3 text-xs font-bold text-white shadow hover:bg-emerald-700"
+                disabled={isSubmittingReview}
+                className="w-full rounded-xl bg-emerald-600 py-3 text-xs font-bold text-white shadow hover:bg-emerald-700 disabled:opacity-50"
               >
-                {t.userDashboard.submitReview}
+                {isSubmittingReview ? 'Mengirimkan Ulasan...' : t.userDashboard.submitReview}
               </button>
             </form>
           </div>
@@ -778,6 +909,150 @@ export const UserDashboard: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* MODAL KONFIRMASI PEMBATALAN PESANAN */}
+      {bookingToCancel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
+                  <XCircle className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Batalkan Pesanan #{bookingToCancel.id}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {bookingToCancel.venueName}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setBookingToCancel(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <div className="rounded-2xl bg-amber-50 border border-amber-200 p-3.5 text-xs text-amber-900 leading-relaxed">
+                <p className="font-bold text-amber-950 mb-1">Perhatian:</p>
+                Apakah Anda yakin ingin membatalkan pesanan ini? Slot jadwal yang Anda reservasi akan segera dibuka kembali untuk umum.
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 border border-slate-200/70 p-3 text-xs space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Jadwal:</span>
+                  <span className="font-bold text-slate-800">
+                    {bookingToCancel.items[0]?.date} • {bookingToCancel.items.map((i) => i.timeStart).join(', ')} WIB
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Total Nominal:</span>
+                  <span className="font-bold text-slate-900">{formatRupiah(bookingToCancel.grandTotal)}</span>
+                </div>
+              </div>
+
+              {cancelError && (
+                <div className="flex items-center gap-2 rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-600 border border-red-200">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{cancelError}</span>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={isCancelling}
+                  onClick={() => setBookingToCancel(null)}
+                  className="w-1/2 rounded-xl border border-slate-200 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Kembali
+                </button>
+                <button
+                  type="button"
+                  disabled={isCancelling}
+                  onClick={handleConfirmCancel}
+                  className="w-1/2 rounded-xl bg-rose-600 py-2.5 text-xs font-bold text-white shadow hover:bg-rose-700 disabled:opacity-50"
+                >
+                  {isCancelling ? 'Membatalkan...' : 'Ya, Batalkan'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL KONFIRMASI SELESAI BERMAIN */}
+      {bookingToComplete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                  <CheckCircle2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Selesaikan Sesi Bermain #{bookingToComplete.id}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {bookingToComplete.venueName}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setBookingToComplete(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Konfirmasi bahwa Anda telah selesai bermain di lapangan <strong>{bookingToComplete.venueName}</strong>. Pesanan akan berpindah ke tab <strong>Selesai Bermain</strong> dan Anda dapat memberikan ulasan serta rating bintang.
+              </p>
+
+              <div className="rounded-2xl bg-slate-50 border border-slate-200/70 p-3 text-xs space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Jadwal:</span>
+                  <span className="font-bold text-slate-800">
+                    {bookingToComplete.items[0]?.date} • {bookingToComplete.items.map((i) => i.timeStart).join(', ')} WIB
+                  </span>
+                </div>
+              </div>
+
+              {completeError && (
+                <div className="flex items-center gap-2 rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-600 border border-red-200">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{completeError}</span>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={isCompleting}
+                  onClick={() => setBookingToComplete(null)}
+                  className="w-1/2 rounded-xl border border-slate-200 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={isCompleting}
+                  onClick={handleConfirmComplete}
+                  className="w-1/2 rounded-xl bg-emerald-600 py-2.5 text-xs font-bold text-white shadow hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {isCompleting ? 'Menyelesaikan...' : 'Ya, Selesaikan'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -13,7 +13,14 @@ import {
   PaymentMethodType,
 } from '../types';
 import type { UserCategory } from '@prisma/client';
-import { getVenues, createBooking, getMyBookingsAction, cancelUserBookingAction } from '../actions/venueActions';
+import {
+  getVenues,
+  createBooking,
+  getMyBookingsAction,
+  cancelUserBookingAction,
+  completeUserBookingAction,
+  submitVenueReviewAction,
+} from '../actions/venueActions';
 import { getCurrentUserAction, logoutUserAction } from '../actions/userAuthActions';
 import { validateAndProcessPaymentProof, uploadPaymentProofAction } from '../actions/paymentValidationActions';
 import { getSystemSettings } from '../actions/settingsActions';
@@ -78,10 +85,11 @@ interface AppContextType {
     }
   ) => Promise<Booking | null>;
   uploadPaymentProofForBooking: (bookingId: string, file: File) => Promise<{ success: boolean; error?: string }>;
-  cancelBooking: (bookingId: string) => Promise<void>;
+  cancelBooking: (bookingId: string) => Promise<{ success: boolean; error?: string }>;
+  completeBooking: (bookingId: string) => Promise<{ success: boolean; error?: string }>;
   refreshBookings: () => Promise<void>;
   bookingsLoading: boolean;
-  addReview: (venueId: string, rating: number, comment: string, sportType: string) => void;
+  addReview: (venueId: string, rating: number, comment: string, sportType: string, bookingId?: string) => Promise<boolean>;
   
   // Mitra actions
   toggleFieldMaintenanceSlot: (venueId: string, fieldId: string, date: string, hour: number) => void;
@@ -650,42 +658,89 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const cancelBooking = async (bookingId: string) => {
+  const cancelBooking = async (bookingId: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const res = await cancelUserBookingAction(bookingId);
       if (res.success) {
         await refreshBookings();
+        return { success: true };
       } else {
-        alert(res.error || 'Gagal membatalkan pesanan.');
+        return { success: false, error: res.error || 'Gagal membatalkan pesanan.' };
       }
-    } catch {
-      alert('Terjadi kesalahan saat membatalkan pesanan.');
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Terjadi kesalahan saat membatalkan pesanan.' };
     }
   };
 
-  const addReview = (venueId: string, rating: number, comment: string, sportType: string) => {
-    if (!activeUser) return;
-    const newReview: VenueReview = {
-      id: `rev-${Date.now()}`,
-      venueId,
-      userId: activeUser.id,
-      userName: activeUser.name,
-      userAvatar: activeUser.avatar,
-      rating,
-      comment,
-      createdAt: 'Baru saja',
-      sportType,
-    };
-    setReviews((prev) => [newReview, ...prev]);
+  const completeBooking = async (bookingId: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await completeUserBookingAction(bookingId);
+      if (res.success) {
+        await refreshBookings();
+        return { success: true };
+      } else {
+        return { success: false, error: res.error || 'Gagal menyelesaikan pesanan.' };
+      }
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Terjadi kesalahan saat menyelesaikan pesanan.' };
+    }
+  };
 
-    // Mark user booking as reviewed
-    setBookings((prev) =>
-      prev.map((b) =>
-        b.venueId === venueId && b.userId === activeUser.id && b.status === 'COMPLETED'
-          ? { ...b, hasReviewed: true }
-          : b
-      )
-    );
+  const addReview = async (
+    venueId: string,
+    rating: number,
+    comment: string,
+    sportType: string,
+    bookingId?: string
+  ): Promise<boolean> => {
+    if (!activeUser) return false;
+    try {
+      const res = await submitVenueReviewAction({
+        bookingId,
+        venueId,
+        rating,
+        comment,
+        sportType,
+      });
+
+      if (!res.success) {
+        alert(res.error || 'Gagal mengirimkan ulasan.');
+        return false;
+      }
+
+      const newReview: VenueReview = {
+        id: `rev-${Date.now()}`,
+        venueId,
+        userId: activeUser.id,
+        userName: activeUser.name,
+        userAvatar: activeUser.avatar,
+        rating,
+        comment,
+        createdAt: 'Baru saja',
+        sportType,
+      };
+      setReviews((prev) => [newReview, ...prev]);
+
+      // Mark user booking as reviewed in state
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.venueId === venueId && b.userId === activeUser.id
+            ? { ...b, hasReviewed: true }
+            : b
+        )
+      );
+
+      // Refresh venues from server so updated rating is visible
+      const updatedVenues = await getVenues();
+      setVenues((updatedVenues ?? []) as Venue[]);
+
+      await refreshBookings();
+      return true;
+    } catch (e: any) {
+      console.error('[addReview] Error:', e);
+      alert('Terjadi kesalahan saat mengirimkan ulasan.');
+      return false;
+    }
   };
 
   const toggleFieldMaintenanceSlot = (venueId: string, _fieldId: string, _date: string, _hour: number) => {
@@ -735,6 +790,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         completePayment,
         uploadPaymentProofForBooking,
         cancelBooking,
+        completeBooking,
         refreshBookings,
         bookingsLoading,
         addReview,

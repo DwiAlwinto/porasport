@@ -65,8 +65,8 @@ export async function getAdminPaymentStats(): Promise<AdminStats> {
     const methodMap = new Map<string, { count: number; total: number }>();
 
     for (const b of allBookings) {
-      const isPaid = b.status === 'PAID_SUCCESS';
-      const isPending = b.status === 'PENDING_PAYMENT';
+      const isPaid = b.status === 'PAID_SUCCESS' || b.status === 'COMPLETED';
+      const isPending = b.status === 'PENDING_PAYMENT' || b.status === 'MENUNGGU_VALIDASI';
       const isClosed = b.status === 'CANCELLED';
       const isToday = new Date(b.createdAt) >= today;
 
