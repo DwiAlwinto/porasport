@@ -145,7 +145,11 @@ export async function getAdminBookings(filters?: {
     const whereClause: any = {};
 
     if (filters?.status && filters.status !== 'ALL') {
-      whereClause.status = filters.status as BookingStatus;
+      if (filters.status === 'PENDING_OR_VALIDATION') {
+        whereClause.status = { in: ['PENDING_PAYMENT', 'MENUNGGU_VALIDASI'] };
+      } else {
+        whereClause.status = filters.status as BookingStatus;
+      }
     }
 
     if (filters?.paymentMethod && filters.paymentMethod !== 'ALL') {
@@ -156,6 +160,8 @@ export async function getAdminBookings(filters?: {
       const q = filters.search.trim();
       whereClause.OR = [
         { id: { contains: q, mode: 'insensitive' } },
+        { senderName: { contains: q, mode: 'insensitive' } },
+        { nik: { contains: q, mode: 'insensitive' } },
         { user: { name: { contains: q, mode: 'insensitive' } } },
         { user: { email: { contains: q, mode: 'insensitive' } } },
         { user: { phone: { contains: q, mode: 'insensitive' } } },
@@ -919,5 +925,356 @@ export async function cancelSpecificBookingInSlot(bookingId: string, slotId: str
   } catch (error: any) {
     console.error("Failed to cancel specific booking in slot:", error);
     return { success: false, error: toPublicMessage(error, "Gagal membatalkan pesanan.") };
+  }
+}
+
+/**
+ * 12. CRUD SUPERADMIN: Buat Pesanan Baru Secara Manual
+ */
+export interface CreateSuperAdminBookingInput {
+  venueId: string;
+  fieldId: string;
+  dateStr: string; // "YYYY-MM-DD"
+  hour: number;
+  timeStart: string; // "08:00"
+  timeEnd: string; // "09:00"
+  customerName: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  nik?: string;
+  npwp?: string;
+  totalAmount: number;
+  paymentMethod: string;
+  status: BookingStatus;
+  adminNotes?: string;
+}
+
+export async function createSuperAdminBookingAction(input: CreateSuperAdminBookingInput) {
+  await verifySuperAdmin();
+  try {
+    const targetDate = dateFromKey(input.dateStr);
+
+    const venue = await prisma.venue.findUnique({
+      where: { id: input.venueId },
+    });
+    if (!venue) throw new UserFacingError('Venue tidak ditemukan.');
+
+    const field = await prisma.venueField.findUnique({
+      where: { id: input.fieldId },
+    });
+    if (!field) throw new UserFacingError('Lapangan tidak ditemukan.');
+
+    const cleanEmail = (input.customerEmail || '').trim().toLowerCase();
+    const cleanPhone = (input.customerPhone || '').trim();
+    const cleanName = (input.customerName || 'Customer Superadmin').trim();
+
+    // Dapatkan atau buat User untuk booking ini
+    let user = null;
+    if (cleanEmail) {
+      user = await prisma.user.findUnique({ where: { email: cleanEmail } });
+    }
+    if (!user && cleanPhone) {
+      user = await prisma.user.findFirst({ where: { phone: cleanPhone } });
+    }
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          name: cleanName,
+          email: cleanEmail || `manual-${Date.now()}@disbudporasport.id`,
+          phone: cleanPhone || null,
+          role: 'USER',
+        },
+      });
+    }
+
+    const bookingId = `GLR-ADM-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+    const isPool = field.sportType === 'RENANG';
+    const quantity = 1;
+    const finalPrice = Math.max(0, input.totalAmount);
+
+    const booking = await prisma.$transaction(async (tx) => {
+      // 1. Cek / siapkan slot
+      const slot = await tx.fieldSlot.findUnique({
+        where: {
+          fieldId_date_hour: {
+            fieldId: field.id,
+            date: targetDate,
+            hour: input.hour,
+          },
+        },
+      });
+
+      const maxCap = slot?.maxCapacity || field.maxCapacity || (isPool ? 30 : 1);
+      const currentBooked = slot?.bookedCapacity || 0;
+      const newBooked = currentBooked + quantity;
+      const isFull = newBooked >= maxCap;
+
+      const slotId = slot?.id || `slot-${crypto.randomUUID()}`;
+
+      // 2. Buat Booking
+      const newBooking = await tx.booking.create({
+        data: {
+          id: bookingId,
+          userId: user.id,
+          venueId: venue.id,
+          sportCategory: field.sportType,
+          status: input.status,
+          paymentMethod: input.paymentMethod || 'TUNAI_CASH',
+          totalPrice: finalPrice,
+          serviceFee: 0,
+          grandTotal: finalPrice,
+          qrCodeToken: `QR-${bookingId}`,
+          expiresAt: new Date(Date.now() + 24 * 3600000),
+          nik: input.nik ? input.nik.trim() : null,
+          npwp: input.npwp ? input.npwp.trim() : null,
+          senderName: cleanName,
+          senderPhone: cleanPhone || null,
+          adminNotes: input.adminNotes ? `[SUPERADMIN] ${input.adminNotes}` : '[SUPERADMIN] Dibuat Manual oleh Superadmin',
+          items: {
+            create: [
+              {
+                fieldId: field.id,
+                slotId: slotId,
+                quantity: quantity,
+                date: targetDate,
+                timeStart: input.timeStart,
+                timeEnd: input.timeEnd,
+                price: finalPrice,
+                isPeakHour: input.hour >= 16,
+              },
+            ],
+          },
+          ...(input.status === 'PAID_SUCCESS' ? {
+            payment: {
+              create: {
+                amount: finalPrice,
+                paymentMethod: input.paymentMethod || 'TUNAI_CASH',
+                status: 'PAID',
+                paidAt: new Date(),
+                paymentGatewayRef: `SUPERADMIN-MANUAL-${Date.now()}`,
+              },
+            },
+          } : {}),
+        },
+      });
+
+      // 3. Update Slot
+      await tx.fieldSlot.upsert({
+        where: {
+          fieldId_date_hour: {
+            fieldId: field.id,
+            date: targetDate,
+            hour: input.hour,
+          },
+        },
+        update: {
+          bookedCapacity: newBooked,
+          status: isFull ? 'BOOKED' : 'AVAILABLE',
+          bookingId: slot?.bookingId ? slot.bookingId : newBooking.id,
+          bookedByUserId: slot?.bookedByUserId ? slot.bookedByUserId : user.id,
+        },
+        create: {
+          id: slotId,
+          fieldId: field.id,
+          date: targetDate,
+          hour: input.hour,
+          timeStart: input.timeStart,
+          timeEnd: input.timeEnd,
+          price: finalPrice,
+          isPeakHour: input.hour >= 16,
+          maxCapacity: maxCap,
+          bookedCapacity: newBooked,
+          status: isFull ? 'BOOKED' : 'AVAILABLE',
+          bookingId: newBooking.id,
+          bookedByUserId: user.id,
+        },
+      });
+
+      return newBooking;
+    }, { maxWait: 10000, timeout: 20000 });
+
+    revalidatePath('/');
+    revalidatePath('/admin/bookings');
+    return { success: true, booking };
+  } catch (error: any) {
+    console.error('Failed to create superadmin booking:', error);
+    return { success: false, error: toPublicMessage(error, 'Gagal membuat pesanan manual.') };
+  }
+}
+
+/**
+ * 13. CRUD SUPERADMIN: Perbarui Detail / Status Pesanan
+ */
+export interface UpdateSuperAdminBookingInput {
+  bookingId: string;
+  senderName?: string;
+  senderPhone?: string;
+  nik?: string;
+  npwp?: string;
+  totalPrice?: number;
+  status?: BookingStatus;
+  paymentMethod?: string;
+  adminNotes?: string;
+}
+
+export async function updateSuperAdminBookingAction(input: UpdateSuperAdminBookingInput) {
+  await verifySuperAdmin();
+  try {
+    const existing = await prisma.booking.findUnique({
+      where: { id: input.bookingId },
+      include: { items: true, payment: true },
+    });
+
+    if (!existing) {
+      throw new UserFacingError('Pesanan tidak ditemukan.');
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const willBePaid = input.status === 'PAID_SUCCESS';
+      const willBeCancelled = input.status === 'CANCELLED';
+
+      // 1. Update Booking
+      await tx.booking.update({
+        where: { id: input.bookingId },
+        data: {
+          ...(input.senderName ? { senderName: input.senderName.trim() } : {}),
+          ...(input.senderPhone !== undefined ? { senderPhone: input.senderPhone.trim() || null } : {}),
+          ...(input.nik !== undefined ? { nik: input.nik.trim() || null } : {}),
+          ...(input.npwp !== undefined ? { npwp: input.npwp.trim() || null } : {}),
+          ...(input.totalPrice !== undefined ? { totalPrice: input.totalPrice, grandTotal: input.totalPrice } : {}),
+          ...(input.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),
+          ...(input.status ? { status: input.status } : {}),
+          ...(input.adminNotes !== undefined ? { adminNotes: input.adminNotes } : {}),
+        },
+      });
+
+      // 2. Jika status diubah menjadi LUNAS (PAID_SUCCESS)
+      if (willBePaid) {
+        await tx.payment.upsert({
+          where: { bookingId: input.bookingId },
+          update: {
+            status: 'PAID',
+            paidAt: new Date(),
+            paymentGatewayRef: 'SUPERADMIN-STATUS-UPDATE',
+          },
+          create: {
+            bookingId: input.bookingId,
+            amount: input.totalPrice || existing.grandTotal,
+            paymentMethod: input.paymentMethod || existing.paymentMethod,
+            status: 'PAID',
+            paidAt: new Date(),
+            paymentGatewayRef: 'SUPERADMIN-STATUS-UPDATE',
+          },
+        });
+
+        for (const item of existing.items) {
+          await tx.fieldSlot.updateMany({
+            where: {
+              fieldId: item.fieldId,
+              date: item.date,
+              timeStart: item.timeStart,
+            },
+            data: {
+              status: 'BOOKED',
+              bookingId: existing.id,
+              bookedByUserId: existing.userId,
+            },
+          });
+        }
+      }
+
+      // 3. Jika status diubah menjadi DIBATALKAN (CANCELLED), lepaskan kuota slot
+      if (willBeCancelled && existing.status !== 'CANCELLED') {
+        for (const item of existing.items) {
+          const slot = await tx.fieldSlot.findFirst({
+            where: {
+              fieldId: item.fieldId,
+              date: item.date,
+              timeStart: item.timeStart,
+            },
+          });
+
+          if (slot) {
+            const qty = item.quantity || 1;
+            const newBooked = Math.max(0, slot.bookedCapacity - qty);
+            const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (newBooked >= slot.maxCapacity ? 'BOOKED' : 'AVAILABLE');
+            await tx.fieldSlot.update({
+              where: { id: slot.id },
+              data: {
+                bookedCapacity: newBooked,
+                status: newStatus,
+                bookingId: newBooked === 0 ? null : slot.bookingId,
+                bookedByUserId: newBooked === 0 ? null : slot.bookedByUserId,
+              },
+            });
+          }
+        }
+      }
+    }, { maxWait: 10000, timeout: 20000 });
+
+    revalidatePath('/');
+    revalidatePath('/admin/bookings');
+    return { success: true };
+  } catch (error: any) {
+    console.error('Failed to update booking:', error);
+    return { success: false, error: toPublicMessage(error, 'Gagal memperbarui pesanan.') };
+  }
+}
+
+/**
+ * 14. CRUD SUPERADMIN: Hapus Pesanan Permanen (Delete Booking)
+ */
+export async function deleteSuperAdminBookingAction(bookingId: string) {
+  await verifySuperAdmin();
+  try {
+    await prisma.$transaction(async (tx) => {
+      const booking = await tx.booking.findUnique({
+        where: { id: bookingId },
+        include: { items: true },
+      });
+
+      if (!booking) {
+        throw new UserFacingError('Pesanan tidak ditemukan.');
+      }
+
+      // 1. Lepas kuota pada slot yang terhubung
+      for (const item of booking.items) {
+        const slot = await tx.fieldSlot.findFirst({
+          where: {
+            fieldId: item.fieldId,
+            date: item.date,
+            timeStart: item.timeStart,
+          },
+        });
+
+        if (slot) {
+          const qty = item.quantity || 1;
+          const newBooked = Math.max(0, slot.bookedCapacity - qty);
+          const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (newBooked >= slot.maxCapacity ? 'BOOKED' : 'AVAILABLE');
+          await tx.fieldSlot.update({
+            where: { id: slot.id },
+            data: {
+              bookedCapacity: newBooked,
+              status: newStatus,
+              bookingId: newBooked === 0 ? null : slot.bookingId,
+              bookedByUserId: newBooked === 0 ? null : slot.bookedByUserId,
+            },
+          });
+        }
+      }
+
+      // 2. Hapus PaymentProof, Payment, BookingItem, Booking
+      await tx.paymentProof.deleteMany({ where: { bookingId } });
+      await tx.payment.deleteMany({ where: { bookingId } });
+      await tx.bookingItem.deleteMany({ where: { bookingId } });
+      await tx.booking.delete({ where: { id: bookingId } });
+    }, { maxWait: 10000, timeout: 20000 });
+
+    revalidatePath('/');
+    revalidatePath('/admin/bookings');
+    return { success: true };
+  } catch (error: any) {
+    console.error('Failed to delete booking:', error);
+    return { success: false, error: toPublicMessage(error, 'Gagal menghapus pesanan.') };
   }
 }
