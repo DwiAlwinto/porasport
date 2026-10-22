@@ -15,7 +15,6 @@ import {
   ShieldCheck,
   Maximize2,
   Send,
-  Sparkles,
   RefreshCw,
   Lock,
   Plus,
@@ -35,7 +34,6 @@ import {
   getAdminBookings,
   manualVerifyPayment,
   rejectPaymentWithReasonAction,
-  simulateWebhookTrigger,
   getAdminVenuesWithFields,
   createSuperAdminBookingAction,
   updateSuperAdminBookingAction,
@@ -111,11 +109,6 @@ export default function AdminBookingsPage() {
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
 
-  // Webhook Simulator State
-  const [showSimulator, setShowSimulator] = useState(false);
-  const [simOrderId, setSimOrderId] = useState('');
-  const [simStatus, setSimStatus] = useState<'settlement' | 'expire' | 'cancel'>('settlement');
-  const [simResponse, setSimResponse] = useState<any>(null);
 
   // Superadmin CRUD Modals & State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -205,14 +198,6 @@ export default function AdminBookingsPage() {
     });
   };
 
-  // Run Webhook Simulation
-  const handleRunSimulator = async () => {
-    if (!simOrderId) return;
-    setSimResponse(null);
-    const res = await simulateWebhookTrigger(simOrderId, simStatus);
-    setSimResponse(res);
-    fetchData();
-  };
 
   // Re-trigger OCR Validation
   const handleReTriggerOCR = (bookingId: string) => {
@@ -394,54 +379,8 @@ export default function AdminBookingsPage() {
             </button>
           )}
 
-          <button
-            onClick={() => setShowSimulator(!showSimulator)}
-            className="flex items-center gap-2 rounded-xl border border-line-strong bg-subtle px-4 py-2.5 text-xs font-bold text-fg-subtle hover:bg-subtle-strong hover:text-fg transition"
-          >
-            <Sparkles className="h-4 w-4 text-emerald-700" />
-            <span>{showSimulator ? 'Tutup Simulator' : 'Simulator Webhook Gateway'}</span>
-          </button>
         </div>
       </div>
-
-      {/* Webhook Simulator Collapsible */}
-      {showSimulator && (
-        <div className="rounded-3xl border border-line bg-surface p-5 shadow-xl shadow-slate-200/60 animate-in fade-in">
-          <h3 className="text-xs font-black uppercase text-emerald-700 tracking-wider mb-2 flex items-center gap-1.5">
-            <Sparkles className="h-3.5 w-3.5" />
-            Simulator Notifikasi Callback Payment Gateway (Xendit / Midtrans / QRIS)
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <input
-              type="text"
-              placeholder="Masukkan ID Pesanan (misal: GLR-...)"
-              value={simOrderId}
-              onChange={(e) => setSimOrderId(e.target.value)}
-              className="rounded-xl border border-line-strong bg-field px-3 py-2 text-xs font-mono text-fg outline-none focus:border-emerald-500"
-            />
-            <select
-              value={simStatus}
-              onChange={(e) => setSimStatus(e.target.value as any)}
-              className="rounded-xl border border-line-strong bg-field px-3 py-2 text-xs font-bold text-fg outline-none focus:border-emerald-500"
-            >
-              <option value="settlement">Settlement (Lunas Berhasil)</option>
-              <option value="expire">Expire (Waktu Habis / Kedaluwarsa)</option>
-              <option value="cancel">Cancel (Dibatalkan)</option>
-            </select>
-            <button
-              onClick={handleRunSimulator}
-              className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-500"
-            >
-              Tembakkan Event Webhook
-            </button>
-          </div>
-          {simResponse && (
-            <pre className="mt-3 rounded-xl bg-field p-3 text-[10px] font-mono text-emerald-700 overflow-x-auto">
-              {JSON.stringify(simResponse, null, 2)}
-            </pre>
-          )}
-        </div>
-      )}
 
       {/* Search & Filter */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 rounded-3xl border border-line bg-surface p-4">
