@@ -19,8 +19,7 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
-import { registerUserAction } from '../../actions/userAuthActions';
-import { useApp } from '../../context/AppContext';
+import { registerUserAction, getCurrentUserAction } from '../../actions/userAuthActions';
 
 function RegisterContent() {
   const router = useRouter();
@@ -32,9 +31,7 @@ function RegisterContent() {
   const redirectFrom = searchParams.get('redirect_from');
   const isNewAccount = searchParams.get('new_account') === 'true';
 
-  const { isLoggedIn, isSessionChecking } = useApp();
-
-  const [isCheckingRegister, setIsCheckingRegister] = useState(true);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [showEmailForm, setShowEmailForm] = useState(Boolean(emailParam || nameParam));
   const [name, setName] = useState(nameParam);
   const [email, setEmail] = useState(emailParam);
@@ -47,37 +44,48 @@ function RegisterContent() {
 
   // Guard: Pengalihan pintar untuk pengguna yang sudah login atau sudah pernah registrasi
   useEffect(() => {
-    // 1. Jika pengguna sudah login, arahkan langsung ke dashboard
-    if (!isSessionChecking && isLoggedIn) {
-      router.replace(returnUrl || '/dashboard');
-      return;
-    }
+    let isMounted = true;
 
-    // 2. Jika bukan permintaan eksplisit buat akun baru (?new_account=true),
-    // periksa apakah browser ini sudah pernah registrasi / punya akun
-    if (!isNewAccount) {
-      const isRegisteredCookie =
-        typeof document !== 'undefined' &&
-        document.cookie
-          .split('; ')
-          .find((row) => row.startsWith('has_registered='))
-          ?.split('=')[1];
-      const isRegisteredStorage =
-        typeof window !== 'undefined' && localStorage.getItem('has_registered') === 'true';
+    getCurrentUserAction()
+      .then((res) => {
+        if (!isMounted) return;
+        // 1. Jika pengguna sudah login, arahkan langsung ke dashboard
+        if (res.success && res.user) {
+          router.replace(returnUrl || '/dashboard');
+          return;
+        }
 
-      if (isRegisteredCookie === 'true' || isRegisteredStorage) {
-        // Pengguna sudah pernah registrasi! Arahkan ke halaman login
-        router.replace(
-          `/login?info=already_registered&returnUrl=${encodeURIComponent(returnUrl)}`
-        );
-        return;
-      }
-    }
+        // 2. Jika bukan permintaan eksplisit buat akun baru (?new_account=true),
+        // periksa apakah browser ini sudah pernah registrasi / punya akun
+        if (!isNewAccount) {
+          const isRegisteredCookie =
+            typeof document !== 'undefined' &&
+            document.cookie
+              .split('; ')
+              .find((row) => row.startsWith('has_registered='))
+              ?.split('=')[1];
+          const isRegisteredStorage =
+            typeof window !== 'undefined' && localStorage.getItem('has_registered') === 'true';
 
-    if (!isSessionChecking) {
-      setIsCheckingRegister(false);
-    }
-  }, [isLoggedIn, isSessionChecking, isNewAccount, returnUrl, router]);
+          if (isRegisteredCookie === 'true' || isRegisteredStorage) {
+            // Pengguna sudah pernah registrasi! Arahkan ke halaman login
+            router.replace(
+              `/login?info=already_registered&returnUrl=${encodeURIComponent(returnUrl)}`
+            );
+            return;
+          }
+        }
+
+        setIsCheckingSession(false);
+      })
+      .catch(() => {
+        if (isMounted) setIsCheckingSession(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isNewAccount, returnUrl, router]);
 
   const handleEmailRegister = (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,7 +126,7 @@ function RegisterContent() {
     });
   };
 
-  if (isCheckingRegister) {
+  if (isCheckingSession) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">

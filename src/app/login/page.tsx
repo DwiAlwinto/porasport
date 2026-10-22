@@ -16,9 +16,8 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
-import { loginUserAction } from '../../actions/userAuthActions';
+import { loginUserAction, getCurrentUserAction } from '../../actions/userAuthActions';
 import { safeReturnUrl } from '../../lib/safeUrl';
-import { useApp } from '../../context/AppContext';
 
 function LoginContent() {
   const router = useRouter();
@@ -32,9 +31,7 @@ function LoginContent() {
   const isGoogleDevMode = searchParams.get('google_dev_mode') === 'true';
   const stateParam = searchParams.get('state') || '';
 
-  const { isLoggedIn, isSessionChecking } = useApp();
-
-  const [isCheckingRegister, setIsCheckingRegister] = useState(true);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [showEmailForm, setShowEmailForm] = useState(Boolean(emailParam || infoParam));
   const [email, setEmail] = useState(emailParam);
   const [password, setPassword] = useState('');
@@ -48,24 +45,34 @@ function LoginContent() {
 
   // Guard: Pengalihan pintar untuk pengguna yang sudah login
   useEffect(() => {
-    // 1. Jika pengguna sudah login, arahkan langsung ke dashboard atau returnUrl
-    if (!isSessionChecking && isLoggedIn) {
-      router.replace(returnUrl || '/dashboard');
-      return;
-    }
+    let isMounted = true;
 
-    // 2. Tandai has_registered jika datang dari register atau login langsung
-    if (hasAccountParam || infoParam === 'already_registered' || emailParam) {
-      try {
-        localStorage.setItem('has_registered', 'true');
-        document.cookie = 'has_registered=true; path=/; max-age=31536000';
-      } catch (e) {}
-    }
+    getCurrentUserAction()
+      .then((res) => {
+        if (!isMounted) return;
+        if (res.success && res.user) {
+          router.replace(returnUrl || '/dashboard');
+          return;
+        }
 
-    if (!isSessionChecking) {
-      setIsCheckingRegister(false);
-    }
-  }, [isLoggedIn, isSessionChecking, hasAccountParam, infoParam, emailParam, returnUrl, router]);
+        // Tandai has_registered jika datang dari register atau login langsung
+        if (hasAccountParam || infoParam === 'already_registered' || emailParam) {
+          try {
+            localStorage.setItem('has_registered', 'true');
+            document.cookie = 'has_registered=true; path=/; max-age=31536000';
+          } catch (e) {}
+        }
+
+        setIsCheckingSession(false);
+      })
+      .catch(() => {
+        if (isMounted) setIsCheckingSession(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [hasAccountParam, infoParam, emailParam, returnUrl, router]);
 
   const handleEmailLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,7 +106,7 @@ function LoginContent() {
     )}&dev_email=${encodeURIComponent(devEmail)}&dev_name=${encodeURIComponent(devName)}`;
   };
 
-  if (isCheckingRegister) {
+  if (isCheckingSession) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center text-xs font-bold text-slate-500">
         <div className="flex flex-col items-center gap-2">

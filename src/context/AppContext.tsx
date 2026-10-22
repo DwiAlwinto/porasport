@@ -814,7 +814,51 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 export const useApp = () => {
   const context = useContext(AppContext);
   if (!context) {
-    throw new Error('useApp must be used within an AppProvider');
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('[useApp] Peringatan: useApp dipanggil di luar AppProvider. Komponen menggunakan safe fallback.');
+    }
+    return {
+      venues: [],
+      venuesLoading: false,
+      venuesError: null,
+      systemSettings: {},
+      refreshSystemSettings: async () => {},
+      activeUser: null,
+      bookings: [],
+      reviews: [],
+      searchFilters: defaultSearchFilters,
+      selectedVenue: null,
+      activeView: 'HOME',
+      isSchemaModalOpen: false,
+      isCheckoutModalOpen: false,
+      activeBookingDraft: null,
+      setActiveUser: () => {},
+      setSearchFilters: () => {},
+      setSelectedVenue: () => {},
+      setActiveView: () => {},
+      setIsSchemaModalOpen: () => {},
+      setIsCheckoutModalOpen: () => {},
+      setActiveBookingDraft: () => {},
+      handleSearchSubmit: () => {},
+      startBookingCheckout: () => {},
+      completePayment: async () => null,
+      uploadPaymentProofForBooking: async () => ({ success: false, error: 'Di luar AppProvider' }),
+      cancelBooking: async () => ({ success: false, error: 'Di luar AppProvider' }),
+      completeBooking: async () => ({ success: false, error: 'Di luar AppProvider' }),
+      refreshBookings: async () => {},
+      bookingsLoading: false,
+      addReview: async () => false,
+      toggleFieldMaintenanceSlot: () => {},
+      addNewVenue: () => {},
+      activeLang: 'ID',
+      setActiveLang: () => {},
+      t: TRANSLATIONS.ID,
+      isLoggedIn: false,
+      isSessionChecking: false,
+      isMounted: true,
+      logoutUser: async () => {},
+      checkUserSession: async () => {},
+    } as AppContextType;
   }
   return context;
 };
