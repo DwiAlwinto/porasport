@@ -6,6 +6,7 @@ import { getAdminSession } from './authActions';
 import { toPublicMessage } from '../lib/userFacingError';
 import { revalidatePath } from 'next/cache';
 import { Role } from '@prisma/client';
+import { deleteBookingProofFiles } from '../lib/storage';
 
 /**
  * 1. Ambil Daftar Khusus Petugas Administrator
@@ -54,8 +55,8 @@ export async function getAdminUsersList(search?: string) {
 export async function getCustomerUsersList(search?: string) {
   try {
     const session = await getAdminSession();
-    if (!session || session.role !== 'SUPERADMIN') {
-      return { success: false, customers: [], error: 'Akses ditolak: Hanya Superadmin yang diizinkan.' };
+    if (!session || (session.role !== 'ADMIN' && session.role !== 'SUPERADMIN')) {
+      return { success: false, customers: [], error: 'Akses ditolak: Hanya petugas Admin dan Superadmin yang diizinkan.' };
     }
 
     const where: any = { role: 'USER' };
@@ -134,7 +135,7 @@ export async function getCustomerUsersList(search?: string) {
 export async function getCustomerBookingHistory(userId: string) {
   try {
     const session = await getAdminSession();
-    if (!session || session.role !== 'SUPERADMIN') {
+    if (!session || (session.role !== 'ADMIN' && session.role !== 'SUPERADMIN')) {
       return { success: false, bookings: [], error: 'Akses ditolak.' };
     }
 
@@ -309,3 +310,268 @@ export async function updateUserRoleAction(userId: string, newRole: Role) {
     return { success: false, error: toPublicMessage(error, 'Gagal mengubah role pengguna.') };
   }
 }
+
+/**
+ * 8. Tambah User Penyewa (Customer) Baru oleh Superadmin
+ */
+export async function createCustomerUserAction(data: {
+  name: string;
+  email: string;
+  phone?: string;
+  password?: string;
+}) {
+  try {
+    const session = await getAdminSession();
+    if (!session || session.role !== 'SUPERADMIN') {
+      return { success: false, error: 'Akses ditolak: Hanya Superadmin yang berwenang menambah user penyewa.' };
+    }
+
+    const name = data.name?.trim();
+    const email = data.email?.trim().toLowerCase();
+    const phone = data.phone?.trim() || null;
+    const password = data.password?.trim() || 'disbudpora123';
+
+    if (!name || !email) {
+      return { success: false, error: 'Nama lengkap dan email wajib diisi.' };
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return { success: false, error: 'Format email tidak valid.' };
+    }
+
+    if (password.length < 8) {
+      return { success: false, error: 'Kata sandi minimal 8 karakter.' };
+    }
+
+    const existingEmail = await prisma.user.findUnique({
+      where: { email },
+    });
+    if (existingEmail) {
+      return { success: false, error: `Email ${email} sudah terdaftar di sistem.` };
+    }
+
+    if (phone) {
+      const existingPhone = await prisma.user.findFirst({
+        where: { phone },
+      });
+      if (existingPhone) {
+        return { success: false, error: `Nomor WhatsApp/telepon ${phone} sudah digunakan akun lain.` };
+      }
+    }
+
+    const newUser = await prisma.user.create({
+      data: {
+        name,
+        email,
+        phone,
+        passwordHash: hashPassword(password),
+        role: 'USER',
+        avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`,
+      },
+    });
+
+    revalidatePath('/admin/users/customers');
+    return { success: true, customer: newUser };
+  } catch (error: any) {
+    console.error("Failed to create customer user:", error);
+    return { success: false, error: toPublicMessage(error, 'Gagal menambahkan user penyewa baru.') };
+  }
+}
+
+/**
+ * 9. Perbarui Profil & Sandi User Penyewa oleh Superadmin
+ */
+export async function updateCustomerUserAction(data: {
+  userId: string;
+  name: string;
+  email: string;
+  phone?: string;
+  newPassword?: string;
+}) {
+  try {
+    const session = await getAdminSession();
+    if (!session || session.role !== 'SUPERADMIN') {
+      return { success: false, error: 'Akses ditolak: Hanya Superadmin yang berwenang mengubah data user penyewa.' };
+    }
+
+    const { userId } = data;
+    const name = data.name?.trim();
+    const email = data.email?.trim().toLowerCase();
+    const phone = data.phone?.trim() || null;
+    const newPassword = data.newPassword?.trim();
+
+    if (!userId || !name || !email) {
+      return { success: false, error: 'ID user, nama, dan email wajib diisi.' };
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return { success: false, error: 'Format email tidak valid.' };
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!targetUser) {
+      return { success: false, error: 'User penyewa tidak ditemukan.' };
+    }
+
+    if (targetUser.role !== 'USER') {
+      return { success: false, error: 'Aksi ini hanya untuk mengelola data user penyewa (Role USER).' };
+    }
+
+    if (email !== targetUser.email) {
+      const emailConflict = await prisma.user.findUnique({
+        where: { email },
+      });
+      if (emailConflict) {
+        return { success: false, error: `Email ${email} sudah digunakan akun lain.` };
+      }
+    }
+
+    if (phone && phone !== targetUser.phone) {
+      const phoneConflict = await prisma.user.findFirst({
+        where: { phone, id: { not: userId } },
+      });
+      if (phoneConflict) {
+        return { success: false, error: `Nomor telepon ${phone} sudah digunakan akun lain.` };
+      }
+    }
+
+    const updateData: any = {
+      name,
+      email,
+      phone,
+    };
+
+    if (newPassword) {
+      if (newPassword.length < 8) {
+        return { success: false, error: 'Kata sandi baru minimal 8 karakter.' };
+      }
+      updateData.passwordHash = hashPassword(newPassword);
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+    });
+
+    revalidatePath('/admin/users/customers');
+    return { success: true, customer: updated };
+  } catch (error: any) {
+    console.error("Failed to update customer user:", error);
+    return { success: false, error: toPublicMessage(error, 'Gagal memperbarui data user penyewa.') };
+  }
+}
+
+/**
+ * 10. Hapus User Penyewa Permanen beserta Pembersihan Berkas Storage Supabase
+ */
+export async function deleteCustomerUserAction(userId: string) {
+  try {
+    const session = await getAdminSession();
+    if (!session || session.role !== 'SUPERADMIN') {
+      return { success: false, error: 'Akses ditolak: Hanya Superadmin yang diizinkan menghapus data penyewa.' };
+    }
+
+    if (userId === session.userId) {
+      return { success: false, error: 'Anda tidak dapat menghapus akun Anda sendiri.' };
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        bookings: {
+          include: {
+            items: true,
+            paymentProof: true,
+          },
+        },
+      },
+    });
+
+    if (!targetUser) {
+      return { success: false, error: 'User penyewa tidak ditemukan.' };
+    }
+
+    if (targetUser.role !== 'USER') {
+      return { success: false, error: 'Hanya akun penyewa (role USER) yang dapat dihapus dari fitur ini.' };
+    }
+
+    // 1. Kumpulkan daftar booking dan berkas bukti pembayaran untuk dibersihkan dari Storage
+    const proofCleanups: { bookingId: string; paths: (string | null | undefined)[] }[] = [];
+    for (const b of targetUser.bookings) {
+      proofCleanups.push({
+        bookingId: b.id,
+        paths: [b.paymentProofUrl, b.paymentProof?.fileUrl],
+      });
+    }
+
+    // 2. Transaksi penghapusan atomik pada database
+    await prisma.$transaction(async (tx) => {
+      for (const b of targetUser.bookings) {
+        // Lepas kuota pada slot yang terhubung
+        for (const item of b.items) {
+          const slot = await tx.fieldSlot.findFirst({
+            where: {
+              fieldId: item.fieldId,
+              date: item.date,
+              timeStart: item.timeStart,
+            },
+          });
+
+          if (slot) {
+            const qty = item.quantity || 1;
+            const newBooked = Math.max(0, slot.bookedCapacity - qty);
+            const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (newBooked >= slot.maxCapacity ? 'BOOKED' : 'AVAILABLE');
+            await tx.fieldSlot.update({
+              where: { id: slot.id },
+              data: {
+                bookedCapacity: newBooked,
+                status: newStatus,
+                bookingId: newBooked === 0 ? null : slot.bookingId,
+                bookedByUserId: newBooked === 0 ? null : slot.bookedByUserId,
+              },
+            });
+          }
+        }
+
+        // Hapus data PaymentProof, Payment, BookingItem, dan Booking
+        await tx.paymentProof.deleteMany({ where: { bookingId: b.id } });
+        await tx.payment.deleteMany({ where: { bookingId: b.id } });
+        await tx.bookingItem.deleteMany({ where: { bookingId: b.id } });
+        await tx.booking.delete({ where: { id: b.id } });
+      }
+
+      // Hapus user secara permanen (otomatis cascade ke Review dan RevokedSession)
+      await tx.user.delete({
+        where: { id: userId },
+      });
+    }, { maxWait: 15000, timeout: 30000 });
+
+    // 3. Bersihkan seluruh file fisik bukti pembayaran di Supabase Storage & local disk
+    let totalStorageFilesDeleted = 0;
+    for (const item of proofCleanups) {
+      try {
+        const cleanupRes = await deleteBookingProofFiles(item.bookingId, item.paths);
+        totalStorageFilesDeleted += cleanupRes.deletedCount;
+      } catch (cleanErr: any) {
+        console.warn(`[Storage Cleanup Warning] Kendala saat membersihkan bukti sewa ${item.bookingId}:`, cleanErr?.message);
+      }
+    }
+
+    console.log(`[Customer Deletion] User ${userId} (${targetUser.email}) berhasil dihapus permanen. Total ${totalStorageFilesDeleted} berkas bukti storage dibersihkan.`);
+
+    revalidatePath('/admin/users/customers');
+    revalidatePath('/admin/bookings');
+    revalidatePath('/admin');
+    return {
+      success: true,
+      message: `Akun penyewa ${targetUser.name} beserta ${targetUser.bookings.length} riwayat pesanan dan seluruh berkas bukti pembayaran di storage berhasil dibersihkan permanen.`,
+    };
+  } catch (error: any) {
+    console.error("Failed to delete customer user:", error);
+    return { success: false, error: toPublicMessage(error, 'Gagal menghapus akun penyewa.') };
+  }
+}
+
