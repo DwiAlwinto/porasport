@@ -13,24 +13,32 @@ import {
   ChevronLeft,
   Sparkles,
   Info,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { loginUserAction } from '../../actions/userAuthActions';
 import { safeReturnUrl } from '../../lib/safeUrl';
+import { useApp } from '../../context/AppContext';
 
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnUrl = safeReturnUrl(searchParams.get('returnUrl'));
   const errorMessage = searchParams.get('error');
+  const infoParam = searchParams.get('info');
+  const emailParam = searchParams.get('email') || '';
   const hasAccountParam =
     searchParams.get('has_account') === 'true' || searchParams.get('registered') === 'true';
   const isGoogleDevMode = searchParams.get('google_dev_mode') === 'true';
   const stateParam = searchParams.get('state') || '';
 
+  const { isLoggedIn, isSessionChecking } = useApp();
+
   const [isCheckingRegister, setIsCheckingRegister] = useState(true);
-  const [showEmailForm, setShowEmailForm] = useState(false);
-  const [email, setEmail] = useState('');
+  const [showEmailForm, setShowEmailForm] = useState(Boolean(emailParam || infoParam));
+  const [email, setEmail] = useState(emailParam);
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState<string | null>(errorMessage || null);
   const [isPending, startTransition] = useTransition();
 
@@ -38,35 +46,26 @@ function LoginContent() {
   const [devEmail, setDevEmail] = useState('budi.santoso@gmail.com');
   const [devName, setDevName] = useState('Budi Santoso');
 
-  // Proteksi: Jika pengguna belum pernah register di browser ini, redirect ke /register
+  // Guard: Pengalihan pintar untuk pengguna yang sudah login
   useEffect(() => {
-    const isRegisteredCookie =
-      typeof document !== 'undefined' &&
-      document.cookie
-        .split('; ')
-        .find((row) => row.startsWith('has_registered='))
-        ?.split('=')[1];
-    const isRegisteredStorage =
-      typeof window !== 'undefined' && localStorage.getItem('has_registered') === 'true';
+    // 1. Jika pengguna sudah login, arahkan langsung ke dashboard atau returnUrl
+    if (!isSessionChecking && isLoggedIn) {
+      router.replace(returnUrl || '/dashboard');
+      return;
+    }
 
-    if (hasAccountParam) {
-      // Pengguna datang dari tombol "Sudah punya akun? Login di sini"
+    // 2. Tandai has_registered jika datang dari register atau login langsung
+    if (hasAccountParam || infoParam === 'already_registered' || emailParam) {
       try {
         localStorage.setItem('has_registered', 'true');
         document.cookie = 'has_registered=true; path=/; max-age=31536000';
       } catch (e) {}
+    }
+
+    if (!isSessionChecking) {
       setIsCheckingRegister(false);
-      return;
     }
-
-    if (!isRegisteredCookie && !isRegisteredStorage) {
-      // Belum pernah register: arahkan otomatis ke halaman pendaftaran
-      router.replace(`/register?redirect_from=login&returnUrl=${encodeURIComponent(returnUrl)}`);
-      return;
-    }
-
-    setIsCheckingRegister(false);
-  }, [hasAccountParam, returnUrl, router]);
+  }, [isLoggedIn, isSessionChecking, hasAccountParam, infoParam, emailParam, returnUrl, router]);
 
   const handleEmailLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,7 +83,7 @@ function LoginContent() {
           localStorage.setItem('has_registered', 'true');
           document.cookie = 'has_registered=true; path=/; max-age=31536000';
         } catch (e) {}
-        router.push(returnUrl);
+        router.push(returnUrl || '/dashboard');
         router.refresh();
       } else {
         setFormError(res.error || 'Email atau kata sandi tidak sesuai.');
@@ -185,6 +184,32 @@ function LoginContent() {
               </p>
               <div className="h-1 w-10 bg-[#05BB75] rounded-full" />
             </div>
+
+            {/* Notification jika dialihkan dari register karena sudah terdaftar */}
+            {infoParam === 'already_registered' && !formError && (
+              <div className="mb-5 rounded-2xl border border-emerald-300 bg-emerald-50 p-4 text-xs shadow-sm">
+                <div className="flex items-start gap-2.5">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-bold text-emerald-950">
+                      Perangkat Anda sudah terdaftar di sistem DISBUDPORA.
+                    </p>
+                    <p className="text-emerald-800 text-[11px] leading-relaxed">
+                      Silakan masuk dengan email dan kata sandi Anda untuk melanjutkan.
+                    </p>
+                    <div className="pt-1">
+                      <Link
+                        href={`/register?new_account=true&returnUrl=${encodeURIComponent(returnUrl)}`}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 underline"
+                      >
+                        <span>Ingin mendaftarkan akun baru dengan email lain?</span>
+                        <ArrowRight className="h-3 w-3" />
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Error Notification */}
             {formError && (
@@ -311,13 +336,21 @@ function LoginContent() {
                     <div className="relative">
                       <Lock className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
                       <input
-                        type="password"
+                        type={showPassword ? 'text' : 'password'}
                         required
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••••••"
-                        className="w-full rounded-xl border border-slate-300 bg-slate-50 pl-10 pr-4 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#05BB75] focus:border-transparent transition"
+                        className="w-full rounded-xl border border-slate-300 bg-slate-50 pl-10 pr-11 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#05BB75] focus:border-transparent transition"
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3.5 top-2.5 p-1 text-slate-400 hover:text-slate-600 transition"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
                     </div>
                   </div>
 

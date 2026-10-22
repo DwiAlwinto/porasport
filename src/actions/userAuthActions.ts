@@ -68,6 +68,8 @@ export async function registerUserAction(data: RegisterUserData) {
       return {
         success: false,
         error: 'Email ini sudah terdaftar. Silakan masuk menggunakan akun Anda.',
+        isExistingEmail: true,
+        existingEmail: email,
       };
     }
 
@@ -79,7 +81,8 @@ export async function registerUserAction(data: RegisterUserData) {
       if (existingPhone) {
         return {
           success: false,
-          error: 'Nomor WhatsApp / HP ini sudah digunakan akun lain.',
+          error: 'Nomor WhatsApp / HP ini sudah digunakan akun lain. Silakan gunakan nomor lain atau masuk ke akun Anda.',
+          isExistingPhone: true,
         };
       }
     }

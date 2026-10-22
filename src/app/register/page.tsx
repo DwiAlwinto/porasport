@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, Suspense, useTransition } from 'react';
+import React, { useState, useEffect, Suspense, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { safeReturnUrl } from '../../lib/safeUrl';
@@ -16,8 +16,11 @@ import {
   ChevronLeft,
   Sparkles,
   Info,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { registerUserAction } from '../../actions/userAuthActions';
+import { useApp } from '../../context/AppContext';
 
 function RegisterContent() {
   const router = useRouter();
@@ -27,26 +30,67 @@ function RegisterContent() {
   const nameParam = searchParams.get('name') || '';
   const errorParam = searchParams.get('error');
   const redirectFrom = searchParams.get('redirect_from');
+  const isNewAccount = searchParams.get('new_account') === 'true';
 
+  const { isLoggedIn, isSessionChecking } = useApp();
+
+  const [isCheckingRegister, setIsCheckingRegister] = useState(true);
   const [showEmailForm, setShowEmailForm] = useState(Boolean(emailParam || nameParam));
   const [name, setName] = useState(nameParam);
   const [email, setEmail] = useState(emailParam);
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState<string | null>(errorParam || null);
+  const [existingEmailError, setExistingEmailError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Guard: Pengalihan pintar untuk pengguna yang sudah login atau sudah pernah registrasi
+  useEffect(() => {
+    // 1. Jika pengguna sudah login, arahkan langsung ke dashboard
+    if (!isSessionChecking && isLoggedIn) {
+      router.replace(returnUrl || '/dashboard');
+      return;
+    }
+
+    // 2. Jika bukan permintaan eksplisit buat akun baru (?new_account=true),
+    // periksa apakah browser ini sudah pernah registrasi / punya akun
+    if (!isNewAccount) {
+      const isRegisteredCookie =
+        typeof document !== 'undefined' &&
+        document.cookie
+          .split('; ')
+          .find((row) => row.startsWith('has_registered='))
+          ?.split('=')[1];
+      const isRegisteredStorage =
+        typeof window !== 'undefined' && localStorage.getItem('has_registered') === 'true';
+
+      if (isRegisteredCookie === 'true' || isRegisteredStorage) {
+        // Pengguna sudah pernah registrasi! Arahkan ke halaman login
+        router.replace(
+          `/login?info=already_registered&returnUrl=${encodeURIComponent(returnUrl)}`
+        );
+        return;
+      }
+    }
+
+    if (!isSessionChecking) {
+      setIsCheckingRegister(false);
+    }
+  }, [isLoggedIn, isSessionChecking, isNewAccount, returnUrl, router]);
 
   const handleEmailRegister = (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
+    setExistingEmailError(null);
 
     if (!name.trim() || !email.trim() || !password) {
       setFormError('Nama lengkap, email, dan kata sandi wajib diisi.');
       return;
     }
 
-    if (password.length < 6) {
-      setFormError('Kata sandi minimal terdiri dari 6 karakter.');
+    if (password.length < 8) {
+      setFormError('Kata sandi minimal terdiri dari 8 karakter.');
       return;
     }
 
@@ -63,13 +107,27 @@ function RegisterContent() {
           localStorage.setItem('has_registered', 'true');
           document.cookie = 'has_registered=true; path=/; max-age=31536000';
         } catch (err) {}
-        router.push(returnUrl);
+        router.push(returnUrl || '/dashboard');
         router.refresh();
       } else {
         setFormError(res.error || 'Gagal mendaftarkan akun. Silakan coba kembali.');
+        if ((res as any).isExistingEmail) {
+          setExistingEmailError((res as any).existingEmail || email);
+        }
       }
     });
   };
+
+  if (isCheckingRegister) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-[#05BB75]" />
+          <p className="text-xs font-semibold text-slate-500">Memeriksa status akun...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-between">
@@ -137,13 +195,18 @@ function RegisterContent() {
             
             {/* Header Title & Subtitle */}
             <div className="space-y-3 mb-6">
+              {isNewAccount && (
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-bold text-emerald-800">
+                  <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>Pendaftaran Akun Baru</span>
+                </div>
+              )}
               <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900">
                 New Sports Experience.
               </h1>
               <p className="text-sm text-slate-600 leading-relaxed">
                 Ada ribuan orang yang suka berolahraga seperti kamu. Ayo mulai perjalanan berolahraga bersama —{' '}
-                <span className="font-bold text-[#05BB75]">disbudpora sport
-</span>.
+                <span className="font-bold text-[#05BB75]">disbudpora sport</span>.
               </p>
               <div className="h-1 w-10 bg-[#05BB75] rounded-full" />
             </div>
@@ -158,8 +221,32 @@ function RegisterContent() {
               </div>
             )}
 
+            {/* Rekomendasi Masuk Cepat jika Email Sudah Terdaftar */}
+            {existingEmailError && (
+              <div className="mb-5 rounded-2xl border border-emerald-300 bg-emerald-50 p-4 text-xs shadow-sm">
+                <div className="flex items-start gap-2.5">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="space-y-2">
+                    <p className="font-bold text-emerald-950">
+                      Email <span className="underline">{existingEmailError}</span> sudah terdaftar di sistem!
+                    </p>
+                    <p className="text-emerald-800 text-[11px] leading-relaxed">
+                      Anda dapat langsung masuk ke akun Anda menggunakan kata sandi yang telah dibuat.
+                    </p>
+                    <Link
+                      href={`/login?email=${encodeURIComponent(existingEmailError)}&has_account=true&returnUrl=${encodeURIComponent(returnUrl)}`}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-[#05BB75] hover:bg-[#049a60] px-4 py-2 text-xs font-black text-white shadow-sm transition"
+                    >
+                      <span>Masuk ke Akun Sekarang</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Error Notification */}
-            {formError && (
+            {formError && !existingEmailError && (
               <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-3.5 text-xs font-semibold text-red-700">
                 <AlertCircle className="h-4 w-4 shrink-0 text-red-500 mt-0.5" />
                 <span>{formError}</span>
@@ -261,18 +348,27 @@ function RegisterContent() {
 
                   <div>
                     <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                      Kata Sandi (Min. 6 Karakter)
+                      Kata Sandi (Min. 8 Karakter)
                     </label>
                     <div className="relative">
                       <Lock className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
                       <input
-                        type="password"
+                        type={showPassword ? 'text' : 'password'}
                         required
+                        minLength={8}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full rounded-xl border border-slate-300 bg-slate-50 pl-10 pr-4 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#05BB75] focus:border-transparent transition"
+                        placeholder="Minimal 8 karakter"
+                        className="w-full rounded-xl border border-slate-300 bg-slate-50 pl-10 pr-11 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#05BB75] focus:border-transparent transition"
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3.5 top-2.5 p-1 text-slate-400 hover:text-slate-600 transition"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
                     </div>
                   </div>
 
