@@ -48,6 +48,7 @@ export const CheckoutModal: React.FC = () => {
   const [senderPhone, setSenderPhone] = useState<string>('');
   const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
   const [proofFileName, setProofFileName] = useState<string>('');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isAmountConfirmed, setIsAmountConfirmed] = useState(false);
 
@@ -154,13 +155,20 @@ export const CheckoutModal: React.FC = () => {
     }).format(val);
   };
 
+  // Cleanup preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
   // Handle file picker for payment proof
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      alert('Mohon pilih file gambar struk/bukti transfer (JPG, PNG).');
+      alert('Mohon pilih file gambar struk/bukti transfer (JPG, PNG, WEBP).');
       return;
     }
 
@@ -169,12 +177,17 @@ export const CheckoutModal: React.FC = () => {
       return;
     }
 
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
     setProofFileName(file.name);
     setPaymentProofFile(file);
     setFormError(null);
   };
 
   const handleRemoveProof = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
     setPaymentProofFile(null);
     setProofFileName('');
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -695,17 +708,24 @@ export const CheckoutModal: React.FC = () => {
 
                   {paymentProofFile ? (
                     <div className="flex items-center justify-between rounded-2xl border border-emerald-300 bg-emerald-50/50 p-3.5">
-                      <div className="flex items-center gap-3 overflow-hidden">
-                        <img
-                          src={URL.createObjectURL(paymentProofFile)}
-                          alt="Preview Struk"
-                          className="h-14 w-14 rounded-xl object-cover border border-emerald-200 shrink-0"
-                        />
-                        <div className="overflow-hidden">
-                          <div className="truncate text-xs font-bold text-slate-900">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        {previewUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={previewUrl}
+                            alt="Preview Struk"
+                            className="h-14 w-14 rounded-xl object-cover border border-emerald-200 shrink-0"
+                          />
+                        ) : (
+                          <div className="h-14 w-14 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                            <FileText className="h-6 w-6" />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-bold text-slate-900" title={proofFileName}>
                             {proofFileName || 'struk-transfer.jpg'}
                           </div>
-                          <div className="text-[11px] text-emerald-700 font-medium">
+                          <div className="text-[11px] text-emerald-700 font-medium mt-0.5">
                             ✓ Bukti gambar siap diverifikasi
                           </div>
                         </div>
@@ -713,7 +733,7 @@ export const CheckoutModal: React.FC = () => {
                       <button
                         type="button"
                         onClick={handleRemoveProof}
-                        className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
+                        className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 transition shrink-0 ml-2"
                         title="Hapus gambar"
                       >
                         <Trash2 className="h-4 w-4" />

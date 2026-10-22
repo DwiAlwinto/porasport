@@ -14,7 +14,8 @@ import {
   FileText,
   Lock,
   ArrowRight,
-  Download
+  Download,
+  Eye,
 } from 'lucide-react';
 import { Booking } from '../../types';
 
@@ -44,6 +45,8 @@ export const CheckoutPage: React.FC = () => {
   const [customerNote, setCustomerNote] = useState<string>('');
   const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
   const [proofFileName, setProofFileName] = useState<string>('');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [showProofModal, setShowProofModal] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [isTnCAccepted, setIsTnCAccepted] = useState(false);
   const [isAmountConfirmed, setIsAmountConfirmed] = useState(false);
@@ -143,27 +146,39 @@ export const CheckoutPage: React.FC = () => {
     }).format(val);
   };
 
+  // Cleanup preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
   // Handle file picker for payment proof
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      alert('Mohon pilih file gambar struk/bukti transfer (JPG, PNG).');
+      setFormError('Mohon pilih file gambar struk/bukti transfer (JPG, PNG, WEBP).');
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      alert('Ukuran file maksimal 5MB.');
+      setFormError('Ukuran file maksimal 5 MB.');
       return;
     }
 
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
     setProofFileName(file.name);
     setPaymentProofFile(file);
     setFormError(null);
   };
 
   const handleRemoveProof = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
     setPaymentProofFile(null);
     setProofFileName('');
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -641,43 +656,73 @@ export const CheckoutPage: React.FC = () => {
                 
                 {/* PEMBAYARAN */}
                 <div className="rounded-3xl bg-white p-6 sm:p-8 shadow-sm ring-1 ring-slate-200">
-                  <h3 className="text-xl font-black text-slate-800 mb-1">
-                    {t.checkout.choosePaymentType}
-                  </h3>
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-xl font-black text-slate-900">
+                      {t.checkout.choosePaymentType}
+                    </h3>
+                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                      QRIS Auto-Detect
+                    </span>
+                  </div>
                   <p className="text-xs text-slate-500 mb-6">{t.checkout.securePaymentNote}</p>
 
-                  <div className="rounded-2xl border-2 border-[#ff5722] overflow-hidden">
-                    <div className="bg-[#ff5722] px-4 py-3 text-white flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <QrCode className="h-5 w-5" />
-                        <span className="font-bold text-sm">QRIS / Transfer Bank</span>
+                  <div className="rounded-3xl border border-slate-200 overflow-hidden shadow-sm bg-white">
+                    {/* Header Tab QRIS */}
+                    <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-5 py-3.5 text-white flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 backdrop-blur-sm text-emerald-400 border border-white/10 shrink-0">
+                          <QrCode className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <span className="font-bold text-sm tracking-wide">QRIS / Transfer Bank</span>
+                          <p className="text-[10px] text-slate-400">Verifikasi instan rekening resmi</p>
+                        </div>
                       </div>
-                      <div className="h-4 w-4 rounded-full border-4 border-white"></div>
+                      <div className="flex items-center gap-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-full text-[10px] font-bold">
+                        <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span>Resmi Aktif</span>
+                      </div>
                     </div>
                     
-                    <div className="p-6 bg-slate-50 flex flex-col items-center">
+                    <div className="p-6 bg-slate-50/60 flex flex-col items-center">
                       <div className="mb-4 text-center">
-                        <div className="text-sm font-bold text-slate-800">{qrisLabel}</div>
-                        <div className="text-xs text-slate-500 mt-1">{paymentNotesTxt}</div>
+                        <div className="text-sm font-black text-slate-900">{qrisLabel}</div>
+                        <div className="text-xs text-slate-500 mt-0.5 max-w-sm mx-auto">{paymentNotesTxt}</div>
                       </div>
-                      <div className="rounded-2xl bg-white p-4 shadow-sm border border-slate-200 inline-block mb-3">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={qrisUrl}
-                          alt="QRIS DISBUDPORA"
-                          className="h-48 w-48 sm:h-56 sm:w-56 object-contain"
-                        />
+
+                      {/* Frame Barcode QRIS */}
+                      <div className="relative group p-4 bg-white rounded-3xl border border-slate-200 shadow-md shadow-slate-100 flex flex-col items-center">
+                        <div className="p-3 bg-white rounded-2xl border border-slate-100 shadow-inner">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={qrisUrl}
+                            alt="QRIS DISBUDPORA"
+                            className="h-48 w-48 sm:h-56 sm:w-56 object-contain transition-transform duration-300 group-hover:scale-[1.02]"
+                          />
+                        </div>
+
+                        {/* Supported Apps Badges */}
+                        <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5 text-[9px] font-bold text-slate-600">
+                          <span className="bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">BCA</span>
+                          <span className="bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">Mandiri</span>
+                          <span className="bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">BRI</span>
+                          <span className="bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">BNI</span>
+                          <span className="bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">BJB</span>
+                          <span className="bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">GoPay</span>
+                          <span className="bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">OVO</span>
+                          <span className="bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">DANA</span>
+                        </div>
                       </div>
 
                       {/* Download QRIS Button */}
-                      <div className="mb-6 w-full max-w-xs flex flex-col items-center gap-1.5">
+                      <div className="mt-4 mb-6 w-full max-w-xs flex flex-col items-center gap-1.5">
                         <button
                           type="button"
                           onClick={handleDownloadQRIS}
                           disabled={isDownloadingQris}
-                          className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-white border-2 border-orange-200 hover:border-[#ff5722] hover:bg-orange-50 text-slate-800 hover:text-[#ff5722] px-4 py-2.5 text-xs font-bold shadow-sm transition-all active:scale-95 disabled:opacity-50"
+                          className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-white border border-slate-200 hover:border-emerald-600 hover:bg-emerald-50/50 text-slate-800 hover:text-emerald-700 px-4 py-2.5 text-xs font-bold shadow-sm transition-all active:scale-95 disabled:opacity-50"
                         >
-                          <Download className={`h-4 w-4 text-[#ff5722] ${isDownloadingQris ? 'animate-bounce' : ''}`} />
+                          <Download className={`h-4 w-4 text-emerald-600 ${isDownloadingQris ? 'animate-bounce' : ''}`} />
                           {isDownloadingQris ? t.checkout.downloading : t.checkout.downloadBarcode}
                         </button>
                         <p className="text-[11px] text-slate-500 text-center">
@@ -685,137 +730,182 @@ export const CheckoutPage: React.FC = () => {
                         </p>
                       </div>
 
+                      {/* SEPARATOR UPLOAD */}
                       <div className="w-full border-t border-slate-200 pt-6">
-                        <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center justify-center gap-2">
-                          <UploadCloud className="h-4 w-4 text-[#ff5722]" />
-                          {t.checkout.uploadProofHeading}
-                        </h4>
+                        <div className="flex items-center justify-between mb-3.5">
+                          <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-600 text-white text-[11px] font-black">✓</span>
+                            <span>{t.checkout.uploadProofHeading}</span>
+                          </h4>
+                          <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                            Wajib Dilampirkan
+                          </span>
+                        </div>
 
                         {/* Amount Confirmation Checkbox - REQUIRED before upload */}
-                        <label className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 mb-4 cursor-pointer transition hover:bg-amber-100">
-                          <input
-                            type="checkbox"
-                            checked={isAmountConfirmed}
-                            onChange={(e) => setIsAmountConfirmed(e.target.checked)}
-                            className="mt-1 h-4 w-4 rounded border-slate-300 text-[#ff5722] focus:ring-[#ff5722]"
-                            required
-                          />
-                          <span className="text-sm text-slate-700 leading-relaxed">
-                            {t.checkout.amountConfirmCheckbox} <strong className="text-[#ff5722]">{formatRupiah(grandTotal)}</strong>
-                            <br />
-                            <span className="text-red-600 font-semibold">{t.checkout.amountConfirmWarning}</span>
-                          </span>
-                        </label>
+                        <div className={`rounded-2xl border transition-all ${
+                          isAmountConfirmed
+                            ? 'border-emerald-300 bg-emerald-50/60 shadow-sm'
+                            : 'border-amber-300 bg-amber-50/80'
+                        } p-3.5 mb-4`}>
+                          <label className="flex items-start gap-3 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={isAmountConfirmed}
+                              onChange={(e) => setIsAmountConfirmed(e.target.checked)}
+                              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer shrink-0"
+                              required
+                            />
+                            <div className="text-xs text-slate-700 leading-relaxed">
+                              <span className="font-semibold text-slate-900">
+                                {t.checkout.amountConfirmCheckbox}{' '}
+                                <strong className="text-emerald-700 font-black text-sm bg-emerald-100/70 px-1.5 py-0.5 rounded">
+                                  {formatRupiah(grandTotal)}
+                                </strong>
+                              </span>
+                              <p className="text-[11px] text-amber-900 font-medium mt-1">
+                                ⚠️ {t.checkout.amountConfirmWarning}
+                              </p>
+                            </div>
+                          </label>
+                        </div>
 
+                        {/* Hidden File Input */}
                         <input
                           type="file"
                           ref={fileInputRef}
                           onChange={handleFileChange}
                           disabled={!isAmountConfirmed}
                           className="hidden"
-                          accept="image/png, image/jpeg"
+                          accept="image/png, image/jpeg, image/webp"
                         />
 
+                        {/* Upload Preview / Dropzone */}
                         {paymentProofFile ? (
-                          <div className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                          <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50/60 p-3.5 shadow-sm transition-all">
                             <div className="flex items-center gap-3">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
-                                <FileText className="h-5 w-5" />
+                              {/* Real Thumbnail */}
+                              <div
+                                onClick={() => setShowProofModal(true)}
+                                className="relative group/thumb h-16 w-16 rounded-xl overflow-hidden border border-emerald-200 shadow-sm shrink-0 bg-white cursor-pointer"
+                                title="Klik untuk memperbesar struk"
+                              >
+                                {previewUrl ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={previewUrl}
+                                    alt="Bukti Transfer"
+                                    className="h-full w-full object-cover group-hover/thumb:scale-110 transition duration-200"
+                                  />
+                                ) : (
+                                  <div className="h-full w-full flex items-center justify-center bg-emerald-100 text-emerald-700">
+                                    <FileText className="h-6 w-6" />
+                                  </div>
+                                )}
+                                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/thumb:opacity-100 transition flex items-center justify-center text-white">
+                                  <Eye className="h-4 w-4" />
+                                </div>
                               </div>
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-bold text-slate-800">
+
+                              {/* File Details */}
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-xs font-black text-slate-900" title={proofFileName}>
                                   {proofFileName}
                                 </p>
-                                <p className="text-xs text-emerald-600 font-medium">{t.checkout.uploadSuccess}</p>
+                                <p className="text-[11px] text-slate-500 mt-0.5">
+                                  {paymentProofFile ? `${(paymentProofFile.size / 1024).toFixed(0)} KB` : ''} •{' '}
+                                  <span className="text-emerald-700 font-bold">✓ Foto siap diverifikasi</span>
+                                </p>
+
+                                {/* Action Buttons */}
+                                <div className="flex items-center gap-2 mt-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowProofModal(true)}
+                                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-white border border-emerald-200 px-2 py-0.5 rounded-md shadow-xs hover:bg-emerald-50 transition"
+                                  >
+                                    <Eye className="h-3 w-3" />
+                                    <span>Lihat Struk</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 hover:text-slate-800 bg-white border border-slate-200 px-2 py-0.5 rounded-md shadow-xs hover:bg-slate-50 transition"
+                                  >
+                                    <UploadCloud className="h-3 w-3" />
+                                    <span>Ganti</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleRemoveProof}
+                                    className="inline-flex items-center gap-1 text-[11px] font-bold text-red-600 hover:text-red-700 bg-white border border-red-200 px-2 py-0.5 rounded-md shadow-xs hover:bg-red-50 transition ml-auto"
+                                    title="Hapus foto ini"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                    <span>Hapus</span>
+                                  </button>
+                                </div>
                               </div>
                             </div>
-                            <button
-                              type="button"
-                              onClick={handleRemoveProof}
-                              className="rounded-full p-2 text-slate-400 hover:bg-white hover:text-red-500 shadow-sm transition"
-                            >
-                              <XCircle className="h-5 w-5" />
-                            </button>
                           </div>
                         ) : (
                           <div
                             onClick={() => isAmountConfirmed && fileInputRef.current?.click()}
-                            className={`group relative flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 px-6 py-8 transition ${
+                            className={`group relative flex cursor-pointer flex-col items-center justify-center gap-2.5 rounded-2xl border-2 px-6 py-7 transition-all ${
                               isAmountConfirmed
-                                ? 'border-dashed border-slate-300 bg-white hover:border-[#ff5722] hover:bg-[#ff5722]/5'
+                                ? 'border-dashed border-slate-300 bg-white hover:border-emerald-500 hover:bg-emerald-50/20 shadow-xs'
                                 : 'border-dashed border-slate-200 bg-slate-50 cursor-not-allowed opacity-60'
                             }`}
                           >
-                            <div className={`flex h-12 w-12 items-center justify-center rounded-full transition ${
+                            <div className={`flex h-12 w-12 items-center justify-center rounded-2xl transition ${
                               isAmountConfirmed
-                                ? 'bg-slate-100 text-slate-400 group-hover:bg-[#ff5722]/10 group-hover:text-[#ff5722]'
+                                ? 'bg-emerald-50 text-emerald-600 group-hover:scale-110 shadow-xs'
                                 : 'bg-slate-100 text-slate-300'
                             }`}>
                               <UploadCloud className="h-6 w-6" />
                             </div>
                             <div className="text-center">
-                              <p className="text-sm font-semibold text-slate-700">
+                              <p className="text-xs font-bold text-slate-800">
                                 {isAmountConfirmed ? t.checkout.clickToUpload : t.checkout.checkConfirmFirst}
                               </p>
-                              <p className="mt-1 text-xs text-slate-500">{t.checkout.maxFileSize}</p>
+                              <p className="mt-1 text-[11px] text-slate-400">JPG, PNG, atau WEBP (Maksimal 5 MB)</p>
                             </div>
-                            <input
-                              type="file"
-                              ref={fileInputRef}
-                              onChange={handleFileChange}
-                              disabled={!isAmountConfirmed}
-                              className="hidden"
-                              accept="image/png, image/jpeg"
-                            />
                           </div>
                         )}
 
-                        {/* OCR Validation Status */}
+                        {/* OCR Validation Status Indicators */}
                         {ocrStatus !== 'idle' && (
-                          <div className={`mt-4 rounded-xl p-3 text-xs font-medium border ${
+                          <div className={`mt-3 rounded-xl p-3 text-xs font-medium border ${
                             ocrStatus === 'processing'
-                              ? 'border-amber-200 bg-amber-50 text-amber-800'
+                              ? 'border-blue-200 bg-blue-50 text-blue-800'
                               : ocrStatus === 'passed'
                                 ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                                 : ocrStatus === 'manual_review'
-                                  ? 'border-blue-200 bg-blue-50 text-blue-800'
+                                  ? 'border-amber-200 bg-amber-50 text-amber-800'
                                   : 'border-red-200 bg-red-50 text-red-800'
                           }`}>
                             {ocrStatus === 'processing' && (
                               <div className="flex items-center gap-2 justify-center">
-                                <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
-                                <span>Memvalidasi bukti transfer dengan OCR...</span>
+                                <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                                <span>Sedang memverifikasi bukti transfer via Vision OCR...</span>
                               </div>
                             )}
                             {ocrStatus === 'passed' && (
-                              <div className="flex items-center gap-2 justify-center">
+                              <div className="flex items-center gap-2 justify-center font-bold">
                                 <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                                <span>✅ Validasi otomatis BERHASIL! Pesanan langsung LUNAS.</span>
+                                <span>✅ Validasi otomatis berhasil! Pesanan langsung berstatus Lunas.</span>
                               </div>
                             )}
                             {ocrStatus === 'manual_review' && (
-                              <div className="flex items-start gap-2 justify-center">
-                                <AlertCircle className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
-                                <div className="text-center">
-                                   <div className="font-semibold">⚠️ Validasi otomatis memerlukan review manual</div>
-                                  <div className="text-[10px] mt-0.5">
-                                    {ocrResult ? (
-                                      <>
-                                        {!ocrResult.amountMatch && <div>• Nominal tidak sesuai</div>}
-                                        {!ocrResult.dateMatch && <div>• Tanggal tidak sesuai hari ini</div>}
-                                        {!ocrResult.keywordMatch && <div>• Kata kunci DISBUDPORA/BJB/PAN tidak ditemukan</div>}
-                                      </>
-                                    ) : (
-                                      'Struk akan diverifikasi oleh admin DISBUDPORA'
-                                    )}
-                                  </div>
-                                </div>
+                              <div className="flex items-center gap-2 justify-center">
+                                <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                                <span>⏳ Bukti bayar terlampir. Menunggu verifikasi tim kasir Disbudpora.</span>
                               </div>
                             )}
                             {ocrStatus === 'failed' && (
                               <div className="flex items-center gap-2 justify-center">
                                 <XCircle className="h-4 w-4 text-red-600 shrink-0" />
-                                <span>❌ Validasi gagal. Silakan coba unggah ulang dengan struk yang jelas.</span>
+                                <span>Gagal memvalidasi struk. Silakan unggah struk foto yang lebih jelas.</span>
                               </div>
                             )}
                           </div>
@@ -913,6 +1003,47 @@ export const CheckoutPage: React.FC = () => {
               </div>
             </div>
           </form>
+        )}
+
+        {/* LIGHTBOX MODAL FOR PAYMENT PROOF */}
+        {showProofModal && previewUrl && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs">
+            <div className="relative max-w-lg w-full bg-white rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95">
+              <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50">
+                <div className="font-bold text-sm text-slate-800 flex items-center gap-2 min-w-0">
+                  <FileText className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <span className="truncate">{proofFileName}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowProofModal(false)}
+                  className="rounded-full p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition shrink-0 ml-2"
+                >
+                  <XCircle className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="p-4 bg-slate-950 flex items-center justify-center max-h-[70vh] overflow-auto">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={previewUrl}
+                  alt="Pratinjau Bukti Bayar"
+                  className="max-h-[65vh] w-auto object-contain rounded-lg shadow-md"
+                />
+              </div>
+              <div className="p-3 bg-white border-t border-slate-100 flex items-center justify-between">
+                <span className="text-[11px] text-slate-500 font-medium">
+                  {paymentProofFile ? `${(paymentProofFile.size / 1024).toFixed(0)} KB` : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowProofModal(false)}
+                  className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

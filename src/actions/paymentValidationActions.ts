@@ -176,23 +176,28 @@ export async function validateAndProcessPaymentProof(
       data: { paymentProofUrl: uploadResult.path },
     })
 
-    const ocrResult = await runOCRValidation(
-      uploadResult.path,
-      booking.grandTotal
-    )
+    let ocrResult: OCRValidationResult | null = null;
+    try {
+      ocrResult = await runOCRValidation(
+        uploadResult.path,
+        booking.grandTotal
+      );
+    } catch (ocrErr: unknown) {
+      console.warn('[OCR Validation skipped or failed]:', ocrErr);
+    }
 
-    const newStatus = ocrResult.passed ? 'PAID_SUCCESS' : 'MENUNGGU_VALIDASI'
+    const newStatus = ocrResult?.passed ? 'PAID_SUCCESS' : 'MENUNGGU_VALIDASI';
 
     await prisma.$transaction(async (tx) => {
       await tx.booking.update({
         where: { id: bookingId },
         data: {
           status: newStatus as any,
-          ocrExtractedText: ocrResult.extractedText,
-          ocrValidationResult: ocrResult as any,
-          ocrProcessedAt: new Date(),
+          ocrExtractedText: ocrResult?.extractedText || null,
+          ocrValidationResult: (ocrResult as any) || null,
+          ocrProcessedAt: ocrResult ? new Date() : null,
         },
-      })
+      });
 
       await tx.paymentProof.create({
         data: {
@@ -201,11 +206,11 @@ export async function validateAndProcessPaymentProof(
           fileName: uploadResult.fileName,
           fileSize: uploadResult.fileSize,
           mimeType: uploadResult.mimeType,
-          ocrStatus: ocrResult.passed ? 'PASSED' : 'FAILED',
+          ocrStatus: ocrResult?.passed ? 'PASSED' : 'FAILED',
         },
-      })
+      });
 
-      if (ocrResult.passed) {
+      if (ocrResult?.passed) {
         await tx.payment.upsert({
           where: { bookingId },
           update: {
@@ -246,7 +251,7 @@ export async function validateAndProcessPaymentProof(
     return {
       success: true,
       bookingId,
-      ocrResult,
+      ocrResult: ocrResult || undefined,
       newStatus,
     }
   } catch (error: any) {
