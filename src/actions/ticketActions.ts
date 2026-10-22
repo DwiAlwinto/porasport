@@ -29,6 +29,12 @@ export interface TicketVerificationResult {
     paidAt?: string;
     checkedInAt?: string;
     adminNotes?: string;
+    rescheduleStatus?: string;
+    rescheduleReason?: string;
+    rescheduleOriginalDate?: string;
+    rescheduleOriginalTime?: string;
+    rescheduleTargetDate?: string;
+    rescheduleTargetTime?: string;
   };
 }
 
@@ -86,7 +92,8 @@ export async function verifyTicketAction(tokenOrId: string): Promise<TicketVerif
       return { success: false, error: 'Tiket tidak ditemukan dalam sistem resmi DISBUDPORA.' };
     }
 
-    const isValid = booking.status === 'PAID_SUCCESS';
+    const isPendingReschedule = booking.rescheduleStatus === 'PENDING_CUSTOMER';
+    const isValid = booking.status === 'PAID_SUCCESS' && !isPendingReschedule;
     const firstItem = booking.items[0];
     const timeSlots = booking.items.map((i) => `${i.timeStart} - ${i.timeEnd}`).join(', ');
 
@@ -119,6 +126,12 @@ export async function verifyTicketAction(tokenOrId: string): Promise<TicketVerif
         paidAt: booking.payment?.paidAt?.toISOString() || booking.updatedAt.toISOString(),
         checkedInAt,
         adminNotes: booking.adminNotes || undefined,
+        rescheduleStatus: booking.rescheduleStatus || undefined,
+        rescheduleReason: booking.rescheduleReason || undefined,
+        rescheduleOriginalDate: booking.rescheduleOriginalDate ? booking.rescheduleOriginalDate.toISOString().split('T')[0] : undefined,
+        rescheduleOriginalTime: booking.rescheduleOriginalTime || undefined,
+        rescheduleTargetDate: booking.rescheduleTargetDate ? booking.rescheduleTargetDate.toISOString().split('T')[0] : undefined,
+        rescheduleTargetTime: booking.rescheduleTargetTime || undefined,
       },
     };
   } catch (error: any) {

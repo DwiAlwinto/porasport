@@ -173,6 +173,54 @@ function TicketVerifyContent() {
               )}
             </div>
 
+            {/* Banner Khusus Penyesuaian Agenda Dinas Pemda */}
+            {(data.ticket as any).rescheduleStatus === 'PENDING_CUSTOMER' && (
+              <div className="rounded-3xl border-2 border-amber-500/50 bg-gradient-to-br from-amber-950/80 via-slate-900 to-slate-900 p-5 text-xs text-amber-200 space-y-2.5 shadow-xl">
+                <div className="flex items-center gap-2 font-black text-amber-300 text-sm">
+                  <Building2 className="h-5 w-5 text-amber-400 shrink-0" />
+                  <span>PENYESUAIAN JADWAL KEDINASAN PEMKAB BEKASI</span>
+                </div>
+                <p className="text-slate-300 leading-relaxed">
+                  Fasilitas olahraga pada jadwal ini dialihkan sementara sehubungan dengan agenda resmi kedinasan Pemerintah Kabupaten Bekasi ({(data.ticket as any).rescheduleReason || 'Kegiatan Kedinasan Daerah'}).
+                </p>
+                <div className="rounded-2xl bg-slate-950/80 border border-slate-800 p-3 text-xs">
+                  <span className="text-slate-400 block text-[10px] font-semibold">Jadwal Semula:</span>
+                  <span className="text-slate-400 line-through">
+                    {(data.ticket as any).rescheduleOriginalDate || data.ticket.date}
+                  </span>{' '}
+                  <span className="text-amber-300 font-bold">
+                    ({(data.ticket as any).rescheduleOriginalTime || data.ticket.timeSlots})
+                  </span>
+                </div>
+                <div className="text-[11px] text-emerald-300 font-bold flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
+                  <span>Hak Bebas Geser Tanggal (Gratis 100%) dapat dipilih langsung di Dashboard Penyewa.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => router.push('/dashboard')}
+                  className="mt-2 w-full rounded-xl bg-gradient-to-r from-amber-500 to-emerald-600 py-2.5 text-xs font-black text-slate-950 hover:from-amber-400 hover:to-emerald-500 shadow-lg shadow-emerald-950/40 transition flex items-center justify-center gap-2"
+                >
+                  <Calendar className="h-4 w-4" />
+                  <span>Buka Dashboard untuk Geser Jadwal Sekarang</span>
+                </button>
+              </div>
+            )}
+
+            {(data.ticket as any).rescheduleStatus === 'RESOLVED' && (
+              <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/40 p-3.5 text-xs text-emerald-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                  <span>
+                    Jadwal Baru Resmi Disetujui: <strong className="text-white font-bold">{(data.ticket as any).rescheduleTargetDate || data.ticket.date}</strong>
+                  </span>
+                </div>
+                <span className="rounded-md bg-emerald-500/20 px-2 py-0.5 text-[10px] font-black text-emerald-300 uppercase tracking-wider">
+                  Rescheduled
+                </span>
+              </div>
+            )}
+
             {/* Ticket Info Details */}
             <div className="rounded-3xl border border-slate-800 bg-slate-800/60 p-5 space-y-3 backdrop-blur-md">
               <div className="flex items-center justify-between border-b border-slate-700/60 pb-2">

@@ -662,6 +662,14 @@ export async function getMyBookingsAction() {
           ocrExtractedText: b.ocrExtractedText || undefined,
           ocrValidationResult: (b.ocrValidationResult as any) || undefined,
           ocrProcessedAt: b.ocrProcessedAt ? b.ocrProcessedAt.toISOString() : undefined,
+          rescheduleStatus: (b.rescheduleStatus as any) || undefined,
+          rescheduleReason: b.rescheduleReason || undefined,
+          rescheduleNoticeDate: b.rescheduleNoticeDate ? b.rescheduleNoticeDate.toISOString() : undefined,
+          rescheduleOriginalDate: b.rescheduleOriginalDate ? b.rescheduleOriginalDate.toISOString().split('T')[0] : undefined,
+          rescheduleOriginalTime: b.rescheduleOriginalTime || undefined,
+          rescheduleTargetDate: b.rescheduleTargetDate ? b.rescheduleTargetDate.toISOString().split('T')[0] : undefined,
+          rescheduleTargetTime: b.rescheduleTargetTime || undefined,
+          rescheduleCustomerNotes: b.rescheduleCustomerNotes || undefined,
         };
       })
     );

@@ -194,6 +194,14 @@ export interface Booking {
     expectedKeywords: string[];
   };
   ocrProcessedAt?: string;
+  rescheduleStatus?: 'PENDING_CUSTOMER' | 'RESOLVED' | 'REJECTED_REFUND';
+  rescheduleReason?: string;
+  rescheduleNoticeDate?: string;
+  rescheduleOriginalDate?: string;
+  rescheduleOriginalTime?: string;
+  rescheduleTargetDate?: string;
+  rescheduleTargetTime?: string;
+  rescheduleCustomerNotes?: string;
 }
 
 export interface UserProfile {

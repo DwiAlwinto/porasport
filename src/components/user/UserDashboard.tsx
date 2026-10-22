@@ -28,8 +28,11 @@ import {
   Check,
   ExternalLink,
   ShieldCheck,
+  FileText,
 } from 'lucide-react';
 import { UserAvatar } from '../common/UserAvatar';
+import { PemdaNoticeModal } from './PemdaNoticeModal';
+import { ReschedulePickerModal } from './ReschedulePickerModal';
 
 export const UserDashboard: React.FC = () => {
   const {
@@ -80,6 +83,11 @@ export const UserDashboard: React.FC = () => {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState<boolean>(false);
 
+  // Modal Pemda Reschedule Notice & Picker
+  const [pemdaNoticeBooking, setPemdaNoticeBooking] = useState<Booking | null>(null);
+  const [reschedulePickerBooking, setReschedulePickerBooking] = useState<Booking | null>(null);
+  const [hasAutoCheckedPemdaNotice, setHasAutoCheckedPemdaNotice] = useState<boolean>(false);
+
   useEffect(() => {
     if (activeQrModalBooking) {
       const origin = typeof window !== 'undefined' ? window.location.origin : 'https://disbudporasport.gabuspucung.id';
@@ -127,6 +135,17 @@ export const UserDashboard: React.FC = () => {
 
   // Filter user bookings
   const userBookings = bookings.filter((b) => b.userId === activeUser?.id);
+
+  // Auto-tampilkan Surat Pemberitahuan Resmi Pemda jika ada pesanan terdampak agenda dinas
+  useEffect(() => {
+    if (hasAutoCheckedPemdaNotice || userBookings.length === 0) return;
+    const affected = userBookings.find((b) => b.rescheduleStatus === 'PENDING_CUSTOMER');
+    if (affected) {
+      setPemdaNoticeBooking(affected);
+      setHasAutoCheckedPemdaNotice(true);
+    }
+  }, [userBookings, hasAutoCheckedPemdaNotice]);
+
   const filteredBookings = userBookings.filter((b) => {
     if (statusTab === 'ALL') return true;
     if (statusTab === 'PENDING_PAYMENT') {
@@ -398,7 +417,11 @@ export const UserDashboard: React.FC = () => {
             filteredBookings.map((booking) => (
               <div
                 key={booking.id}
-                className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
+                className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:shadow-md ${
+                  booking.rescheduleStatus === 'PENDING_CUSTOMER'
+                    ? 'border-2 border-amber-400 bg-amber-50/20 shadow-md shadow-amber-950/5'
+                    : 'border-slate-200'
+                }`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 px-5 py-3">
                   <div className="flex items-center gap-3">
@@ -408,26 +431,33 @@ export const UserDashboard: React.FC = () => {
                     <span className="text-xs text-slate-400">• {booking.createdAt}</span>
                   </div>
                   <div>
-                    {(booking.status === 'PENDING_PAYMENT' || booking.status === 'MENUNGGU_VALIDASI') && (
+                    {booking.rescheduleStatus === 'PENDING_CUSTOMER' ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 px-3.5 py-1 text-xs font-black text-white shadow-sm animate-pulse">
+                        <Building2 className="h-3.5 w-3.5" />
+                        <span>Agenda Pemda: Perlu Geser Tanggal</span>
+                      </span>
+                    ) : booking.rescheduleStatus === 'RESOLVED' ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 border border-emerald-300">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                        <span>Jadwal Berhasil Digeser (Rescheduled)</span>
+                      </span>
+                    ) : (booking.status === 'PENDING_PAYMENT' || booking.status === 'MENUNGGU_VALIDASI') ? (
                       <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
                         {booking.status === 'MENUNGGU_VALIDASI' || booking.paymentProofUrl
                           ? t.userDashboard.statusPendingValidation
                           : t.userDashboard.statusPendingPayment}
                       </span>
-                    )}
-                    {booking.status === 'PAID_SUCCESS' && (
+                    ) : booking.status === 'PAID_SUCCESS' ? (
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
                         <span>{t.userDashboard.statusPaidSuccess}</span>
                       </span>
-                    )}
-                    {booking.status === 'COMPLETED' && (
+                    ) : booking.status === 'COMPLETED' ? (
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-800">
                         <CheckCircle2 className="h-3.5 w-3.5 text-blue-600" />
                         <span>{t.userDashboard.statusCompleted}</span>
                       </span>
-                    )}
-                    {booking.status === 'CANCELLED' && (
+                    ) : (
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-700">
                         <XCircle className="h-3.5 w-3.5 text-rose-600" />
                         <span>{t.userDashboard.statusCancelled}</span>
@@ -462,6 +492,46 @@ export const UserDashboard: React.FC = () => {
                         </span>
                       </div>
 
+                      {/* Notifikasi Khusus Agenda Pemda */}
+                      {booking.rescheduleStatus === 'PENDING_CUSTOMER' && (
+                        <div className="mt-3 rounded-2xl border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-amber-100/60 p-3.5 text-xs text-amber-950 space-y-1.5 shadow-sm">
+                          <div className="flex items-start gap-2">
+                            <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-black text-amber-900 uppercase tracking-wide text-[11px]">
+                                  Pemberitahuan Agenda Kedinasan Pemkab Bekasi
+                                </span>
+                                <span className="rounded bg-amber-200/80 px-1.5 py-0.2 text-[9px] font-black text-amber-900">
+                                  Reschedule Gratis Rp 0
+                                </span>
+                              </div>
+                              <p className="mt-1 text-amber-900 font-medium">
+                                {booking.rescheduleReason || 'Fasilitas digunakan untuk agenda resmi Pemerintah Kabupaten Bekasi.'}
+                              </p>
+                              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-amber-800">
+                                <span>Jadwal Semula: <del className="text-slate-500 font-bold">{booking.rescheduleOriginalDate || booking.items[0]?.date}</del> ({booking.rescheduleOriginalTime || 'WIB'})</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Info Sukses Reschedule */}
+                      {booking.rescheduleStatus === 'RESOLVED' && (
+                        <div className="mt-2.5 rounded-xl border border-emerald-300 bg-emerald-50/90 p-2.5 text-xs text-emerald-950 flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                            <span>
+                              Jadwal Baru Disetujui: <strong className="text-emerald-900 font-black">{booking.items[0]?.date} ({booking.items[0]?.timeStart}-{booking.items[0]?.timeEnd} WIB)</strong>
+                            </span>
+                          </div>
+                          <span className="rounded-md bg-emerald-200 px-2 py-0.5 text-[10px] font-black text-emerald-800 uppercase tracking-wider">
+                            Rescheduled Resmi
+                          </span>
+                        </div>
+                      )}
+
                       {booking.status === 'CANCELLED' && (
                         <div className="mt-2.5 rounded-xl border border-rose-200 bg-rose-50/70 p-2.5 text-xs text-rose-800">
                           <div className="flex items-start gap-2">
@@ -491,7 +561,25 @@ export const UserDashboard: React.FC = () => {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                      {booking.status === 'PAID_SUCCESS' && (
+                      {/* Aksi Khusus jika Perlu Geser Jadwal Pemda */}
+                      {booking.rescheduleStatus === 'PENDING_CUSTOMER' ? (
+                        <>
+                          <button
+                            onClick={() => setReschedulePickerBooking(booking)}
+                            className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-emerald-600 px-4 py-2 text-xs font-black text-white shadow-md hover:from-amber-400 hover:to-emerald-500 transition"
+                          >
+                            <Calendar className="h-4 w-4" />
+                            <span>Geser Tanggal Sekarang</span>
+                          </button>
+                          <button
+                            onClick={() => setPemdaNoticeBooking(booking)}
+                            className="flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100 transition shadow-sm"
+                          >
+                            <FileText className="h-3.5 w-3.5" />
+                            <span>Surat Pemda</span>
+                          </button>
+                        </>
+                      ) : booking.status === 'PAID_SUCCESS' ? (
                         <>
                           <button
                             onClick={() => setActiveQrModalBooking(booking)}
@@ -512,7 +600,7 @@ export const UserDashboard: React.FC = () => {
                             <span>Selesai Bermain</span>
                           </button>
                         </>
-                      )}
+                      ) : null}
 
                       {(booking.status === 'PENDING_PAYMENT' || booking.status === 'MENUNGGU_VALIDASI') && (
                         <>
@@ -1055,6 +1143,31 @@ export const UserDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL PEMBERITAHUAN RESMI PEMDA (ROYAL NOTICE) */}
+      {pemdaNoticeBooking && (
+        <PemdaNoticeModal
+          booking={pemdaNoticeBooking}
+          userName={activeUser?.name}
+          onClose={() => setPemdaNoticeBooking(null)}
+          onOpenPicker={(b) => setReschedulePickerBooking(b)}
+        />
+      )}
+
+      {/* MODAL PEMILIH TANGGAL PENGGANTI (RESCHEDULE PICKER) */}
+      {reschedulePickerBooking && (
+        <ReschedulePickerModal
+          booking={reschedulePickerBooking}
+          onClose={() => setReschedulePickerBooking(null)}
+          onSuccess={(newDate, newTime) => {
+            setUploadSuccessToast(
+              `Jadwal baru Anda (${newDate} pukul ${newTime}) berhasil dikonfirmasi! E-Ticket telah diperbarui.`
+            );
+            refreshBookings();
+            setTimeout(() => setUploadSuccessToast(null), 5000);
+          }}
+        />
       )}
     </div>
   );

@@ -239,6 +239,17 @@ model Booking {
   ocrExtractedText String?       @db.Text      // Raw OCR output untuk audit
   ocrValidationResult Json?      // {amountMatch, dateMatch, keywordMatch, passed: boolean}
   ocrProcessedAt   DateTime?     // Kapan OCR dijalankan
+
+  // Penyesuaian Jadwal Kedinasan Pemkab Bekasi (Reschedule Pemda)
+  rescheduleStatus          String?       // null | 'PENDING_CUSTOMER' | 'RESOLVED' | 'REJECTED_REFUND'
+  rescheduleReason          String?       // Alasan resmi Pemda
+  rescheduleNoticeDate      DateTime?     // Tanggal notifikasi dikirim
+  rescheduleOriginalDate    DateTime?     // Tanggal sewa semula sebelum digeser
+  rescheduleOriginalTime    String?       // Jam sewa semula sebelum digeser
+  rescheduleTargetDate      DateTime?     // Tanggal sewa baru yang disetujui
+  rescheduleTargetTime      String?       // Jam sewa baru yang disetujui
+  rescheduleCustomerNotes   String?       // Catatan persetujuan dari penyewa
+
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 

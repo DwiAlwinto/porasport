@@ -38,8 +38,9 @@ import {
   createSuperAdminBookingAction,
   updateSuperAdminBookingAction,
   deleteSuperAdminBookingAction,
-} from '../../../actions/adminActions';
+} from '@/actions/adminActions';
 import { reTriggerOCRValidation } from '../../../actions/paymentValidationActions';
+import { initiatePemdaRescheduleAction } from '../../../actions/rescheduleActions';
 import { BookingStatus } from '@prisma/client';
 
 const getIdentityLabel = (idNum?: string | null) => {
@@ -142,6 +143,31 @@ export default function AdminBookingsPage() {
   });
 
   const [deletingBooking, setDeletingBooking] = useState<any | null>(null);
+
+  // Modal Pemda Reschedule State
+  const [pemdaRescheduleBooking, setPemdaRescheduleBooking] = useState<any | null>(null);
+  const [pemdaReason, setPemdaReason] = useState<string>('Agenda Resmi Kedinasan Pemerintah Kabupaten Bekasi / DISBUDPORA');
+  const [pemdaAdminNotes, setPemdaAdminNotes] = useState<string>('');
+  const [isSubmittingPemda, setIsSubmittingPemda] = useState<boolean>(false);
+
+  const handleConfirmPemdaReschedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pemdaRescheduleBooking) return;
+    setIsSubmittingPemda(true);
+    const res = await initiatePemdaRescheduleAction({
+      bookingId: pemdaRescheduleBooking.id,
+      reason: pemdaReason,
+      adminNotes: pemdaAdminNotes,
+    });
+    setIsSubmittingPemda(false);
+    if (res.success) {
+      showToast(res.message || 'Pemberitahuan geser jadwal Pemda berhasil dikirim!');
+      setPemdaRescheduleBooking(null);
+      fetchData();
+    } else {
+      alert(res.error || 'Gagal mengalihkan jadwal.');
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -486,25 +512,35 @@ export default function AdminBookingsPage() {
                     </td>
 
                     <td className="p-4">
-                      <span
-                        className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[10px] font-bold ${
-                          b.status === 'PAID_SUCCESS'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      {b.rescheduleStatus === 'PENDING_CUSTOMER' ? (
+                        <span className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">
+                          🏛️ Geser Pemda (Menunggu Warga)
+                        </span>
+                      ) : b.rescheduleStatus === 'RESOLVED' ? (
+                        <span className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          ✅ Rescheduled Resmi
+                        </span>
+                      ) : (
+                        <span
+                          className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[10px] font-bold ${
+                            b.status === 'PAID_SUCCESS'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : b.status === 'MENUNGGU_VALIDASI'
+                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                              : b.status === 'PENDING_PAYMENT'
+                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                              : 'bg-red-50 text-red-700 border border-red-200'
+                          }`}
+                        >
+                          {b.status === 'PAID_SUCCESS'
+                            ? '✅ Lunas'
                             : b.status === 'MENUNGGU_VALIDASI'
-                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                            ? '⏳ Menunggu Validasi'
                             : b.status === 'PENDING_PAYMENT'
-                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                            : 'bg-red-50 text-red-700 border border-red-200'
-                        }`}
-                      >
-                        {b.status === 'PAID_SUCCESS'
-                          ? '✅ Lunas'
-                          : b.status === 'MENUNGGU_VALIDASI'
-                          ? '⏳ Menunggu Validasi'
-                          : b.status === 'PENDING_PAYMENT'
-                          ? '⏰ Menunggu Bayar'
-                          : '❌ Dibatalkan'}
-                      </span>
+                            ? '⏰ Menunggu Bayar'
+                            : '❌ Dibatalkan'}
+                        </span>
+                      )}
                     </td>
 
                     <td className="p-4 text-right">
@@ -516,6 +552,22 @@ export default function AdminBookingsPage() {
                         >
                           Audit
                         </button>
+
+                        {/* Tombol Geser Jadwal Pemda */}
+                        {b.status === 'PAID_SUCCESS' && b.rescheduleStatus !== 'PENDING_CUSTOMER' && (
+                          <button
+                            onClick={() => {
+                              setPemdaRescheduleBooking(b);
+                              setPemdaReason('Agenda Resmi Kedinasan Pemerintah Kabupaten Bekasi / DISBUDPORA');
+                              setPemdaAdminNotes('');
+                            }}
+                            className="rounded-xl border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-100 transition flex items-center gap-1"
+                            title="Alihkan jadwal untuk Agenda Pemda (Reschedule Warga)"
+                          >
+                            <Building2 className="h-3.5 w-3.5 text-amber-600" />
+                            <span>Geser Pemda</span>
+                          </button>
+                        )}
                         
                         {/* SUPERADMIN-ONLY ACTIONS: EDIT & DELETE */}
                         {isSuperAdmin && (
@@ -1158,6 +1210,155 @@ export default function AdminBookingsPage() {
                 Konfirmasi Tolak
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PENGALIHAN JADWAL AGENDA DINAS PEMDA */}
+      {pemdaRescheduleBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="relative my-6 w-full max-w-lg rounded-3xl border border-amber-300 bg-surface p-6 shadow-2xl text-fg">
+            <div className="flex items-center justify-between border-b border-line pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-100 text-amber-800 border border-amber-300 shrink-0">
+                  <Building2 className="h-6 w-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-black text-fg">Pengalihan Jadwal Pemda</h3>
+                    <span className="rounded bg-amber-100 text-amber-900 text-[10px] font-black uppercase px-2 py-0.5 border border-amber-300">
+                      Reschedule Warga
+                    </span>
+                  </div>
+                  <p className="text-xs text-fg-muted font-mono">#{pemdaRescheduleBooking.id}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setPemdaRescheduleBooking(null)}
+                className="rounded-lg p-2 text-fg-muted hover:bg-subtle hover:text-fg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmPemdaReschedule} className="mt-4 space-y-4 text-xs">
+              {/* Detail Pesanan Terdampak */}
+              <div className="rounded-2xl border border-line bg-field p-3.5 space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-fg-muted">Nama Pemesan:</span>
+                  <span className="font-bold text-fg">
+                    {pemdaRescheduleBooking.senderName || pemdaRescheduleBooking.user?.name || 'Warga'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-fg-muted">Venue &amp; Lapangan:</span>
+                  <span className="font-bold text-fg">
+                    {pemdaRescheduleBooking.venue?.name} • {pemdaRescheduleBooking.items?.[0]?.field?.name}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-fg-muted">Jadwal Semula:</span>
+                  <span className="font-bold text-amber-800">
+                    {pemdaRescheduleBooking.items?.[0]?.date} • {pemdaRescheduleBooking.items?.map((i: any) => i.timeStart).join(', ')} WIB
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-fg-muted">Total Pembayaran:</span>
+                  <span className="font-black text-emerald-700">
+                    {formatRupiah(pemdaRescheduleBooking.grandTotal)} (Lunas)
+                  </span>
+                </div>
+              </div>
+
+              {/* Template Alasan Resmi Pemda */}
+              <div>
+                <label className="block font-bold text-fg mb-1.5">
+                  Pilih Alasan Agenda Kedinasan Pemda:
+                </label>
+                <div className="space-y-1.5">
+                  {[
+                    'Agenda Resmi Kedinasan Pemerintah Kabupaten Bekasi / DISBUDPORA',
+                    'Kejuaraan & Turnamen Resmi Olahraga Daerah Kab. Bekasi',
+                    'Kunjungan Kerja Protokoler & Pemeriksaan Lapangan Pimpinan Daerah',
+                    'Pemeliharaan Khusus & Sterilisasi Lapangan Pemda',
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setPemdaReason(preset)}
+                      className={`w-full text-left p-2.5 rounded-xl border text-xs font-semibold transition ${
+                        pemdaReason === preset
+                          ? 'border-amber-500 bg-amber-50 text-amber-800 font-bold'
+                          : 'border-line bg-field text-fg-muted hover:bg-subtle'
+                      }`}
+                    >
+                      • {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Input Custom Alasan */}
+              <div>
+                <label className="block font-bold text-fg mb-1">
+                  Atau Rincian Kustom Alasan Kedinasan:
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={pemdaReason}
+                  onChange={(e) => setPemdaReason(e.target.value)}
+                  className="w-full rounded-xl border border-line-strong bg-field py-2.5 px-3 text-xs font-bold text-fg outline-none focus:border-amber-500"
+                />
+              </div>
+
+              {/* Catatan Tambahan Admin */}
+              <div>
+                <label className="block font-bold text-fg mb-1">
+                  Catatan Internal Petugas (Opsional):
+                </label>
+                <input
+                  type="text"
+                  placeholder="Contoh: Disposisi Surat Dinas No. 045/Dispora"
+                  value={pemdaAdminNotes}
+                  onChange={(e) => setPemdaAdminNotes(e.target.value)}
+                  className="w-full rounded-xl border border-line-strong bg-field py-2.5 px-3 text-xs text-fg outline-none focus:border-amber-500"
+                />
+              </div>
+
+              {/* Warning Notice Box */}
+              <div className="rounded-2xl border border-amber-300 bg-amber-50/80 p-3.5 text-[11px] text-amber-900 leading-relaxed space-y-1">
+                <div className="font-bold flex items-center gap-1.5 text-amber-950">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <span>Dampak Sistem Setelah Notifikasi Dikirim:</span>
+                </div>
+                <ul className="list-disc list-inside space-y-0.5 pl-1">
+                  <li>Slot jam lama akan dilepas otomatis sehingga lapangan dapat digunakan Pemda tanpa konflik jadwal.</li>
+                  <li>Surat Pemberitahuan Resmi Mewah akan otomatis muncul di Dashboard &amp; Tiket warga.</li>
+                  <li>Warga dapat memilih tanggal &amp; jam pengganti secara mandiri tanpa biaya tambahan (Rp 0).</li>
+                </ul>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-2 border-t border-line pt-4">
+                <button
+                  type="button"
+                  disabled={isSubmittingPemda}
+                  onClick={() => setPemdaRescheduleBooking(null)}
+                  className="rounded-xl border border-line-strong px-4 py-2.5 text-xs font-bold text-fg-subtle hover:bg-subtle transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingPemda}
+                  className="flex items-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 text-xs font-black text-white hover:bg-amber-700 shadow-md shadow-amber-600/20 transition disabled:opacity-50"
+                >
+                  {isSubmittingPemda && <RefreshCw className="h-4 w-4 animate-spin" />}
+                  <span>Kirim Pemberitahuan Geser Jadwal</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
