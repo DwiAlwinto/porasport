@@ -56,6 +56,9 @@ export const UserDashboard: React.FC = () => {
   const userBookings = bookings.filter((b) => b.userId === activeUser?.id);
   const filteredBookings = userBookings.filter((b) => {
     if (statusTab === 'ALL') return true;
+    if (statusTab === 'PENDING_PAYMENT') {
+      return b.status === 'PENDING_PAYMENT' || b.status === 'MENUNGGU_VALIDASI';
+    }
     return b.status === statusTab;
   });
 
@@ -177,7 +180,7 @@ export const UserDashboard: React.FC = () => {
             }`}
           >
             {t.userDashboard.tabPending} (
-            {userBookings.filter((b) => b.status === 'PENDING_PAYMENT').length})
+            {userBookings.filter((b) => b.status === 'PENDING_PAYMENT' || b.status === 'MENUNGGU_VALIDASI').length})
           </button>
           <button
             onClick={() => setStatusTab('PAID_SUCCESS')}
@@ -245,9 +248,9 @@ export const UserDashboard: React.FC = () => {
                     <span className="text-xs text-slate-400">• {booking.createdAt}</span>
                   </div>
                   <div>
-                    {booking.status === 'PENDING_PAYMENT' && (
+                    {(booking.status === 'PENDING_PAYMENT' || booking.status === 'MENUNGGU_VALIDASI') && (
                       <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
-                        {booking.paymentProofUrl
+                        {booking.status === 'MENUNGGU_VALIDASI' || booking.paymentProofUrl
                           ? t.userDashboard.statusPendingValidation
                           : t.userDashboard.statusPendingPayment}
                       </span>
@@ -323,7 +326,7 @@ export const UserDashboard: React.FC = () => {
                         </button>
                       )}
 
-                      {booking.status === 'PENDING_PAYMENT' && (
+                      {(booking.status === 'PENDING_PAYMENT' || booking.status === 'MENUNGGU_VALIDASI') && (
                         <>
                           <button
                             onClick={() => {
@@ -335,14 +338,16 @@ export const UserDashboard: React.FC = () => {
                             className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow hover:bg-emerald-700 transition"
                           >
                             <Upload className="h-4 w-4" />
-                            <span>{booking.paymentProofUrl ? 'Ganti Bukti Bayar' : 'Unggah Bukti Bayar'}</span>
+                            <span>{booking.paymentProofUrl || booking.status === 'MENUNGGU_VALIDASI' ? 'Ganti Bukti Bayar' : 'Unggah Bukti Bayar'}</span>
                           </button>
-                          <button
-                            onClick={() => cancelBooking(booking.id)}
-                            className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-100 transition"
-                          >
-                            {t.userDashboard.cancelOrder}
-                          </button>
+                          {booking.status === 'PENDING_PAYMENT' && (
+                            <button
+                              onClick={() => cancelBooking(booking.id)}
+                              className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-100 transition"
+                            >
+                              {t.userDashboard.cancelOrder}
+                            </button>
+                          )}
                         </>
                       )}
 

@@ -22,6 +22,7 @@ import { Booking } from '../../types';
 export const CheckoutPage: React.FC = () => {
   const {
     activeBookingDraft,
+    setActiveBookingDraft,
     activeUser,
     completePayment,
     setActiveView,
@@ -113,7 +114,7 @@ export const CheckoutPage: React.FC = () => {
     }
   }, [activeUser, senderPhone]);
 
-  if (!activeBookingDraft) {
+  if (!activeBookingDraft && !completedBooking) {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center p-6 text-center">
         <h2 className="text-xl font-bold text-slate-800">{t.checkout.noActiveOrder}</h2>
@@ -128,8 +129,11 @@ export const CheckoutPage: React.FC = () => {
     );
   }
 
-  const venue = venues.find((v) => v.id === activeBookingDraft.venueId);
-  const subtotal = activeBookingDraft.items.reduce((sum, item) => sum + item.price, 0);
+  const venueId = activeBookingDraft?.venueId || completedBooking?.venueId;
+  const venue = venues.find((v) => v.id === venueId);
+  const subtotal = activeBookingDraft
+    ? activeBookingDraft.items.reduce((sum, item) => sum + item.price, 0)
+    : (completedBooking?.grandTotal || completedBooking?.totalPrice || 0);
   const serviceFee = 0;
   const grandTotal = subtotal;
 
@@ -412,7 +416,10 @@ export const CheckoutPage: React.FC = () => {
             </div>
 
             <button
-              onClick={() => setActiveView('USER_DASHBOARD')}
+              onClick={() => {
+                setActiveBookingDraft(null);
+                setActiveView('USER_DASHBOARD');
+              }}
               className="mt-6 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-sm font-bold text-white transition hover:bg-slate-800 shadow-md shadow-slate-900/20"
             >
               {t.checkout.checkBookingStatus}
@@ -436,8 +443,8 @@ export const CheckoutPage: React.FC = () => {
                   <div>
                     <h3 className="font-bold text-slate-900 text-lg">{venue?.name}</h3>
                     <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                      <p className="text-sm text-slate-500">{(t.categories as any)[activeBookingDraft.sportCategory] || activeBookingDraft.sportCategory.replace('_', ' ')}</p>
-                      {activeBookingDraft.userCategoryLabel && (
+                      <p className="text-sm text-slate-500">{activeBookingDraft?.sportCategory ? ((t.categories as any)[activeBookingDraft.sportCategory] || activeBookingDraft.sportCategory.replace('_', ' ')) : ''}</p>
+                      {activeBookingDraft?.userCategoryLabel && (
                         <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
                           {activeBookingDraft.userCategoryLabel}
                         </span>
@@ -456,7 +463,7 @@ export const CheckoutPage: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4 text-slate-400" />
                       <span className="text-sm font-bold text-slate-700">
-                        {activeBookingDraft.items[0]?.date} • {activeBookingDraft.items.map(i => i.timeStart).join(', ')} WIB
+                        {activeBookingDraft?.items[0]?.date} • {activeBookingDraft?.items.map(i => i.timeStart).join(', ')} WIB
                       </span>
                     </div>
                     <div className="flex items-center gap-4">
@@ -920,13 +927,13 @@ export const CheckoutPage: React.FC = () => {
                   <div className="space-y-4">
                     <div>
                       <h4 className="font-bold text-slate-900 mb-1">{venue?.name}</h4>
-                      {activeBookingDraft.userCategoryLabel && (
+                      {activeBookingDraft?.userCategoryLabel && (
                         <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 mb-1">
                           {activeBookingDraft.userCategoryLabel}
                         </span>
                       )}
                       <p className="text-xs text-slate-500">
-                        {activeBookingDraft.items[0]?.date} • {activeBookingDraft.items.map(i => i.timeStart).join(', ')}
+                        {activeBookingDraft?.items[0]?.date} • {activeBookingDraft?.items.map(i => i.timeStart).join(', ')}
                       </p>
                     </div>
                     

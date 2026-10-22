@@ -28,6 +28,7 @@ export const CheckoutModal: React.FC = () => {
     isCheckoutModalOpen,
     setIsCheckoutModalOpen,
     activeBookingDraft,
+    setActiveBookingDraft,
     activeUser,
     completePayment,
     setActiveView,
@@ -133,10 +134,13 @@ export const CheckoutModal: React.FC = () => {
     return () => clearInterval(interval);
   }, [isCheckoutModalOpen]);
 
-  if (!isCheckoutModalOpen || !activeBookingDraft) return null;
+  if (!isCheckoutModalOpen || (!activeBookingDraft && !completedBooking)) return null;
 
-  const venue = venues.find((v) => v.id === activeBookingDraft.venueId);
-  const subtotal = activeBookingDraft.items.reduce((sum, item) => sum + item.price, 0);
+  const venueId = activeBookingDraft?.venueId || completedBooking?.venueId;
+  const venue = venues.find((v) => v.id === venueId);
+  const subtotal = activeBookingDraft
+    ? activeBookingDraft.items.reduce((sum, item) => sum + item.price, 0)
+    : (completedBooking?.grandTotal || completedBooking?.totalPrice || 0);
   const serviceFee = 0;
   const grandTotal = subtotal;
 
@@ -461,6 +465,7 @@ export const CheckoutModal: React.FC = () => {
                 <button
                   onClick={() => {
                     setIsCheckoutModalOpen(false);
+                    setActiveBookingDraft(null);
                     setActiveView('USER_DASHBOARD');
                   }}
                   className="rounded-xl bg-emerald-600 px-6 py-3 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition"
@@ -468,7 +473,10 @@ export const CheckoutModal: React.FC = () => {
                   Lihat di Riwayat Pemesanan
                 </button>
                 <button
-                  onClick={() => setIsCheckoutModalOpen(false)}
+                  onClick={() => {
+                    setIsCheckoutModalOpen(false);
+                    setActiveBookingDraft(null);
+                  }}
                   className="rounded-xl border border-slate-200 bg-white px-6 py-3 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
                 >
                   Tutup
@@ -488,9 +496,9 @@ export const CheckoutModal: React.FC = () => {
                     </div>
                     <h4 className="mt-1 text-sm font-black text-slate-900">{venue?.name}</h4>
                     <p className="text-xs text-slate-600">
-                      {activeBookingDraft.items[0]?.fieldName} • {activeBookingDraft.items[0]?.date} (
+                      {activeBookingDraft?.items[0]?.fieldName} • {activeBookingDraft?.items[0]?.date} (
                       <span className="font-bold text-slate-900">
-                        {activeBookingDraft.items.map((i) => `${i.timeStart}-${i.timeEnd}`).join(', ')} WIB
+                        {activeBookingDraft?.items.map((i) => `${i.timeStart}-${i.timeEnd}`).join(', ')} WIB
                       </span>
                       )
                     </p>

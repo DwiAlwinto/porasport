@@ -199,14 +199,23 @@ export async function validateAndProcessPaymentProof(
         },
       });
 
-      await tx.paymentProof.create({
-        data: {
+      await tx.paymentProof.upsert({
+        where: { bookingId },
+        create: {
           bookingId,
           fileUrl: uploadResult.path,
           fileName: uploadResult.fileName,
           fileSize: uploadResult.fileSize,
           mimeType: uploadResult.mimeType,
           ocrStatus: ocrResult?.passed ? 'PASSED' : 'FAILED',
+        },
+        update: {
+          fileUrl: uploadResult.path,
+          fileName: uploadResult.fileName,
+          fileSize: uploadResult.fileSize,
+          mimeType: uploadResult.mimeType,
+          ocrStatus: ocrResult?.passed ? 'PASSED' : 'FAILED',
+          uploadedAt: new Date(),
         },
       });
 

@@ -52,6 +52,7 @@ interface AppContextType {
   setActiveView: (view: AppView) => void;
   setIsSchemaModalOpen: (open: boolean) => void;
   setIsCheckoutModalOpen: (open: boolean) => void;
+  setActiveBookingDraft: (draft: any) => void;
   
   // Search actions
   handleSearchSubmit: (sport?: SportCategory, city?: CityLocation, date?: string) => void;
@@ -543,7 +544,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         totalPrice: totalAmount,
         serviceFee: 0,
         grandTotal: totalAmount,
-        status: validationResult.newStatus === 'PAID_SUCCESS' ? 'PAID_SUCCESS' : 'PENDING_PAYMENT',
+        status: validationResult.newStatus === 'PAID_SUCCESS' ? 'PAID_SUCCESS' : ((validationResult.newStatus as any) || 'MENUNGGU_VALIDASI'),
         paymentMethod: method,
         createdAt: res.booking.createdAt.toString(),
         expiresAt: new Date(Date.now() + 60 * 60000).toISOString(),
@@ -561,7 +562,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       try {
         sessionStorage.removeItem('gelora_checkout_draft_v1');
       } catch {}
-      setActiveBookingDraft(null);
+      // Draft tidak langsung diset null di sini agar CheckoutPage dan CheckoutModal
+      // tidak mengalami glitch/flash "Tidak Ada Pesanan Aktif" sebelum selesai me-render completedBooking
       return mappedBooking;
     }
 
@@ -617,7 +619,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               ? {
                   ...b,
                   paymentProofUrl: 'uploaded',
-                  status: res.newStatus === 'PAID_SUCCESS' ? 'PAID_SUCCESS' : b.status,
+                  status: res.newStatus === 'PAID_SUCCESS' ? 'PAID_SUCCESS' : ((res.newStatus as any) || 'MENUNGGU_VALIDASI'),
                   ocrValidationResult: res.ocrResult,
                 }
               : b
@@ -710,6 +712,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setActiveView,
         setIsSchemaModalOpen,
         setIsCheckoutModalOpen,
+        setActiveBookingDraft,
         handleSearchSubmit,
         startBookingCheckout,
         completePayment,

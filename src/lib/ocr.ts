@@ -29,28 +29,80 @@ export interface OCRValidationResult {
   detectedKeywords: string[]
 }
 
-const DEFAULT_KEYWORDS = ['DISBUDPORA', 'BJB', 'PAN']
+const DEFAULT_KEYWORDS = ['DISBUDPORA', 'BJB', 'PAN', 'QRIS']
 
 function extractAmounts(text: string): number[] {
-  const matches = text.match(/(?:Rp\.?\s*)?(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?)/g)
+  // Dukung pola IDR 10.000,00 / Rp. 10.000 / 10,000.00 / 10.000 / 10000
+  const matches = text.match(/(?:(?:Rp|IDR)\.?\s*)?(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?|\d+)/gi)
   if (!matches) return []
   
-  return matches
-    .map(m => m.replace(/[^\d]/g, ''))
-    .map(n => parseInt(n, 10))
-    .filter(n => !isNaN(n) && n > 0)
+  const amounts = new Set<number>()
+
+  for (const m of matches) {
+    const cleaned = m.replace(/^(?:Rp|IDR)\.?\s*/i, '').trim()
+    if (!cleaned) continue
+
+    // Jika berakhiran 2 digit desimal (,00 atau .00 untuk sen rupiah)
+    if (/[.,]\d{2}$/.test(cleaned)) {
+      const withoutCents = cleaned.slice(0, -3).replace(/[^\d]/g, '')
+      const valWithoutCents = parseInt(withoutCents, 10)
+      if (!isNaN(valWithoutCents) && valWithoutCents > 0) {
+        amounts.add(valWithoutCents)
+      }
+    }
+
+    // Ekstraksi nilai mentah jika berupa nominal utuh tanpa desimal
+    const rawDigits = cleaned.replace(/[^\d]/g, '')
+    const valRaw = parseInt(rawDigits, 10)
+    if (!isNaN(valRaw) && valRaw > 0) {
+      amounts.add(valRaw)
+    }
+  }
+
+  return Array.from(amounts)
 }
 
 function checkDateMatch(text: string): { match: boolean; detected?: string } {
-  const today = new Date()
-  const patterns = [
-    today.toISOString().split('T')[0].replace(/-/g, ''),     // YYYYMMDD
-    today.toISOString().split('T')[0],                         // YYYY-MM-DD
-    today.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }), // DD/MM/YYYY
-    today.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }),    // DD Month YYYY
-    today.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),   // D MMM YYYY
-    `${today.getDate()}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`, // DD/MM/YYYY
-  ]
+  const datesToCheck: Date[] = []
+  const now = new Date()
+
+  // Periksa toleransi H-1, Hari Ini, dan H+1 untuk mengakomodasi perbedaan zona waktu (UTC vs WIB / Asia/Jakarta)
+  for (let offset = -1; offset <= 1; offset++) {
+    const d = new Date(now)
+    d.setDate(d.getDate() + offset)
+    datesToCheck.push(d)
+  }
+
+  const patterns = new Set<string>()
+
+  for (const d of datesToCheck) {
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    const dNum = String(d.getDate())
+
+    // 1. Numerik: YYYYMMDD, YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY
+    patterns.add(`${yyyy}${mm}${dd}`)
+    patterns.add(`${yyyy}-${mm}-${dd}`)
+    patterns.add(`${dd}/${mm}/${yyyy}`)
+    patterns.add(`${dd}-${mm}-${yyyy}`)
+    patterns.add(`${dNum}/${mm}/${yyyy}`)
+    patterns.add(`${dNum}-${mm}-${yyyy}`)
+
+    // 2. Format Indonesia (id-ID)
+    patterns.add(d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }))
+    patterns.add(d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }))
+    patterns.add(d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }))
+    patterns.add(d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }))
+
+    // 3. Format Bahasa Inggris (en-GB / en-US): "22 October 2026", "22 Oct 2026", "October 22, 2026"
+    patterns.add(d.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }))
+    patterns.add(d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }))
+    patterns.add(d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))
+    patterns.add(d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }))
+    patterns.add(d.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }))
+    patterns.add(d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }))
+  }
 
   const upperText = text.toUpperCase()
   for (const pattern of patterns) {
