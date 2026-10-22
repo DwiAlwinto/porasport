@@ -507,9 +507,9 @@ export async function submitPaymentProofAction(bookingId: string, proofData: {
       return { success: false, error: 'Referensi bukti pembayaran tidak valid.' };
     }
 
-    const nik = String(proofData.nik || '').replace(/\D/g, '');
-    if (nik.length < 10 || nik.length > 20) {
-      return { success: false, error: 'NIK harus terdiri dari 10-20 digit angka.' };
+    const nik = String(proofData.nik || '').trim().replace(/[^a-zA-Z0-9-]/g, '');
+    if (nik.length < 8 || nik.length > 20) {
+      return { success: false, error: 'Nomor identitas (NIK / NISN / NIM / NPSN) harus terdiri dari 8-20 karakter.' };
     }
 
     const updated = await prisma.booking.update({

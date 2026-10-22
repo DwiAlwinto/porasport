@@ -222,7 +222,11 @@ export default async function AdminDashboardPage() {
                     <td className="py-3 font-mono font-bold text-fg">{b.id}</td>
                     <td className="py-3 text-fg-subtle">
                       <div className="font-bold text-fg">{b.senderName || b.user?.name || 'Customer'}</div>
-                      <div className="text-[10px] text-fg-faint font-mono">{b.nik ? `NIK: ${b.nik}` : b.user?.email}</div>
+                      <div className="text-[10px] text-fg-faint font-mono">
+                        {b.nik
+                          ? `${b.nik.length === 10 ? 'NISN' : b.nik.length === 8 ? 'NPSN/NIM' : b.nik.length === 16 ? 'NIK' : 'ID'}: ${b.nik}`
+                          : b.user?.email}
+                      </div>
                     </td>
                     <td className="py-3 text-fg-subtle">{b.venue?.name || '-'}</td>
                     <td className="py-3 font-semibold text-emerald-700">{b.paymentMethod}</td>

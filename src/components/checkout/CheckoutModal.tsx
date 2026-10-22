@@ -58,6 +58,28 @@ export const CheckoutModal: React.FC = () => {
   // Cancel booking state
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
+  // Deteksi apakah booking ini untuk kategori Pelajar / Sekolah / Institusi Pendidikan
+  const isEducationOrStudent = React.useMemo(() => {
+    if (!activeBookingDraft) return false;
+    const cat = activeBookingDraft.userCategory;
+    const label = (activeBookingDraft.userCategoryLabel || '').toLowerCase();
+    const keywords = [
+      'sekolah',
+      'pelajar',
+      'siswa',
+      'perguruan tinggi',
+      'institusi',
+      'mahasiswa',
+      'kampus',
+      'universitas',
+      'student',
+      'school'
+    ];
+    if (keywords.some((k) => label.includes(k))) return true;
+    if (cat === 'AMATIR') return true;
+    return false;
+  }, [activeBookingDraft]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // QRIS settings loaded dynamically from DB
@@ -186,11 +208,20 @@ export const CheckoutModal: React.FC = () => {
       return;
     }
 
-    // Validasi NIK
-    const cleanNik = nik.trim().replace(/\D/g, '');
-    if (!cleanNik || cleanNik.length < 16) {
-      setFormError('Nomor Induk Kependudukan (NIK) wajib 16 digit angka.');
-      return;
+    // Validasi NIK / NISN / NIM / NPSN
+    let cleanId = '';
+    if (isEducationOrStudent) {
+      cleanId = nik.trim().replace(/[^a-zA-Z0-9-]/g, '');
+      if (!cleanId || cleanId.length < 8) {
+        setFormError('Nomor identitas (NISN / NIM / NPSN / NIK) minimal 8 karakter.');
+        return;
+      }
+    } else {
+      cleanId = nik.trim().replace(/\D/g, '');
+      if (!cleanId || cleanId.length !== 16) {
+        setFormError('Nomor Induk Kependudukan (NIK) wajib 16 digit angka.');
+        return;
+      }
     }
 
     // Validasi bukti transfer
@@ -205,7 +236,7 @@ export const CheckoutModal: React.FC = () => {
 
     try {
       const realBooking = await completePayment('unused-id', 'QRIS', {
-        nik: cleanNik,
+        nik: cleanId,
         npwp: npwp.trim() || undefined,
         senderName: senderName.trim() || activeUser?.name,
         senderPhone: senderPhone.trim() || activeUser?.phone,
@@ -549,18 +580,37 @@ export const CheckoutModal: React.FC = () => {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label className="text-xs font-bold text-slate-800 flex items-center justify-between">
-                      <span>Nomor Induk Kependudukan (NIK) *</span>
-                      <span className="text-[10px] text-slate-400 font-normal">16 digit</span>
+                      <span>
+                        {isEducationOrStudent ? 'Nomor Identitas (NIK / NISN / NIM / NPSN) *' : 'Nomor Induk Kependudukan (NIK) *'}
+                      </span>
+                      {isEducationOrStudent ? (
+                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                          NISN / NIM / NPSN / NIK
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 font-normal">16 digit</span>
+                      )}
                     </label>
                     <input
                       type="text"
-                      maxLength={16}
+                      maxLength={isEducationOrStudent ? 20 : 16}
                       required
-                      placeholder="Contoh: 3216012345670001"
+                      placeholder={isEducationOrStudent ? 'Masukkan NISN, NIM, NPSN, atau NIK' : 'Contoh: 3216012345670001'}
                       value={nik}
-                      onChange={(e) => setNik(e.target.value.replace(/\D/g, ''))}
+                      onChange={(e) => {
+                        const val = isEducationOrStudent
+                          ? e.target.value.replace(/[^a-zA-Z0-9-]/g, '')
+                          : e.target.value.replace(/\D/g, '');
+                        setNik(val);
+                      }}
                       className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none transition focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-600/20"
                     />
+                    {isEducationOrStudent && (
+                      <p className="mt-1.5 text-[11px] text-emerald-700 font-medium flex items-start gap-1 bg-emerald-50/70 p-2 rounded-lg border border-emerald-100">
+                        <span className="shrink-0">💡</span>
+                        <span>Siswa dapat mengisi NISN (10 digit), Mahasiswa mengisi NIM/NPM, Perwakilan Sekolah mengisi NPSN (8 digit), atau NIK.</span>
+                      </p>
+                    )}
                   </div>
 
                   <div>

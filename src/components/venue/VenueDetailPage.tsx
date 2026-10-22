@@ -479,7 +479,8 @@ export const VenueDetailPage: React.FC = () => {
       activeField.sportType,
       items,
       userCategory,
-      selectedRateId
+      selectedRateId,
+      selectedCategoryLabel
     );
   };
 

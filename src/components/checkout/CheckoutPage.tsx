@@ -60,6 +60,28 @@ export const CheckoutPage: React.FC = () => {
   const [paymentNotesTxt, setPaymentNotesTxt] = useState('Rekening Resmi Dinas Kebudayaan, Pemuda dan Olahraga Kabupaten Bekasi.');
   const [isDownloadingQris, setIsDownloadingQris] = useState(false);
 
+  // Deteksi apakah booking ini untuk kategori Pelajar / Sekolah / Institusi Pendidikan
+  const isEducationOrStudent = React.useMemo(() => {
+    if (!activeBookingDraft) return false;
+    const cat = activeBookingDraft.userCategory;
+    const label = (activeBookingDraft.userCategoryLabel || '').toLowerCase();
+    const keywords = [
+      'sekolah',
+      'pelajar',
+      'siswa',
+      'perguruan tinggi',
+      'institusi',
+      'mahasiswa',
+      'kampus',
+      'universitas',
+      'student',
+      'school'
+    ];
+    if (keywords.some((k) => label.includes(k))) return true;
+    if (cat === 'AMATIR') return true;
+    return false;
+  }, [activeBookingDraft]);
+
   useEffect(() => {
     // Load QRIS settings
     getSystemSettings().then((s) => {
@@ -180,11 +202,20 @@ export const CheckoutPage: React.FC = () => {
       return;
     }
 
-    // Validasi NIK
-    const cleanNik = nik.trim().replace(/\D/g, '');
-    if (!cleanNik || cleanNik.length < 16) {
-      setFormError('Nomor Induk Kependudukan (NIK) wajib 16 digit angka.');
-      return;
+    // Validasi NIK / NISN / NIM / NPSN
+    let cleanId = '';
+    if (isEducationOrStudent) {
+      cleanId = nik.trim().replace(/[^a-zA-Z0-9-]/g, '');
+      if (!cleanId || cleanId.length < 8) {
+        setFormError(t.checkout.identityOrNikError || 'Nomor identitas (NISN / NIM / NPSN / NIK) minimal 8 karakter.');
+        return;
+      }
+    } else {
+      cleanId = nik.trim().replace(/\D/g, '');
+      if (!cleanId || cleanId.length !== 16) {
+        setFormError('Nomor Induk Kependudukan (NIK) wajib 16 digit angka.');
+        return;
+      }
     }
 
     // Validasi bukti transfer
@@ -199,7 +230,7 @@ export const CheckoutPage: React.FC = () => {
 
     try {
       const realBooking = await completePayment('unused-id', 'QRIS', {
-        nik: cleanNik,
+        nik: cleanId,
         npwp: npwp.trim() || undefined,
         senderName: senderName.trim() || activeUser?.name,
         senderPhone: senderPhone.trim() || activeUser?.phone,
@@ -389,7 +420,14 @@ export const CheckoutPage: React.FC = () => {
                 <div className="p-4 sm:p-6 bg-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                   <div>
                     <h3 className="font-bold text-slate-900 text-lg">{venue?.name}</h3>
-                    <p className="text-sm text-slate-500 mt-0.5">{(t.categories as any)[activeBookingDraft.sportCategory] || activeBookingDraft.sportCategory.replace('_', ' ')}</p>
+                    <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                      <p className="text-sm text-slate-500">{(t.categories as any)[activeBookingDraft.sportCategory] || activeBookingDraft.sportCategory.replace('_', ' ')}</p>
+                      {activeBookingDraft.userCategoryLabel && (
+                        <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
+                          {activeBookingDraft.userCategoryLabel}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-1">{t.checkout.subtotal}</p>
@@ -511,18 +549,45 @@ export const CheckoutPage: React.FC = () => {
                   
                   <div className="space-y-5">
                     <div>
-                      <label className="mb-1.5 block text-xs font-bold text-slate-700 flex justify-between">
-                        <span>{t.checkout.nikLabel} <span className="text-red-500">*</span></span>
+                      <label className="mb-1.5 block text-xs font-bold text-slate-700 flex justify-between items-center">
+                        <span>
+                          {isEducationOrStudent
+                            ? (t.checkout.identityOrNikLabel || 'Nomor Identitas (NIK / NISN / NIM / NPSN)')
+                            : t.checkout.nikLabel}{' '}
+                          <span className="text-red-500">*</span>
+                        </span>
+                        {isEducationOrStudent ? (
+                          <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                            NISN / NIM / NPSN / NIK
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-normal text-slate-400">16 digit</span>
+                        )}
                       </label>
                       <input
                         type="text"
                         required
                         value={nik}
-                        onChange={(e) => setNik(e.target.value)}
-                        placeholder={t.checkout.nikPlaceholder}
-                        maxLength={16}
+                        onChange={(e) => {
+                          const val = isEducationOrStudent
+                            ? e.target.value.replace(/[^a-zA-Z0-9-]/g, '')
+                            : e.target.value.replace(/\D/g, '');
+                          setNik(val);
+                        }}
+                        placeholder={
+                          isEducationOrStudent
+                            ? (t.checkout.identityOrNikPlaceholder || 'Masukkan NISN, NIM, NPSN, atau NIK')
+                            : t.checkout.nikPlaceholder
+                        }
+                        maxLength={isEducationOrStudent ? 20 : 16}
                         className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-medium text-slate-900 focus:border-[#ff5722] focus:ring-1 focus:ring-[#ff5722] outline-none transition"
                       />
+                      {isEducationOrStudent && (
+                        <p className="mt-1.5 text-[11px] text-emerald-700 font-medium flex items-start gap-1.5 bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-100">
+                          <span className="shrink-0">💡</span>
+                          <span>{t.checkout.identityOrNikHelper || 'Siswa dapat mengisi NISN (10 digit), Mahasiswa mengisi NIM/NPM, Perwakilan Sekolah mengisi NPSN (8 digit), atau NIK.'}</span>
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -765,6 +830,11 @@ export const CheckoutPage: React.FC = () => {
                   <div className="space-y-4">
                     <div>
                       <h4 className="font-bold text-slate-900 mb-1">{venue?.name}</h4>
+                      {activeBookingDraft.userCategoryLabel && (
+                        <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 mb-1">
+                          {activeBookingDraft.userCategoryLabel}
+                        </span>
+                      )}
                       <p className="text-xs text-slate-500">
                         {activeBookingDraft.items[0]?.date} • {activeBookingDraft.items.map(i => i.timeStart).join(', ')}
                       </p>

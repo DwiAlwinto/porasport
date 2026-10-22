@@ -29,6 +29,15 @@ import {
 } from '../../../actions/adminActions';
 import { reTriggerOCRValidation } from '../../../actions/paymentValidationActions';
 
+const getIdentityLabel = (idNum?: string | null) => {
+  if (!idNum) return 'NIK';
+  const clean = idNum.trim();
+  if (clean.length === 10) return 'NISN';
+  if (clean.length === 8) return 'NPSN/NIM';
+  if (clean.length === 16) return 'NIK';
+  return 'ID / NIK';
+};
+
 export default function AdminBookingsPage() {
   const router = useRouter();
   const { role } = useAdminSession();
@@ -298,7 +307,7 @@ export default function AdminBookingsPage() {
                         {b.senderName || b.user?.name || 'Customer'}
                       </div>
                       <div className="text-[10px] text-fg-muted font-mono">
-                        {b.nik ? `NIK: ${b.nik}` : b.user?.email}
+                        {b.nik ? `${getIdentityLabel(b.nik)}: ${b.nik}` : b.user?.email}
                       </div>
                     </td>
 
@@ -428,7 +437,7 @@ export default function AdminBookingsPage() {
                     />
                     <div className="space-y-1 text-fg-subtle">
                       <div>Nama Pemilik Rekening: <strong className="text-fg">{selectedBooking.senderName || '-'}</strong></div>
-                      <div>NIK: <strong className="text-fg font-mono">{selectedBooking.nik || '-'}</strong></div>
+                      <div>{getIdentityLabel(selectedBooking.nik)}: <strong className="text-fg font-mono">{selectedBooking.nik || '-'}</strong></div>
                       {selectedBooking.npwp && <div>NPWP: <strong className="text-fg font-mono">{selectedBooking.npwp}</strong></div>}
                     </div>
                   </div>
@@ -448,7 +457,7 @@ export default function AdminBookingsPage() {
                       </p>
                       <div className="mt-2 pt-2 border-t border-amber-200/60 space-y-1 text-fg-subtle">
                         <div>Nama Pemesan: <strong className="text-fg">{selectedBooking.senderName || selectedBooking.user?.name || '-'}</strong></div>
-                        <div>NIK: <strong className="text-fg font-mono">{selectedBooking.nik || '-'}</strong></div>
+                        <div>{getIdentityLabel(selectedBooking.nik)}: <strong className="text-fg font-mono">{selectedBooking.nik || '-'}</strong></div>
                         {selectedBooking.npwp && <div>NPWP: <strong className="text-fg font-mono">{selectedBooking.npwp}</strong></div>}
                       </div>
                       <p className="text-[10px] text-amber-700 italic pt-1">

@@ -40,6 +40,7 @@ interface AppContextType {
     venueId: string;
     sportCategory: SportCategory;
     userCategory: UserCategory | null;
+    userCategoryLabel?: string | null;
     rateId?: string | null;
     items: BookingItem[];
   } | null;
@@ -61,7 +62,8 @@ interface AppContextType {
     sportCategory: SportCategory,
     items: BookingItem[],
     userCategory?: UserCategory | null,
-    rateId?: string | null
+    rateId?: string | null,
+    userCategoryLabel?: string | null
   ) => void;
   completePayment: (
     bookingId: string,
@@ -369,6 +371,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     venueId: string;
     sportCategory: SportCategory;
     userCategory: UserCategory | null;
+    userCategoryLabel?: string | null;
     rateId?: string | null;
     items: BookingItem[];
   } | null>(() => {
@@ -448,9 +451,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     sportCategory: SportCategory,
     items: BookingItem[],
     userCategory: UserCategory | null = null,
-    rateId?: string | null
+    rateId?: string | null,
+    userCategoryLabel?: string | null
   ) => {
-    const draft = { venueId, sportCategory, userCategory, rateId, items };
+    const draft = { venueId, sportCategory, userCategory, userCategoryLabel, rateId, items };
     setActiveBookingDraft(draft);
     try {
       sessionStorage.setItem('gelora_checkout_draft_v1', JSON.stringify(draft));
