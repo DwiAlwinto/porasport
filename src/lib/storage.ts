@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
+import fs from 'fs'
+import pathModule from 'path'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -189,4 +191,85 @@ export async function deletePaymentProof(value: string | null | undefined): Prom
     return false
   }
   return true
+}
+
+/**
+ * Hapus seluruh berkas bukti pembayaran untuk satu ID pesanan (bookingId).
+ *
+ * Menghapus:
+ *  1. Berkas spesifik dari `knownPaths` (misal dari `booking.paymentProofUrl` atau `paymentProof.fileUrl`).
+ *  2. Seluruh berkas yang ada di folder Supabase Storage `payment-proofs/<bookingId>/`
+ *     (termasuk berkas bukti lama jika pengguna pernah mengganti bukti transfer).
+ *  3. Berkas fisik lokal di server (jika ada file di `public/` dengan path lokal).
+ */
+export async function deleteBookingProofFiles(
+  bookingId: string,
+  knownPaths: (string | null | undefined)[] = []
+): Promise<{ success: boolean; deletedCount: number; errors: string[] }> {
+  const errors: string[] = []
+  let deletedCount = 0
+
+  const safeBookingId = String(bookingId).replace(/[^a-zA-Z0-9-]/g, '')
+  const folderPath = `payment-proofs/${safeBookingId}`
+
+  const pathsToDelete = new Set<string>()
+
+  // 1. Kumpulkan dari knownPaths yang tercatat di database
+  for (const p of knownPaths) {
+    const sp = toStoragePath(p)
+    if (sp) pathsToDelete.add(sp)
+  }
+
+  // 2. Scan isi direktori folder pada Supabase Storage (membersihkan riwayat berkas ganti bukti)
+  try {
+    const { data: files, error: listError } = await supabase.storage
+      .from(PROOF_BUCKET)
+      .list(folderPath)
+
+    if (!listError && files && Array.isArray(files)) {
+      for (const f of files) {
+        if (f.name) {
+          pathsToDelete.add(`${folderPath}/${f.name}`)
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn('[Storage] List bucket folder warning:', err?.message)
+  }
+
+  // 3. Hapus berkas dari Supabase Storage secara batch
+  if (pathsToDelete.size > 0) {
+    const fileList = Array.from(pathsToDelete)
+    const { error: removeError } = await supabase.storage
+      .from(PROOF_BUCKET)
+      .remove(fileList)
+
+    if (removeError) {
+      console.error('[Storage] Supabase files removal failed:', removeError)
+      errors.push(removeError.message)
+    } else {
+      deletedCount += fileList.length
+    }
+  }
+
+  // 4. Periksa dan hapus file lokal di disk server jika ada
+  for (const p of knownPaths) {
+    if (!p) continue
+    if (p.includes('/uploads/') || p.startsWith('/images/')) {
+      try {
+        const cleanRelPath = p.startsWith('/') ? p.slice(1) : p
+        if (!cleanRelPath.includes('..')) {
+          const localPath = pathModule.join(process.cwd(), 'public', cleanRelPath)
+          if (fs.existsSync(localPath)) {
+            await fs.promises.unlink(localPath)
+            deletedCount++
+          }
+        }
+      } catch (fileErr: any) {
+        console.warn('[Storage] Local file unlink warning:', fileErr?.message)
+      }
+    }
+  }
+
+  return { success: errors.length === 0, deletedCount, errors }
 }

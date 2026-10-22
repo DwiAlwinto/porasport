@@ -337,7 +337,7 @@ export default function AdminBookingsPage() {
     startTransition(async () => {
       const res = await deleteSuperAdminBookingAction(deletingBooking.id);
       if (res.success) {
-        showToast(`Pesanan #${deletingBooking.id} berhasil dihapus permanen!`);
+        showToast(res.message || `Pesanan #${deletingBooking.id} dan berkas bukti QRIS berhasil dibersihkan permanen!`);
         setDeletingBooking(null);
         fetchData();
       } else {
@@ -1162,7 +1162,7 @@ export default function AdminBookingsPage() {
             </div>
 
             <p className="text-xs text-fg-muted leading-relaxed">
-              Tindakan ini akan <strong>menghapus pesanan secara permanen</strong> dari database, menghapus struk transfer terkait, dan <strong>mengembalikan kuota slot</strong> menjadi tersedia kembali untuk pengguna lain.
+              Tindakan ini akan <strong>menghapus pesanan secara permanen</strong> dari database, <strong>membersihkan file fisik bukti transfer/QRIS dari folder penyimpanan memori</strong>, dan <strong>mengembalikan kuota slot</strong> menjadi tersedia kembali untuk pengguna lain.
             </p>
 
             <div className="mt-5 flex justify-end gap-2">

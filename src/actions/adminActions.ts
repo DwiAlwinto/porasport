@@ -6,7 +6,7 @@ import { BookingStatus, SportCategory, UserCategory } from '@prisma/client';
 import { resolveFieldPrice } from '../lib/pricing';
 import { todayKey, dateFromKey } from '../lib/dateKeys';
 import { toPublicMessage, UserFacingError } from '../lib/userFacingError';
-import { getSignedProofUrl } from '../lib/storage';
+import { getSignedProofUrl, deleteBookingProofFiles } from '../lib/storage';
 import { getCurrentAdminAction } from './authActions';
 
 export async function verifyAdminOrSuperAdmin() {
@@ -1223,22 +1223,33 @@ export async function updateSuperAdminBookingAction(input: UpdateSuperAdminBooki
 
 /**
  * 14. CRUD SUPERADMIN: Hapus Pesanan Permanen (Delete Booking)
+ * Menghapus pesanan, melepas kuota slot, dan membersihkan berkas fisik bukti QRIS dari penyimpanan
  */
 export async function deleteSuperAdminBookingAction(bookingId: string) {
   await verifySuperAdmin();
   try {
+    // 1. Ambil data pesanan beserta referensi file bukti sebelum record dihapus
+    const existingBooking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        items: true,
+        paymentProof: true,
+      },
+    });
+
+    if (!existingBooking) {
+      throw new UserFacingError('Pesanan tidak ditemukan.');
+    }
+
+    const proofPaths: (string | null | undefined)[] = [
+      existingBooking.paymentProofUrl,
+      existingBooking.paymentProof?.fileUrl,
+    ];
+
+    // 2. Transaksi penghapusan atomik pada database
     await prisma.$transaction(async (tx) => {
-      const booking = await tx.booking.findUnique({
-        where: { id: bookingId },
-        include: { items: true },
-      });
-
-      if (!booking) {
-        throw new UserFacingError('Pesanan tidak ditemukan.');
-      }
-
-      // 1. Lepas kuota pada slot yang terhubung
-      for (const item of booking.items) {
+      // Lepas kuota pada slot yang terhubung
+      for (const item of existingBooking.items) {
         const slot = await tx.fieldSlot.findFirst({
           where: {
             fieldId: item.fieldId,
@@ -1263,16 +1274,27 @@ export async function deleteSuperAdminBookingAction(bookingId: string) {
         }
       }
 
-      // 2. Hapus PaymentProof, Payment, BookingItem, Booking
+      // Hapus PaymentProof, Payment, BookingItem, Booking
       await tx.paymentProof.deleteMany({ where: { bookingId } });
       await tx.payment.deleteMany({ where: { bookingId } });
       await tx.bookingItem.deleteMany({ where: { bookingId } });
       await tx.booking.delete({ where: { id: bookingId } });
     }, { maxWait: 10000, timeout: 20000 });
 
+    // 3. Bersihkan seluruh file fisik bukti transfer/QRIS dari folder penyimpanan Supabase & server
+    try {
+      const cleanupResult = await deleteBookingProofFiles(bookingId, proofPaths);
+      console.log(`[Storage Cleanup] Berkas bukti bayar untuk pesanan ${bookingId} berhasil dibersihkan (${cleanupResult.deletedCount} file).`);
+    } catch (cleanErr: any) {
+      console.warn(`[Storage Cleanup Warning] Kendala saat membersihkan file bukti untuk ${bookingId}:`, cleanErr?.message);
+    }
+
     revalidatePath('/');
     revalidatePath('/admin/bookings');
-    return { success: true };
+    return {
+      success: true,
+      message: 'Pesanan, alokasi slot, dan file fisik bukti pembayaran berhasil dibersihkan permanen.',
+    };
   } catch (error: any) {
     console.error('Failed to delete booking:', error);
     return { success: false, error: toPublicMessage(error, 'Gagal menghapus pesanan.') };
