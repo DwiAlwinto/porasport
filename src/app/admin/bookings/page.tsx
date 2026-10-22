@@ -52,6 +52,57 @@ const getIdentityLabel = (idNum?: string | null) => {
   return 'ID / NIK';
 };
 
+const renderBookingStatusBadge = (b: { status: string; rescheduleStatus?: string | null }) => {
+  if (b.rescheduleStatus === 'PENDING_CUSTOMER') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">
+        🏛️ Geser Pemda (Menunggu Warga)
+      </span>
+    );
+  }
+  if (b.rescheduleStatus === 'RESOLVED') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+        ✅ Rescheduled Resmi
+      </span>
+    );
+  }
+
+  switch (b.status) {
+    case 'COMPLETED':
+      return (
+        <span className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+          🏆 Selesai Bermain
+        </span>
+      );
+    case 'PAID_SUCCESS':
+      return (
+        <span className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          ✅ Lunas
+        </span>
+      );
+    case 'MENUNGGU_VALIDASI':
+      return (
+        <span className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+          ⏳ Menunggu Validasi
+        </span>
+      );
+    case 'PENDING_PAYMENT':
+      return (
+        <span className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+          ⏰ Menunggu Bayar
+        </span>
+      );
+    case 'CANCELLED':
+    default:
+      return (
+        <span className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">
+          ❌ Dibatalkan
+        </span>
+      );
+  }
+};
+
 const HOURS_LIST = [
   { hour: 6, label: '06:00 - 07:00' },
   { hour: 7, label: '07:00 - 08:00' },
@@ -432,6 +483,7 @@ export default function AdminBookingsPage() {
             <option value="MENUNGGU_VALIDASI">⏳ Menunggu Verifikasi Struk (QRIS)</option>
             <option value="PENDING_PAYMENT">⏰ Menunggu Pembayaran (Belum Bayar)</option>
             <option value="PAID_SUCCESS">✅ Lunas &amp; Tiket Terbit</option>
+            <option value="COMPLETED">🏆 Selesai Bermain</option>
             <option value="CANCELLED">❌ Dibatalkan / Ditolak</option>
           </select>
         </div>
@@ -512,35 +564,7 @@ export default function AdminBookingsPage() {
                     </td>
 
                     <td className="p-4">
-                      {b.rescheduleStatus === 'PENDING_CUSTOMER' ? (
-                        <span className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">
-                          🏛️ Geser Pemda (Menunggu Warga)
-                        </span>
-                      ) : b.rescheduleStatus === 'RESOLVED' ? (
-                        <span className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                          ✅ Rescheduled Resmi
-                        </span>
-                      ) : (
-                        <span
-                          className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[10px] font-bold ${
-                            b.status === 'PAID_SUCCESS'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : b.status === 'MENUNGGU_VALIDASI'
-                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                              : b.status === 'PENDING_PAYMENT'
-                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                              : 'bg-red-50 text-red-700 border border-red-200'
-                          }`}
-                        >
-                          {b.status === 'PAID_SUCCESS'
-                            ? '✅ Lunas'
-                            : b.status === 'MENUNGGU_VALIDASI'
-                            ? '⏳ Menunggu Validasi'
-                            : b.status === 'PENDING_PAYMENT'
-                            ? '⏰ Menunggu Bayar'
-                            : '❌ Dibatalkan'}
-                        </span>
-                      )}
+                      {renderBookingStatusBadge(b)}
                     </td>
 
                     <td className="p-4 text-right">
@@ -628,7 +652,7 @@ export default function AdminBookingsPage() {
               <div className="flex items-center justify-between rounded-2xl bg-field p-4 border border-line">
                 <div>
                   <span className="text-[10px] font-bold uppercase text-fg-faint">Status</span>
-                  <div className="mt-1 font-bold text-fg">{selectedBooking.status}</div>
+                  <div className="mt-1">{renderBookingStatusBadge(selectedBooking)}</div>
                 </div>
                 <div>
                   <span className="text-[10px] font-bold uppercase text-fg-faint">Metode</span>

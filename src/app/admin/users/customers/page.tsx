@@ -494,6 +494,10 @@ export default function AdminCustomersPage() {
                           className={`rounded-lg px-2.5 py-0.5 text-[10px] font-bold ${
                             b.status === 'PAID_SUCCESS'
                               ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : b.status === 'COMPLETED'
+                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                              : b.status === 'MENUNGGU_VALIDASI'
+                              ? 'bg-cyan-50 text-cyan-700 border border-cyan-200'
                               : b.status === 'PENDING_PAYMENT'
                               ? 'bg-amber-50 text-amber-700 border border-amber-200'
                               : 'bg-red-50 text-red-700 border border-red-200'
@@ -501,8 +505,12 @@ export default function AdminCustomersPage() {
                         >
                           {b.status === 'PAID_SUCCESS'
                             ? 'Lunas'
-                            : b.status === 'PENDING_PAYMENT'
+                            : b.status === 'COMPLETED'
+                            ? 'Selesai Bermain'
+                            : b.status === 'MENUNGGU_VALIDASI'
                             ? 'Menunggu Validasi'
+                            : b.status === 'PENDING_PAYMENT'
+                            ? 'Menunggu Bayar'
                             : 'Dibatalkan'}
                         </span>
                       </div>
