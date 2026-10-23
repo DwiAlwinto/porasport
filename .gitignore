@@ -24,3 +24,8 @@ query.sql
 temp_seed/
 _old_vite/
 
+# SonarQube cache & temp files
+.scannerwork/
+.sonar/
+
+
