@@ -28,4 +28,9 @@ _old_vite/
 .scannerwork/
 .sonar/
 
-
+# Dokumen laporan & script lokal
+*.docx
+*.xlsx
+*.pdf
+*.py
+__pycache__/
