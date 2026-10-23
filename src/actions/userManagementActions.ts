@@ -2,6 +2,7 @@
 
 import { prisma } from '../lib/prisma';
 import { hashPassword } from '../lib/auth';
+import crypto from 'crypto';
 import { getAdminSession } from './authActions';
 import { toPublicMessage } from '../lib/userFacingError';
 import { revalidatePath } from 'next/cache';
@@ -329,7 +330,9 @@ export async function createCustomerUserAction(data: {
     const name = data.name?.trim();
     const email = data.email?.trim().toLowerCase();
     const phone = data.phone?.trim() || null;
-    const password = data.password?.trim() || 'disbudpora123';
+    // Hindari hard-coded credentials (CWE-259 / typescript:S2068):
+    // Gunakan password yang diinput atau generate password acak aman secara kriptografis
+    const userPassword = data.password?.trim() || crypto.randomBytes(8).toString('hex');
 
     if (!name || !email) {
       return { success: false, error: 'Nama lengkap dan email wajib diisi.' };
@@ -339,7 +342,7 @@ export async function createCustomerUserAction(data: {
       return { success: false, error: 'Format email tidak valid.' };
     }
 
-    if (password.length < 8) {
+    if (userPassword.length < 8) {
       return { success: false, error: 'Kata sandi minimal 8 karakter.' };
     }
 
@@ -364,7 +367,7 @@ export async function createCustomerUserAction(data: {
         name,
         email,
         phone,
-        passwordHash: hashPassword(password),
+        passwordHash: hashPassword(userPassword),
         role: 'USER',
         avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`,
       },

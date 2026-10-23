@@ -631,12 +631,12 @@ export default function AdminCustomersPage() {
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="font-bold text-fg">Kata Sandi Akun</label>
-                  <span className="text-[10px] text-fg-faint">Default: disbudpora123</span>
+                  <span className="text-[10px] text-fg-faint">Kosongkan untuk auto-generate acak</span>
                 </div>
                 <div className="relative">
                   <input
                     type={showCreatePassword ? 'text' : 'password'}
-                    placeholder="Kosongkan jika ingin default: disbudpora123"
+                    placeholder="Minimal 8 karakter atau biarkan kosong untuk acak"
                     value={createForm.password}
                     onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
                     className="w-full rounded-xl border border-line-strong bg-field py-2.5 pl-3.5 pr-10 text-xs font-semibold text-fg outline-none focus:border-emerald-500"

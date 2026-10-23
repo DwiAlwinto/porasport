@@ -8,6 +8,7 @@ import { todayKey, dateFromKey } from '../lib/dateKeys';
 import { toPublicMessage, UserFacingError } from '../lib/userFacingError';
 import { getSignedProofUrl, deleteBookingProofFiles } from '../lib/storage';
 import { getCurrentAdminAction } from './authActions';
+import crypto from 'crypto';
 
 export async function verifyAdminOrSuperAdmin() {
   const result = await getCurrentAdminAction();
@@ -987,7 +988,9 @@ export async function createSuperAdminBookingAction(input: CreateSuperAdminBooki
       });
     }
 
-    const bookingId = `GLR-ADM-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+    // Gunakan CSPRNG (crypto.randomInt) sesuai standar CWE-338 / SonarQube typescript:S2245
+    const randomSuffix = crypto.randomInt(100, 1000);
+    const bookingId = `GLR-ADM-${Date.now().toString(36).toUpperCase()}-${randomSuffix}`;
     const isPool = field.sportType === 'RENANG';
     const quantity = 1;
     const finalPrice = Math.max(0, input.totalAmount);
