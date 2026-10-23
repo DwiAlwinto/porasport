@@ -32,7 +32,9 @@ const securityHeaders = [
 const nextConfig = {
   poweredByHeader: false,
 
-  ...(isDev ? { allowedDevOrigins: ['192.168.8.101', '192.168.1.101'] } : {}),
+  ...(isDev && process.env.ALLOWED_DEV_ORIGINS
+    ? { allowedDevOrigins: process.env.ALLOWED_DEV_ORIGINS.split(',').map((s) => s.trim()) }
+    : {}),
 
   serverExternalPackages: ['@google-cloud/vision'],
 
