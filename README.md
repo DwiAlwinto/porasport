@@ -15,7 +15,7 @@ pembayaran QRIS dengan verifikasi bukti transfer otomatis, dan portal admin.
 
 ## Menjalankan secara lokal
 
-**Prasyarat:** Node.js 20.9 atau lebih baru, dan sebuah proyek Supabase.
+**Prasyarat:** Node.js 20.18+ atau 22.11+ (LTS dengan Security Patch), dan sebuah proyek Supabase.
 
 ```bash
 # 1. Pasang dependensi
