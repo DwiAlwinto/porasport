@@ -79,7 +79,7 @@ RINCIAN 18 MASALAH KRITIS, RISIKO OPERASIONAL & SOLUSI TEKNIS
      Dengan mengunci selalu dari ID terkecil ke terbesar, deadlock mustahil terjadi.
 
 14. Done : SELISIH PEMBULATAN PECAHAN RUPIAH PADA PAKET MULTI-JAM (AUDIT BPK)
-   - Lokasi: src/actions/venueActions.ts
+   - Lokasi: src/actions/venueActions.ts & src/components/venue/VenueDetailPage.tsx
    - Masalah: Ketika total paket dibagi rata ke beberapa slot (misal Rp 100.000 / 3 slot =
      Rp 33.333,33), pembulatan Math.round menghasilkan 33.333 * 3 = 99.999. Terdapat selisih
      Rp 1 antara tabel induk bookings.grandTotal (100.000) dan akumulasi booking_items.price (99.999).

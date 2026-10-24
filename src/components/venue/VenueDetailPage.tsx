@@ -656,6 +656,15 @@ export const VenueDetailPage: React.FC = () => {
       };
     });
 
+    // PENTING (AUDIT BPK): Alokasikan sisa pembulatan ke item terakhir agar total item di checkout persis sama dengan total paket
+    if ((isDailyPackage || isMultiHourPackage) && items.length > 0) {
+      const sumItems = items.reduce((acc, it) => acc + it.price, 0);
+      const diff = selectedTotalPrice - sumItems;
+      if (diff !== 0) {
+        items[items.length - 1].price += diff;
+      }
+    }
+
     setIsReservingLock(true);
     try {
       const res = await reserveTemporaryBookingAction({
