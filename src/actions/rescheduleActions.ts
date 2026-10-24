@@ -54,7 +54,7 @@ export async function initiatePemdaRescheduleAction(params: {
       .map((i) => `${i.timeStart}-${i.timeEnd}`)
       .join(', ') + ' WIB';
 
-    // 1. Lepaskan kuota slot lama pada FieldSlot agar fasilitas dapat digunakan oleh Pemda
+    // 1. Kunci slot lama pada FieldSlot untuk agenda dinas Pemda agar tidak bisa disewa warga lain
     await prisma.$transaction(async (tx) => {
       for (const item of booking.items) {
         const slot = await tx.fieldSlot.findFirst({
@@ -66,22 +66,12 @@ export async function initiatePemdaRescheduleAction(params: {
         });
 
         if (slot) {
-          const qty = item.quantity || 1;
-          const newBooked = Math.max(0, slot.bookedCapacity - qty);
-          const newStatus =
-            slot.status === 'MAINTENANCE'
-              ? 'MAINTENANCE'
-              : newBooked >= slot.maxCapacity
-              ? 'BOOKED'
-              : 'AVAILABLE';
-
           await tx.fieldSlot.update({
             where: { id: slot.id },
             data: {
-              bookedCapacity: newBooked,
-              status: newStatus,
-              bookingId: newBooked === 0 ? null : slot.bookingId,
-              bookedByUserId: newBooked === 0 ? null : slot.bookedByUserId,
+              status: 'MAINTENANCE',
+              bookedByUserId: `BLOCKED: Agenda Kedinasan Pemkab Bekasi - ${reason.trim()}`,
+              bookingId: null,
             },
           });
         }
@@ -303,9 +293,40 @@ export async function confirmCustomerRescheduleAction(params: {
         });
       }
 
-      // Validasi kapasitas slot baru
+      // 1. Bebaskan kuota slot lama jika masih terikat pada pesanan ini
+      for (const item of booking.items) {
+        if (item.slotId && item.slotId !== targetSlot.id) {
+          const oldSlot = await tx.fieldSlot.findUnique({
+            where: { id: item.slotId },
+          });
+
+          if (oldSlot) {
+            const oldQty = item.quantity || 1;
+            const newOldBooked = Math.max(0, oldSlot.bookedCapacity - oldQty);
+            const isOldFull = newOldBooked >= oldSlot.maxCapacity;
+            const newOldStatus =
+              oldSlot.status === 'MAINTENANCE'
+                ? 'MAINTENANCE'
+                : isOldFull
+                ? 'BOOKED'
+                : 'AVAILABLE';
+
+            await tx.fieldSlot.update({
+              where: { id: oldSlot.id },
+              data: {
+                bookedCapacity: newOldBooked,
+                status: newOldStatus,
+                bookingId: newOldBooked === 0 ? null : (oldSlot.bookingId === booking.id ? null : oldSlot.bookingId),
+                bookedByUserId: newOldBooked === 0 ? null : (oldSlot.bookedByUserId === booking.userId ? null : oldSlot.bookedByUserId),
+              },
+            });
+          }
+        }
+      }
+
+      // 2. Validasi kapasitas slot baru
       if (targetSlot.status === 'MAINTENANCE') {
-        throw new UserFacingError('Slot jadwal yang Anda pilih sedang dalam masa pemeliharaan (Maintenance). Silakan pilih jam lain.');
+        throw new UserFacingError('Slot jadwal yang Anda pilih sedang dalam masa pemeliharaan / agenda dinas. Silakan pilih jam lain.');
       }
 
       const availableCapacity = targetSlot.maxCapacity - targetSlot.bookedCapacity;
@@ -313,19 +334,29 @@ export async function confirmCustomerRescheduleAction(params: {
         throw new UserFacingError('Kapasitas slot pada jam yang Anda pilih sudah terisi penuh oleh pengguna lain. Silakan pilih jam atau tanggal lainnya.');
       }
 
-      // Update kapasitas slot baru
+      // Update kapasitas slot baru secara atomik anti-race condition
       const newBookedCap = targetSlot.bookedCapacity + qty;
       const newStatus = newBookedCap >= targetSlot.maxCapacity ? 'BOOKED' : 'AVAILABLE';
 
-      await tx.fieldSlot.update({
-        where: { id: targetSlot.id },
+      const updateResult = await tx.fieldSlot.updateMany({
+        where: {
+          id: targetSlot.id,
+          bookedCapacity: { lte: targetSlot.maxCapacity - qty },
+          status: { not: 'MAINTENANCE' },
+        },
         data: {
           bookedCapacity: newBookedCap,
           status: newStatus,
-          bookingId: booking.id,
-          bookedByUserId: booking.userId,
+          bookingId: targetSlot.bookingId ? targetSlot.bookingId : booking.id,
+          bookedByUserId: targetSlot.bookedByUserId ? targetSlot.bookedByUserId : booking.userId,
         },
       });
+
+      if (updateResult.count === 0) {
+        throw new UserFacingError(
+          `Slot jam ${timeStart} pada tanggal ${newDateStr} baru saja terisi penuh oleh pengguna lain. Silakan pilih jadwal pengganti lainnya.`
+        );
+      }
 
       // Update seluruh BookingItem dengan tanggal & jam baru
       for (const item of booking.items) {
@@ -381,6 +412,7 @@ export async function requestRescheduleRefundAction(bookingId: string, refundNot
 
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
+      include: { items: true },
     });
 
     if (!booking) {
@@ -391,13 +423,46 @@ export async function requestRescheduleRefundAction(bookingId: string, refundNot
       return { success: false, error: 'Akses ditolak.' };
     }
 
-    await prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        rescheduleStatus: 'REJECTED_REFUND',
-        adminNotes: `${booking.adminNotes ? booking.adminNotes + ' | ' : ''}Pengajuan Refund oleh Warga: ${refundNotes?.trim() || 'Berhalangan di tanggal lain'}`,
-      },
-    });
+    await prisma.$transaction(async (tx) => {
+      // Bebaskan kuota slot lama jika masih terikat pada booking ini
+      for (const item of booking.items) {
+        if (item.slotId) {
+          const oldSlot = await tx.fieldSlot.findUnique({
+            where: { id: item.slotId },
+          });
+
+          if (oldSlot) {
+            const oldQty = item.quantity || 1;
+            const newOldBooked = Math.max(0, oldSlot.bookedCapacity - oldQty);
+            const isOldFull = newOldBooked >= oldSlot.maxCapacity;
+            const newOldStatus =
+              oldSlot.status === 'MAINTENANCE'
+                ? 'MAINTENANCE'
+                : isOldFull
+                ? 'BOOKED'
+                : 'AVAILABLE';
+
+            await tx.fieldSlot.update({
+              where: { id: oldSlot.id },
+              data: {
+                bookedCapacity: newOldBooked,
+                status: newOldStatus,
+                bookingId: newOldBooked === 0 ? null : (oldSlot.bookingId === booking.id ? null : oldSlot.bookingId),
+                bookedByUserId: newOldBooked === 0 ? null : (oldSlot.bookedByUserId === booking.userId ? null : oldSlot.bookedByUserId),
+              },
+            });
+          }
+        }
+      }
+
+      await tx.booking.update({
+        where: { id: bookingId },
+        data: {
+          rescheduleStatus: 'REJECTED_REFUND',
+          adminNotes: `${booking.adminNotes ? booking.adminNotes + ' | ' : ''}Pengajuan Refund oleh Warga: ${refundNotes?.trim() || 'Berhalangan di tanggal lain'}`,
+        },
+      });
+    }, { maxWait: 10000, timeout: 20000 });
 
     revalidatePath('/dashboard');
     revalidatePath('/admin/bookings');
