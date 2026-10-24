@@ -1,0 +1,242 @@
+================================================================================
+MASTER AUDIT FORENSIK SISTEM BOOKING FASILITAS OLAHRAGA DISBUDPORA KAB. BEKASI
+TOTAL 18 TEMUAN CELAH KRITIS: BISNIS, KEAMANAN SIBER, KUOTA, & KEUANGAN DAERAH
+================================================================================
+
+Disusun untuk  : Dinas Kebudayaan, Pemuda dan Olahraga (DISBUDPORA) Kab. Bekasi
+Tingkat Audit  : Deep-Dive Forensic Architecture & Business Logic Audit
+Total Temuan   : 18 Celah Masalah yang Harus Diantisipasi
+
+================================================================================
+RINGKASAN 4 DIMENSI UTAMA
+================================================================================
+Dimensi 1: Integritas Kuota & Database Concurrency (Poin 1, 4, 5, 7, 13, 14)
+Dimensi 2: Keamanan Siber, E-Ticketing & Anti-Fraud (Poin 3, 6, 10, 12, 15)
+Dimensi 3: Keuangan Daerah, Kasir & Regulasi Pemda (Poin 8, 9, 11, 18)
+Dimensi 4: Resiliensi Jaringan & UX Recovery (Poin 2, 16, 17)
+
+================================================================================
+RINCIAN 18 MASALAH KRITIS, RISIKO OPERASIONAL & SOLUSI TEKNIS
+================================================================================
+
+--------------------------------------------------------------------------------
+[DIMENSI 1: INTEGRITAS KUOTA & DATABASE CONCURRENCY]
+--------------------------------------------------------------------------------
+
+1. KERUSAKAN KUOTA MULTI-KAPASITAS (KOLAM RENANG AQUATIC & TREK ATLETIK)
+   - Lokasi: src/actions/adminActions.ts & src/actions/paymentValidationActions.ts
+   - Masalah: Pada Kolam Renang (kapasitas 30 orang), saat admin/cron membatalkan
+     atau menyetujui tiket, status slot dipaksa menjadi 'BOOKED' atau 'AVAILABLE'
+     secara kasar tanpa memperhitungkan jumlah perenang riil (item.quantity).
+   - Risiko: 1 orang beli tiket renang menyebabkan 29 kuota lainnya tertutup bagi
+     warga lain. Sebaliknya, saat 1 tiket batal dari 15 orang, data penguncian
+     14 perenang lainnya ikut terhapus.
+   - Solusi: Hitung secara proporsional:
+     * Batal: bookedCapacity = Math.max(0, slot.bookedCapacity - item.quantity).
+       Jika bookedCapacity < maxCapacity, status menjadi AVAILABLE.
+     * Lunas: Status hanya BOOKED jika bookedCapacity >= maxCapacity.
+
+4. KEBOCORAN SLOT LAMA SAAT RESCHEDULE KEDINASAN PEMDA
+   - Lokasi: src/actions/rescheduleActions.ts
+   - Masalah: Saat warga menyetujui jadwal baru pengganti agenda resmi Pemda,
+     sistem mengalokasikan slot baru namun LUPA melepas kuota pada slot lama yang
+     ditinggalkan.
+   - Risiko: Lapangan lama tetap berstatus BOOKED selamanya, memicu kerugian
+     Pendapatan Asli Daerah (PAD) karena lapangan kosong tidak bisa disewa oleh
+     pihak lain.
+   - Solusi: Dalam transaksi atomik yang sama, kurangi bookedCapacity slot lama
+     dan kembalikan statusnya menjadi AVAILABLE.
+
+5. TABRAKAN KASIR OFFLINE (WALK-IN) DENGAN PENGUNCI ONLINE
+   - Lokasi: src/actions/adminActions.ts
+   - Masalah: Kasir lapangan mencatat sewa langsung (walk-in cash) dengan perintah
+     upsert tanpa conditional check apakah slot tersebut sedang di-lock oleh warga
+     online yang sedang memindai QRIS.
+   - Risiko: Terjadi bentrok fisik di lapangan antara warga yang sudah bayar online
+     dan pemain walk-in.
+   - Solusi: Pasang conditional atomic update pada kasir walk-in. Jika slot sedang
+     di-lock online (< 10 menit), tolak transaksi walk-in dan tampilkan sisa waktu tunggu.
+
+7. CACAT PEMESANAN PAKET SEHARIAN & MULTI-JAM (SLOT BOLONG)
+   - Lokasi: src/components/venue/VenueDetailPage.tsx
+   - Masalah: Pada "Paket Seharian" (06:00 - 23:00) atau "Paket 3 Jam", jika ada 1 atau 2
+     jam di tengahnya yang sudah terisi penyewa reguler, sistem tetap membiarkan warga
+     memilih sisa jamnya namun tetap menagih tarif seharian penuh (full price).
+   - Risiko: Warga membayar mahal paket seharian penuh, tetapi di tengah permainan
+     mereka dipaksa keluar karena ada penyewa reguler lain yang masuk.
+   - Solusi: Validasi kontinuitas paket: opsi "Paket Seharian" hanya aktif jika SELURUH
+     rentang jam operasional berstatus AVAILABLE.
+
+13. RISIKO DATABASE DEADLOCK PADA PEMESANAN MULTI-SLOT SEKALIGUS
+   - Lokasi: src/actions/venueActions.ts
+   - Masalah: Saat pengguna memesan 2 slot sekaligus (Slot A jam 19:00 dan Slot B jam 20:00),
+     sistem melakukan perulangan mengunci baris slot. Jika Pengguna 1 mengunci urutan [A, B]
+     dan Pengguna 2 mengunci urutan [B, A], PostgreSQL akan melempar Deadlock (Error 40P01).
+   - Risiko: Transaksi gagal acak (internal server error) dan pesanan gagal dibuat
+     meskipun slot masih ada.
+   - Solusi: Lakukan pengurutan deterministik sebelum penguncian baris:
+     sortedItems = [...pricedItems].sort((a, b) => a.slotId.localeCompare(b.slotId)).
+     Dengan mengunci selalu dari ID terkecil ke terbesar, deadlock mustahil terjadi.
+
+14. SELISIH PEMBULATAN PECAHAN RUPIAH PADA PAKET MULTI-JAM (AUDIT BPK)
+   - Lokasi: src/actions/venueActions.ts
+   - Masalah: Ketika total paket dibagi rata ke beberapa slot (misal Rp 100.000 / 3 slot =
+     Rp 33.333,33), pembulatan Math.round menghasilkan 33.333 * 3 = 99.999. Terdapat selisih
+     Rp 1 antara tabel induk bookings.grandTotal (100.000) dan akumulasi booking_items.price (99.999).
+   - Risiko: Temuan selisih pembukuan saat audit keuangan oleh BPK / Inspektorat Daerah.
+   - Solusi: Alokasikan selisih sisa pembulatan (rounding remainder) ke slot terakhir:
+     pricedItems[last].price += (serverTotal - sumOfItems).
+
+--------------------------------------------------------------------------------
+[DIMENSI 2: KEAMANAN SIBER, E-TICKETING & ANTI-FRAUD]
+--------------------------------------------------------------------------------
+
+3. TIKET QR GANDA VIA SCREENSHOT SHARING (MULTI CHECK-IN DI GERBANG)
+   - Lokasi: src/actions/ticketActions.ts
+   - Masalah: Fungsi checkInTicketAction saat ini hanya menambahkan teks string ke adminNotes
+     tanpa memblokir tiket yang sudah pernah di-check-in sebelumnya.
+   - Risiko: Satu tiket resmi di-screenshot dan dibagikan ke teman via WhatsApp, memungkinkan
+     beberapa rombongan masuk secara gratis di gerbang berbeda.
+   - Solusi: Pasang pengecekan tegas: jika tiket sudah berstatus pernah masuk (CHECKED_IN:),
+     tolak pemindaian dan tampilkan peringatan: "Tiket ini SUDAH DIGUNAKAN pada pukul ... WIB".
+
+6. SPAM PENGUNGGAHAN BUKTI BAYAR BODONG / STRUK PALSU
+   - Lokasi: src/actions/paymentValidationActions.ts
+   - Masalah: Pengguna dapat mengunggah gambar hoax/struk palsu berkali-kali untuk memperpanjang
+     status MENUNGGU_VALIDASI agar slot tidak lepas.
+   - Risiko: Lapangan aslinya kosong tapi terkunci berjam-jam karena admin kasir harus memeriksa
+     antrean struk palsu.
+   - Solusi: Batasi maksimal 2 kali percobaan upload ulang per pesanan. Jika 2 kali ditolak admin,
+     batalkan pesanan dan lepaskan slot seketika.
+
+10. SCANNER TIKET TIDAK MENGECEK TANGGAL & JAM KEDALUWARSA
+   - Lokasi: src/actions/ticketActions.ts
+   - Masalah: Scanner hanya mengecek status === 'PAID_SUCCESS'. Tanggal sewa (item.date) dan jam
+     berakhir tidak diverifikasi.
+   - Risiko: Tiket bulan lalu jika di-scan hari ini tetap menampilkan centang hijau "TIKET SAH & VALID".
+   - Solusi: Tambahkan validasi tanggal:
+     * Jika tanggal sewa bukan hari ini: tolak dengan pesan "Tiket Kedaluwarsa (Jadwal: [Tanggal])".
+     * Atur jendela masuk resmi: 30 menit sebelum timeStart hingga sesi timeEnd berakhir.
+
+12. KEBOCORAN SUBSIDI TARIF PELAJAR / ATLET DI PINTU GERBANG
+   - Lokasi: src/actions/ticketActions.ts
+   - Masalah: Pelajar/sekolah mendapatkan diskon retribusi resmi. Namun pada tampilan scanner
+     petugas gerbang, tidak ada instruksi tegas apakah penyewa adalah kategori Pelajar.
+   - Risiko: Klub umum/orang dewasa menyalahgunakan tarif subsidi pelajar untuk menghemat biaya
+     tanpa pernah diperiksa kartu identitasnya di pintu masuk.
+   - Solusi: Tampilkan banner mencolok pada layar scanner petugas:
+     "Kategori: Pelajar/Sekolah - PETUGAS WAJIB PERIKSA KARTU PELAJAR / SURAT TUGAS".
+
+15. CELAH IDOR (INSECURE DIRECT OBJECT REFERENCE) PADA PEMINDAI TIKET
+   - Lokasi: src/actions/ticketActions.ts
+   - Masalah: Fungsi verifikasi publik saat ini mengizinkan pencarian tiket berdasarkan ID database
+     langsung ({ id: clean } seperti GLR-xxx atau WALKIN-xxx).
+   - Risiko: ID walk-in yang berbasis timestamp (WALKIN-1729...) dapat ditebak oleh pihak luar
+     untuk mengintip data pribadi warga (Nama, NIK, No Telepon) atau check-in tanpa token QR fisik.
+   - Solusi: Hapus pencarian berbasis ID langsung untuk verifikasi publik. Wajibkan pencarian tiket
+     HANYA menggunakan token acak berentropi tinggi qrCodeToken.
+
+--------------------------------------------------------------------------------
+[DIMENSI 3: KEUANGAN DAERAH, KASIR & REGULASI PEMDA]
+--------------------------------------------------------------------------------
+
+8. BLOKIR PEMELIHARAAN MENDADAK MENIMPA BOOKING LUNAS TANPA RESCHEDULE
+   - Lokasi: src/actions/adminActions.ts
+   - Masalah: Saat admin memblokir slot untuk pemeliharaan rumput/fasilitas (status: 'MAINTENANCE'),
+     sistem menimpa baris slot tanpa mengecek apakah sudah ada warga yang membayar lunas (PAID_SUCCESS).
+   - Risiko: Warga tiba di stadion malam hari mendapati gerbang dikunci karena renovasi tanpa pemberitahuan resmi.
+   - Solusi: Jika slot yang akan diblokir sudah memiliki pesanan lunas, sistem wajib memunculkan peringatan
+     konfirmasi ke admin dan secara otomatis mengalihkan pesanan warga ke status rescheduleStatus: 'PENDING_CUSTOMER'.
+
+9. UANG MASUK TAPI PESANAN TELANJUR EXPIRED (LATE PAYMENT RECOVERY)
+   - Lokasi: src/actions/paymentValidationActions.ts
+   - Masalah: Warga transfer di menit 09:50, namun karena jaringan seluler lambat, berkas bukti bayar baru
+     terunggah di menit 11:05 (melewati toleransi 60 detik). Booking sudah dibatalkan cron, padahal uang warga
+     sudah terpotong dari m-Banking.
+   - Risiko: Warga panik uangnya hilang dan melayangkan komplain ke dinas. Admin saat ini tidak memiliki tombol
+     untuk memulihkan (restore) pesanan tersebut.
+   - Solusi: Sediakan menu khusus di dashboard admin: "Klaim Pembayaran Tertunda / Resolusi Pembayaran Telat",
+     di mana admin dapat mencocokkan mutasi rekening koran dan memulihkan booking atau memberikan slot alternatif.
+
+11. REKENING REFUND WARGA BELUM TERSTRUKTUR SAAT PEMBATALAN PEMDA
+   - Lokasi: src/actions/rescheduleActions.ts
+   - Masalah: Saat warga menolak jadwal baru dan mengajukan refund, sistem hanya menyimpan catatan teks bebas
+     tanpa meminta Nama Bank, No. Rekening, dan Nama Pemilik Rekening secara terstruktur.
+   - Risiko: Bendahara pengeluaran Disbudpora harus menghubungi warga satu per satu via WhatsApp untuk menanyakan
+     nomor rekening, memperlambat proses pengembalian dana.
+   - Solusi: Sediakan formulir modal rekening refund resmi: Nama Bank (BJB, BCA, Mandiri, BRI, dll.),
+     Nomor Rekening, dan Nama Pemilik Rekening.
+
+18. RISIKO PENGGELAPAN KASIR WALK-IN (ANTI-FRAUD & AUDIT TRAIL)
+   - Lokasi: src/actions/adminActions.ts
+   - Masalah: Kasir offline menerima pembayaran tunai di pos lapangan. Saat ini belum ada tabel riwayat audit
+     (audit log immutable). Oknum kasir nakal bisa membatalkan transaksi tunai di malam hari setelah penyewa
+     pulang dan mengantongi uang retribusinya.
+   - Risiko: Kebocoran Pendapatan Asli Daerah (PAD) dan sanksi audit dari Inspektorat Daerah.
+   - Solusi:
+     1. Kunci transaksi tunai: Pesanan kasir walk-in yang jam pemakaiannya sudah lewat TIDAK BOLEH dibatalkan
+        oleh kasir reguler.
+     2. Catat setiap tindakan pembatalan ke tabel AuditLog (ID Admin, Waktu, Alasan, dan Bukti Persetujuan SuperAdmin).
+
+--------------------------------------------------------------------------------
+[DIMENSI 4: RESILIENSI JARINGAN & UX RECOVERY]
+--------------------------------------------------------------------------------
+
+2. CELAH MONOPOLI JADWAL / SLOT-HOGGING (DENIAL-OF-SERVICE OLEH 1 AKUN)
+   - Lokasi: src/actions/venueActions.ts
+   - Masalah: Tidak ada pembatasan jumlah transaksi PENDING_PAYMENT aktif per akun.
+   - Risiko: Satu orang/bot bisa mengunci puluhan jadwal sekaligus dalam waktu 10 menit, melumpuhkan operasional
+     GOR/Stadion tanpa membayar.
+   - Solusi: Batasi maksimal 1 (atau maksimal 2) pesanan aktif berstatus PENDING_PAYMENT per akun.
+
+16. DATABASE CONNECTION POOL STARVATION SAAT PUNCAK TRAFIK
+   - Lokasi: src/actions/venueActions.ts & src/actions/adminActions.ts
+   - Masalah: Opsi prisma.$transaction(..., { timeout: 20000 }) menahan koneksi database hingga 20 detik.
+     Jika 20 pengguna serentak memesan tiket turnamen, batas koneksi PostgreSQL (biasanya 10-20 pool) langsung habis.
+   - Risiko: Pengguna lain yang sedang membuka halaman depan mendapat error "Timed out fetching a new connection".
+   - Solusi:
+     * Turunkan timeout transaksi menjadi maksimal 5 detik.
+     * Lakukan pembacaan data statis (nama venue, rate, user session) DI LUAR transaksi.
+
+17. GHOST DRAFT RECOVERY SAAT SINYAL WARGA DROP / TERPUTUS
+   - Lokasi: src/components/venue/VenueDetailPage.tsx
+   - Masalah: Saat warga menekan "Setuju & Lanjutkan Pemesanan", server berhasil mengunci slot di database.
+     Namun sinyal 4G warga tiba-tiba putus sebelum respons balik tiba di browser. Browser menampilkan error.
+     Saat warga merefresh halaman 5 detik kemudian, slot yang ingin ia sewa berstatus MERAH (Terkunci oleh dirinya
+     sendiri) dan ia tidak bisa memilihnya selama 10 menit!
+   - Risiko: Pengalaman pengguna sangat buruk; warga merasa sistem buggy dan jadwalnya direbut orang.
+   - Solusi (Fitur Ghost Draft Recovery):
+     Saat halaman venue dimuat: jika slot berstatus PENDING_PAYMENT dan bookedByUserId === user.id, tampilkan
+     banner ramah: "Anda memiliki pemesanan aktif untuk jadwal ini (tersisa X menit). [Lanjutkan Pembayaran Sekarang]".
+
+================================================================================
+MATRIKS PRIORITAS EKSEKUSI
+================================================================================
+TAHAP 1 (PRIORITAS KRITIS - INTEGRITAS DATABASE & ANTI-DEADLOCK):
+- Poin 1 : Koreksi kuota decrement Kolam Renang / Aquatic
+- Poin 4 : Pelepasan slot lama pada Reschedule Pemda
+- Poin 13: Deterministic sort slot locking (Anti-Deadlock)
+- Poin 2 : Limit 1 pending booking per akun (Anti-Monopoli)
+- Poin 17: Ghost lock recovery saat sinyal warga terputus
+
+TAHAP 2 (PRIORITAS KEAMANAN SIBER & E-TICKETING):
+- Poin 3 : Anti-Double Check-in tiket QR (Blokir Screenshot Sharing)
+- Poin 10: Validasi tanggal & jam kedaluwarsa tiket di gerbang
+- Poin 15: Hapus celah IDOR (Wajibkan pencarian tiket via qrCodeToken)
+- Poin 12: Banner verifikasi Kartu Pelajar / Atlet subsidi
+- Poin 6 : Batasi percobaan bukti transfer bodong (Maksimal 2x)
+
+TAHAP 3 (PRIORITAS OPERASIONAL KASIR, KEUANGAN BPK & PEMDA):
+- Poin 5 : Conditional atomic check pada kasir walk-in
+- Poin 7 : Kontinuitas Paket Seharian (Blokir paket jika slot bolong)
+- Poin 14: Alokasi selisih pecahan rupiah standar audit BPK
+- Poin 8 : Proteksi slot pemeliharaan vs booking lunas
+- Poin 9 : Fitur Late Payment Recovery (Uang masuk tapi pesanan expired)
+- Poin 11: Formulir rekening refund resmi Pemda
+- Poin 18: Audit log immutable & kunci pembatalan sewa tunai kasir
+- Poin 16: Optimasi connection pool & timeout transaksi ke 5 detik
+
+================================================================================
+Dokumen disiapkan untuk: DISBUDPORA Kabupaten Bekasi
+Status: Siap dieksekusi bertahap
+================================================================================
