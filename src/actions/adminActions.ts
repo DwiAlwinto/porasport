@@ -274,20 +274,28 @@ export async function manualVerifyPayment(bookingId: string, adminNotes?: string
         },
       });
 
-      // 4. Pastikan status FieldSlot menjadi BOOKED
+      // 4. Perbarui status FieldSlot sesuai kapasitas riil
       for (const item of booking.items) {
-        await tx.fieldSlot.updateMany({
+        const slot = await tx.fieldSlot.findFirst({
           where: {
             fieldId: item.fieldId,
             date: item.date,
             timeStart: item.timeStart,
           },
-          data: {
-            status: 'BOOKED',
-            bookingId: booking.id,
-            bookedByUserId: booking.userId,
-          },
         });
+
+        if (slot) {
+          const isFull = slot.bookedCapacity >= slot.maxCapacity;
+          const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (isFull ? 'BOOKED' : 'AVAILABLE');
+          await tx.fieldSlot.update({
+            where: { id: slot.id },
+            data: {
+              status: newStatus,
+              bookingId: slot.bookingId ? slot.bookingId : booking.id,
+              bookedByUserId: slot.bookedByUserId ? slot.bookedByUserId : booking.userId,
+            },
+          });
+        }
       }
 
       return updatedBooking;
@@ -336,20 +344,31 @@ export async function cancelOrExpireBookingAction(
         },
       });
 
-      // Bebaskan Slot Lapangan agar bisa dipesan kembali
+      // Bebaskan Slot Lapangan secara proporsional sesuai kapasitas yang dibatalkan
       for (const item of booking.items) {
-        await tx.fieldSlot.updateMany({
+        const slot = await tx.fieldSlot.findFirst({
           where: {
             fieldId: item.fieldId,
             date: item.date,
             timeStart: item.timeStart,
           },
-          data: {
-            status: 'AVAILABLE',
-            bookingId: null,
-            bookedByUserId: null,
-          },
         });
+
+        if (slot) {
+          const qty = item.quantity || 1;
+          const newBooked = Math.max(0, slot.bookedCapacity - qty);
+          const isFull = newBooked >= slot.maxCapacity;
+          const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (isFull ? 'BOOKED' : 'AVAILABLE');
+          await tx.fieldSlot.update({
+            where: { id: slot.id },
+            data: {
+              bookedCapacity: newBooked,
+              status: newStatus,
+              bookingId: newBooked === 0 ? null : (slot.bookingId === booking.id ? null : slot.bookingId),
+              bookedByUserId: newBooked === 0 ? null : (slot.bookedByUserId === booking.userId ? null : slot.bookedByUserId),
+            },
+          });
+        }
       }
     }, { maxWait: 10000, timeout: 20000 });
 
@@ -391,20 +410,31 @@ export async function rejectPaymentWithReasonAction(bookingId: string, reason: s
         },
       });
 
-      // Lepaskan slot lapangan agar bisa dipesan kembali
+      // Lepaskan slot lapangan secara proporsional sesuai kapasitas yang ditolak
       for (const item of booking.items) {
-        await tx.fieldSlot.updateMany({
+        const slot = await tx.fieldSlot.findFirst({
           where: {
             fieldId: item.fieldId,
             date: item.date,
             timeStart: item.timeStart,
           },
-          data: {
-            status: 'AVAILABLE',
-            bookingId: null,
-            bookedByUserId: null,
-          },
         });
+
+        if (slot) {
+          const qty = item.quantity || 1;
+          const newBooked = Math.max(0, slot.bookedCapacity - qty);
+          const isFull = newBooked >= slot.maxCapacity;
+          const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (isFull ? 'BOOKED' : 'AVAILABLE');
+          await tx.fieldSlot.update({
+            where: { id: slot.id },
+            data: {
+              bookedCapacity: newBooked,
+              status: newStatus,
+              bookingId: newBooked === 0 ? null : (slot.bookingId === booking.id ? null : slot.bookingId),
+              bookedByUserId: newBooked === 0 ? null : (slot.bookedByUserId === booking.userId ? null : slot.bookedByUserId),
+            },
+          });
+        }
       }
       return updated;
     }, { maxWait: 10000, timeout: 20000 });
@@ -1171,18 +1201,26 @@ export async function updateSuperAdminBookingAction(input: UpdateSuperAdminBooki
         });
 
         for (const item of existing.items) {
-          await tx.fieldSlot.updateMany({
+          const slot = await tx.fieldSlot.findFirst({
             where: {
               fieldId: item.fieldId,
               date: item.date,
               timeStart: item.timeStart,
             },
-            data: {
-              status: 'BOOKED',
-              bookingId: existing.id,
-              bookedByUserId: existing.userId,
-            },
           });
+
+          if (slot) {
+            const isFull = slot.bookedCapacity >= slot.maxCapacity;
+            const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (isFull ? 'BOOKED' : 'AVAILABLE');
+            await tx.fieldSlot.update({
+              where: { id: slot.id },
+              data: {
+                status: newStatus,
+                bookingId: slot.bookingId ? slot.bookingId : existing.id,
+                bookedByUserId: slot.bookedByUserId ? slot.bookedByUserId : existing.userId,
+              },
+            });
+          }
         }
       }
 

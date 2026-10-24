@@ -238,18 +238,26 @@ export async function validateAndProcessPaymentProof(
         })
 
         for (const item of booking.items) {
-          await tx.fieldSlot.updateMany({
+          const slot = await tx.fieldSlot.findFirst({
             where: {
               fieldId: item.fieldId,
               date: item.date,
               timeStart: item.timeStart,
             },
-            data: {
-              status: 'BOOKED',
-              bookingId: booking.id,
-              bookedByUserId: booking.userId,
-            },
-          })
+          });
+
+          if (slot) {
+            const isFull = slot.bookedCapacity >= slot.maxCapacity;
+            const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (isFull ? 'BOOKED' : 'AVAILABLE');
+            await tx.fieldSlot.update({
+              where: { id: slot.id },
+              data: {
+                status: newStatus,
+                bookingId: slot.bookingId ? slot.bookingId : booking.id,
+                bookedByUserId: slot.bookedByUserId ? slot.bookedByUserId : booking.userId,
+              },
+            });
+          }
         }
       }
     })
@@ -347,18 +355,26 @@ export async function triggerOCRValidation(bookingId: string): Promise<Validatio
         })
 
         for (const item of booking.items) {
-          await tx.fieldSlot.updateMany({
+          const slot = await tx.fieldSlot.findFirst({
             where: {
               fieldId: item.fieldId,
               date: item.date,
               timeStart: item.timeStart,
             },
-            data: {
-              status: 'BOOKED',
-              bookingId: booking.id,
-              bookedByUserId: booking.userId,
-            },
-          })
+          });
+
+          if (slot) {
+            const isFull = slot.bookedCapacity >= slot.maxCapacity;
+            const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (isFull ? 'BOOKED' : 'AVAILABLE');
+            await tx.fieldSlot.update({
+              where: { id: slot.id },
+              data: {
+                status: newStatus,
+                bookingId: slot.bookingId ? slot.bookingId : booking.id,
+                bookedByUserId: slot.bookedByUserId ? slot.bookedByUserId : booking.userId,
+              },
+            });
+          }
         }
       }
     })
@@ -430,18 +446,26 @@ export async function manualApproveBooking(
       })
 
       for (const item of booking.items) {
-        await tx.fieldSlot.updateMany({
+        const slot = await tx.fieldSlot.findFirst({
           where: {
             fieldId: item.fieldId,
             date: item.date,
             timeStart: item.timeStart,
           },
-          data: {
-            status: 'BOOKED',
-            bookingId: booking.id,
-            bookedByUserId: booking.userId,
-          },
-        })
+        });
+
+        if (slot) {
+          const isFull = slot.bookedCapacity >= slot.maxCapacity;
+          const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (isFull ? 'BOOKED' : 'AVAILABLE');
+          await tx.fieldSlot.update({
+            where: { id: slot.id },
+            data: {
+              status: newStatus,
+              bookingId: slot.bookingId ? slot.bookingId : booking.id,
+              bookedByUserId: slot.bookedByUserId ? slot.bookedByUserId : booking.userId,
+            },
+          });
+        }
       }
     })
 
