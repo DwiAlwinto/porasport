@@ -15,6 +15,7 @@ import { getPublicFieldSlots } from '../../actions/venueActions';
 import { USER_CATEGORY_LABELS, getUserCategoryLabel, rateCoversHour } from '../../lib/pricing';
 import { getWibTodayKey } from '../../lib/dateKeys';
 import { isServerActionMismatchError, handleServerActionMismatch } from '../../lib/actionErrorHandler';
+import { PemdaBookingTermsModal } from '../booking/PemdaBookingTermsModal';
 import type { UserCategory } from '@prisma/client';
 import {
   MapPin,
@@ -125,6 +126,8 @@ export const VenueDetailPage: React.FC = () => {
 
   // Auth gate state — tampil jika user belum login
   const [showLoginGate, setShowLoginGate] = useState(false);
+  // Modal Ketentuan Agenda Resmi Kedinasan Pemda
+  const [showPemdaTermsModal, setShowPemdaTermsModal] = useState(false);
 
   // CATATAN: Semua hook harus dijalankan tanpa syarat. Karena itu early return
   // untuk venue yang tidak ditemukan diletakkan SESUDAH semua hook di bawah.
@@ -445,6 +448,18 @@ export const VenueDetailPage: React.FC = () => {
       setShowLoginGate(true);
       return;
     }
+
+    // Tampilkan Pop-up Ketentuan Agenda Pemda terlebih dahulu
+    setShowPemdaTermsModal(true);
+  };
+
+  const handleConfirmedTermsAndProceed = () => {
+    setShowPemdaTermsModal(false);
+    executeBookingCheckout();
+  };
+
+  const executeBookingCheckout = () => {
+    if (selectedSlots.length === 0 || !activeField || !selectedVenue) return;
 
     const isDailyPackage =
       selectedRate && selectedRate.unit === 'PER_HARI' && selectedSlots.length > 0;
@@ -1710,6 +1725,27 @@ export const VenueDetailPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ============================================================
+          PEMDA BOOKING TERMS MODAL — Kebijakan Agenda Kedinasan Pemkab
+          ============================================================ */}
+      <PemdaBookingTermsModal
+        isOpen={showPemdaTermsModal}
+        onClose={() => setShowPemdaTermsModal(false)}
+        onAgreeAndProceed={handleConfirmedTermsAndProceed}
+        venueName={selectedVenue?.name}
+        fieldNames={activeField?.name}
+        bookingDate={selectedDate}
+        totalCostFormatted={
+          selectedSlots.length > 0
+            ? new Intl.NumberFormat('id-ID', {
+                style: 'currency',
+                currency: 'IDR',
+                maximumFractionDigits: 0,
+              }).format(selectedTotalPrice)
+            : undefined
+        }
+      />
     </div>
   );
 };
