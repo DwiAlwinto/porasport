@@ -21,6 +21,7 @@ interface PemdaBookingTermsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAgreeAndProceed: () => void;
+  isLoading?: boolean;
   venueName?: string;
   fieldNames?: string;
   bookingDate?: string;
@@ -31,6 +32,7 @@ export const PemdaBookingTermsModal: React.FC<PemdaBookingTermsModalProps> = ({
   isOpen,
   onClose,
   onAgreeAndProceed,
+  isLoading = false,
   venueName,
   fieldNames,
   bookingDate,
@@ -266,29 +268,39 @@ export const PemdaBookingTermsModal: React.FC<PemdaBookingTermsModalProps> = ({
         <div className="px-6 py-4 sm:px-7 border-t border-slate-100 bg-slate-50/70 flex flex-col-reverse sm:flex-row items-center justify-between gap-3">
           <button
             type="button"
+            disabled={isLoading}
             onClick={onClose}
-            className="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 rounded-xl transition text-center"
+            className="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 rounded-xl transition text-center disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Kembali / Pilih Waktu Lain
           </button>
 
           <button
             type="button"
-            disabled={!hasAgreed}
+            disabled={!hasAgreed || isLoading}
             onClick={() => {
-              if (hasAgreed) {
+              if (hasAgreed && !isLoading) {
                 onAgreeAndProceed();
               }
             }}
             className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all duration-200 shadow-sm ${
-              hasAgreed
+              hasAgreed && !isLoading
                 ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-600/25 hover:shadow-md active:scale-98'
                 : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
             }`}
           >
-            {!hasAgreed && <Lock className="h-3.5 w-3.5 opacity-60" />}
-            <span>Setuju &amp; Lanjutkan Pemesanan</span>
-            <ArrowRight className="h-4 w-4" />
+            {isLoading ? (
+              <>
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-400 border-t-emerald-700" />
+                <span>Mengunci Jadwal (10 Menit)...</span>
+              </>
+            ) : (
+              <>
+                {!hasAgreed && <Lock className="h-3.5 w-3.5 opacity-60" />}
+                <span>Setuju &amp; Lanjutkan Pemesanan</span>
+                <ArrowRight className="h-4 w-4" />
+              </>
+            )}
           </button>
         </div>
       </div>

@@ -24,12 +24,14 @@ export async function GET(request: Request) {
   }
 
   try {
-    const now = new Date()
+    // Toleransi (grace period) 60 detik: melindungi berkas bukti transfer yang
+    // sedang dalam proses pengiriman via jaringan agar tidak dibatalkan sepihak.
+    const gracePeriodThreshold = new Date(Date.now() - 60 * 1000);
     
     const expiredBookings = await prisma.booking.findMany({
       where: {
         status: 'PENDING_PAYMENT',
-        expiresAt: { lt: now },
+        expiresAt: { lt: gracePeriodThreshold },
       },
       include: { items: true },
     })

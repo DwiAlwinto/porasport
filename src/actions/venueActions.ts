@@ -371,7 +371,7 @@ export async function createBooking(data: {
           serviceFee,
           grandTotal,
           qrCodeToken: `QR-${crypto.randomUUID().replace(/-/g, '').slice(0, 20).toUpperCase()}`,
-          expiresAt: new Date(Date.now() + 5 * 60000), // 5 menit untuk transfer & upload bukti
+          expiresAt: new Date(Date.now() + 10 * 60000), // 10 menit untuk transfer & upload bukti
           nik: data.nik || null,
           npwp: data.npwp || null,
           senderName: data.senderName || null,
@@ -404,7 +404,7 @@ export async function createBooking(data: {
         }
       });
 
-      // 2. Kunci kuota slot yang dipesan secara atomik
+      // 2. Kunci kuota slot yang dipesan secara atomik (Pessimistic Conditional Lock)
       for (const item of pricedItems) {
         const slot = await tx.fieldSlot.findUnique({
           where: { id: item.slotId },
@@ -441,8 +441,13 @@ export async function createBooking(data: {
 
         const isFull = newBooked >= maxCap;
 
-        await tx.fieldSlot.update({
-          where: { id: slot.id },
+        // Conditional atomic update untuk mencegah race condition di tingkat database
+        const updateResult = await tx.fieldSlot.updateMany({
+          where: {
+            id: slot.id,
+            bookedCapacity: { lte: maxCap - addQty },
+            status: { not: 'MAINTENANCE' },
+          },
           data: {
             bookedCapacity: newBooked,
             status: isFull ? 'BOOKED' : 'AVAILABLE',
@@ -450,6 +455,12 @@ export async function createBooking(data: {
             bookedByUserId: slot.bookedByUserId ? slot.bookedByUserId : userId,
           },
         });
+
+        if (updateResult.count === 0) {
+          throw new Error(
+            `Slot jam ${item.timeStart} baru saja terisi oleh pemesan lain. Silakan pilih jadwal lain.`
+          );
+        }
       }
 
       return newBooking;
@@ -864,4 +875,87 @@ export async function submitVenueReviewAction(data: {
     return { success: false, error: toPublicMessage(error, 'Gagal mengirimkan ulasan.') };
   }
 }
+
+/**
+ * Pre-Hold Real: Mengunci slot jadwal di database selama 10 menit saat user masuk checkout.
+ * Mencegah phantom lock & race condition di milidetik yang sama.
+ */
+export async function reserveTemporaryBookingAction(data: {
+  venueId: string;
+  sportCategory: SportCategory;
+  userCategory?: UserCategory | null;
+  rateId?: string | null;
+  items: {
+    slotId: string;
+    fieldId: string;
+    date: string;
+    timeStart: string;
+    timeEnd: string;
+    price: number;
+    isPeakHour: boolean;
+    quantity?: number;
+  }[];
+}) {
+  return createBooking({
+    venueId: data.venueId,
+    totalAmount: data.items.reduce((sum, item) => sum + item.price, 0),
+    paymentMethod: 'QRIS',
+    sportCategory: data.sportCategory,
+    userCategory: data.userCategory,
+    rateId: data.rateId,
+    items: data.items,
+  });
+}
+
+/**
+ * Memperbarui data identitas pemesan (NIK, NPWP, nama, nomor telepon) pada pesanan yang sudah di-prehold.
+ */
+export async function updateBookingCustomerDetailsAction(data: {
+  bookingId: string;
+  nik?: string;
+  npwp?: string;
+  senderName?: string;
+  senderPhone?: string;
+  customerNote?: string;
+}) {
+  try {
+    const session = await getCurrentUserSession();
+    if (!session || !session.userId) {
+      return { success: false, error: 'Silakan login terlebih dahulu.' };
+    }
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: data.bookingId },
+    });
+
+    if (!booking) {
+      return { success: false, error: 'Pesanan tidak ditemukan.' };
+    }
+
+    if (booking.userId !== session.userId) {
+      return { success: false, error: 'Akses ditolak.' };
+    }
+
+    if (booking.status !== 'PENDING_PAYMENT') {
+      return { success: false, error: 'Pesanan sudah diproses atau dibatalkan.' };
+    }
+
+    await prisma.booking.update({
+      where: { id: data.bookingId },
+      data: {
+        nik: data.nik || null,
+        npwp: data.npwp || null,
+        senderName: data.senderName || null,
+        senderPhone: data.senderPhone || null,
+        adminNotes: data.customerNote ? `Catatan: ${data.customerNote}` : booking.adminNotes,
+      },
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('[updateBookingCustomerDetailsAction] Gagal memperbarui data:', error);
+    return { success: false, error: toPublicMessage(error, 'Gagal memperbarui data pemesan.') };
+  }
+}
+
 

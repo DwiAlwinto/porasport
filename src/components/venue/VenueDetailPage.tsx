@@ -11,7 +11,7 @@ import {
 import {
   generateDaySlotsForField,
 } from '../../lib/slotUtils';
-import { getPublicFieldSlots } from '../../actions/venueActions';
+import { getPublicFieldSlots, reserveTemporaryBookingAction } from '../../actions/venueActions';
 import { USER_CATEGORY_LABELS, getUserCategoryLabel, rateCoversHour } from '../../lib/pricing';
 import { getWibTodayKey } from '../../lib/dateKeys';
 import { isServerActionMismatchError, handleServerActionMismatch } from '../../lib/actionErrorHandler';
@@ -128,6 +128,10 @@ export const VenueDetailPage: React.FC = () => {
   const [showLoginGate, setShowLoginGate] = useState(false);
   // Modal Ketentuan Agenda Resmi Kedinasan Pemda
   const [showPemdaTermsModal, setShowPemdaTermsModal] = useState(false);
+  // Pre-hold atomic lock state & conflict feedback
+  const [isReservingLock, setIsReservingLock] = useState(false);
+  const [slotConflictError, setSlotConflictError] = useState<string | null>(null);
+  const [slotRefreshTrigger, setSlotRefreshTrigger] = useState(0);
 
   // CATATAN: Semua hook harus dijalankan tanpa syarat. Karena itu early return
   // untuk venue yang tidak ditemukan diletakkan SESUDAH semua hook di bawah.
@@ -277,7 +281,7 @@ export const VenueDetailPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [activeField, selectedDate, userCategory]);
+  }, [activeField, selectedDate, userCategory, slotRefreshTrigger]);
 
   /**
    * Sumber tunggal grid slot.
@@ -454,11 +458,10 @@ export const VenueDetailPage: React.FC = () => {
   };
 
   const handleConfirmedTermsAndProceed = () => {
-    setShowPemdaTermsModal(false);
     executeBookingCheckout();
   };
 
-  const executeBookingCheckout = () => {
+  const executeBookingCheckout = async () => {
     if (selectedSlots.length === 0 || !activeField || !selectedVenue) return;
 
     const isDailyPackage =
@@ -507,14 +510,58 @@ export const VenueDetailPage: React.FC = () => {
       };
     });
 
-    startBookingCheckout(
-      selectedVenue.id,
-      activeField.sportType,
-      items,
-      userCategory,
-      selectedRateId,
-      selectedCategoryLabel
-    );
+    setIsReservingLock(true);
+    try {
+      const res = await reserveTemporaryBookingAction({
+        venueId: selectedVenue.id,
+        sportCategory: activeField.sportType as any,
+        userCategory: userCategory,
+        rateId: selectedRateId,
+        items: items.map((it) => ({
+          slotId: it.slotId,
+          fieldId: it.fieldId,
+          date: it.date,
+          timeStart: it.timeStart,
+          timeEnd: it.timeEnd,
+          price: it.price,
+          isPeakHour: it.isPeakHour,
+          quantity: it.quantity,
+        })),
+      });
+
+      if (!res.success || !res.booking) {
+        setShowPemdaTermsModal(false);
+        setSlotConflictError(
+          res.error || 'Maaf, slot jadwal yang Anda pilih baru saja dipesan oleh pengguna lain. Silakan pilih jadwal lain.'
+        );
+        setSelectedSlots([]);
+        setSlotRefreshTrigger((prev) => prev + 1);
+        return;
+      }
+
+      // Slot berhasil dikunci di DB selama 10 menit!
+      setShowPemdaTermsModal(false);
+      startBookingCheckout(
+        selectedVenue.id,
+        activeField.sportType,
+        items,
+        userCategory,
+        selectedRateId,
+        selectedCategoryLabel,
+        res.booking.id,
+        res.booking.expiresAt
+      );
+    } catch (err: any) {
+      console.error('[executeBookingCheckout] Error:', err);
+      setShowPemdaTermsModal(false);
+      setSlotConflictError(
+        err?.message || 'Terjadi kendala saat mengunci slot jadwal. Silakan coba lagi.'
+      );
+      setSelectedSlots([]);
+      setSlotRefreshTrigger((prev) => prev + 1);
+    } finally {
+      setIsReservingLock(false);
+    }
   };
 
 
@@ -1731,8 +1778,9 @@ export const VenueDetailPage: React.FC = () => {
           ============================================================ */}
       <PemdaBookingTermsModal
         isOpen={showPemdaTermsModal}
-        onClose={() => setShowPemdaTermsModal(false)}
+        onClose={() => !isReservingLock && setShowPemdaTermsModal(false)}
         onAgreeAndProceed={handleConfirmedTermsAndProceed}
+        isLoading={isReservingLock}
         venueName={selectedVenue?.name}
         fieldNames={activeField?.name}
         bookingDate={selectedDate}
@@ -1746,6 +1794,39 @@ export const VenueDetailPage: React.FC = () => {
             : undefined
         }
       />
+
+      {/* ============================================================
+          MODAL KONFLIK RACE CONDITION / SLOT TELAH TERISI
+          ============================================================ */}
+      {slotConflictError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md animate-in fade-in duration-200">
+          <div
+            className="relative max-w-md w-full rounded-3xl bg-white shadow-2xl p-6 sm:p-7 text-center ring-1 ring-slate-900/10 overflow-hidden animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 ring-8 ring-amber-500/10">
+              <AlertCircle className="h-7 w-7" />
+            </div>
+
+            <h3 className="text-lg font-black text-slate-900">
+              Jadwal Baru Saja Terisi
+            </h3>
+            <p className="mt-2 text-xs text-slate-600 leading-relaxed">
+              {slotConflictError}
+            </p>
+
+            <div className="mt-6">
+              <button
+                type="button"
+                onClick={() => setSlotConflictError(null)}
+                className="w-full rounded-xl bg-emerald-600 py-3.5 text-xs font-black uppercase tracking-wider text-white hover:bg-emerald-700 transition shadow-md shadow-emerald-600/20"
+              >
+                Pilih Jadwal Lain
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -247,7 +247,7 @@ export const TRANSLATIONS = {
       continueBooking: "Tidak, Lanjutkan Pesanan",
       confirmCancel: "Ya, Batalkan Pesanan",
       timeoutTitle: "Waktu Pemesanan Telah Habis",
-      timeoutDesc: "Batas waktu 5 menit untuk menyelesaikan pembayaran telah berakhir. Slot jadwal telah dilepaskan kembali agar adil bagi pengguna lain.",
+      timeoutDesc: "Batas waktu 10 menit untuk menyelesaikan pembayaran telah berakhir. Slot jadwal telah dilepaskan kembali agar adil bagi pengguna lain.",
       selectAnotherSchedule: "Pilih Jadwal Lain",
     },
 
@@ -576,7 +576,7 @@ export const TRANSLATIONS = {
       continueBooking: "No, Continue Booking",
       confirmCancel: "Yes, Cancel Booking",
       timeoutTitle: "Booking Time Has Expired",
-      timeoutDesc: "The 5-minute time limit to complete payment has expired. The slots have been automatically released to maintain fair availability.",
+      timeoutDesc: "The 10-minute time limit to complete payment has expired. The slots have been automatically released to maintain fair availability.",
       selectAnotherSchedule: "Select Another Schedule",
     },
 

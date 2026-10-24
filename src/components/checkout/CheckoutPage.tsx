@@ -34,8 +34,8 @@ export const CheckoutPage: React.FC = () => {
 
   const [step, setStep] = useState<1 | 2>(1);
 
-  // 5 Minutes (300s) countdown timer
-  const LOCK_DURATION = 300;
+  // 10 Minutes (600s) countdown timer
+  const LOCK_DURATION = 600;
   const [secondsLeft, setSecondsLeft] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -112,7 +112,13 @@ export const CheckoutPage: React.FC = () => {
     if (typeof window !== 'undefined') {
       let storedEnd = sessionStorage.getItem('gelora_checkout_end_time_v1');
       if (!storedEnd) {
-        storedEnd = (Date.now() + LOCK_DURATION * 1000).toString();
+        const expiresAtMs = activeBookingDraft?.expiresAt
+          ? new Date(activeBookingDraft.expiresAt).getTime()
+          : null;
+        storedEnd = (expiresAtMs && expiresAtMs > Date.now()
+          ? expiresAtMs
+          : Date.now() + LOCK_DURATION * 1000
+        ).toString();
         try {
           sessionStorage.setItem('gelora_checkout_end_time_v1', storedEnd);
         } catch {}
@@ -301,13 +307,17 @@ export const CheckoutPage: React.FC = () => {
     setOcrStatus('processing');
 
     try {
-      const realBooking = await completePayment('unused-id', 'QRIS', {
-        nik: cleanId,
-        npwp: npwp.trim() || undefined,
-        senderName: senderName.trim() || activeUser?.name,
-        senderPhone: senderPhone.trim() || activeUser?.phone,
-        paymentProofFile: paymentProofFile,
-      });
+      const realBooking = await completePayment(
+        activeBookingDraft?.bookingId || 'unused-id',
+        'QRIS',
+        {
+          nik: cleanId,
+          npwp: npwp.trim() || undefined,
+          senderName: senderName.trim() || activeUser?.name,
+          senderPhone: senderPhone.trim() || activeUser?.phone,
+          paymentProofFile: paymentProofFile,
+        }
+      );
 
       if (realBooking) {
         setCompletedBooking(realBooking);
@@ -375,23 +385,23 @@ export const CheckoutPage: React.FC = () => {
         {/* TIMER */}
         {!completedBooking && (
           <div className={`mb-6 mx-auto max-w-2xl flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-xs transition-colors ${
-            secondsLeft < 60
+            secondsLeft < 120
               ? 'border-red-300 bg-red-50 text-red-900 animate-pulse'
               : 'border-amber-200 bg-amber-50 text-amber-900'
           }`}>
             <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-              secondsLeft < 60 ? 'bg-red-500/20 text-red-700' : 'bg-amber-500/20 text-amber-700'
+              secondsLeft < 120 ? 'bg-red-500/20 text-red-700' : 'bg-amber-500/20 text-amber-700'
             }`}>
               <Lock className="h-5 w-5" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className={`text-sm font-black ${secondsLeft < 60 ? 'text-red-950' : 'text-amber-900'}`}>
+              <div className={`text-sm font-black ${secondsLeft < 120 ? 'text-red-950' : 'text-amber-900'}`}>
                 {t.checkout.slotLockedTitle}
               </div>
-              <div className={`text-xs leading-relaxed ${secondsLeft < 60 ? 'text-red-800' : 'text-amber-700'}`}>
+              <div className={`text-xs leading-relaxed ${secondsLeft < 120 ? 'text-red-800' : 'text-amber-700'}`}>
                 {t.checkout.slotLockedNoticePrefix}{' '}
                 <span className={`font-mono font-black px-1.5 py-0.5 rounded ${
-                  secondsLeft < 60 ? 'bg-red-200 text-red-900' : 'bg-amber-200/60 text-amber-950'
+                  secondsLeft < 120 ? 'bg-red-200 text-red-900' : 'bg-amber-200/60 text-amber-950'
                 }`}>
                   {timerString}
                 </span>{' '}
@@ -1170,7 +1180,7 @@ export const CheckoutPage: React.FC = () => {
           </div>
         )}
 
-        {/* POP-UP WAKTU PEMESANAN HABIS (TIMEOUT 5 MENIT) */}
+        {/* POP-UP WAKTU PEMESANAN HABIS (TIMEOUT 10 MENIT) */}
         {showTimeoutModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-md animate-in fade-in duration-200">
             <div

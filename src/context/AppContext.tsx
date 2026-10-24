@@ -16,6 +16,7 @@ import type { UserCategory } from '@prisma/client';
 import {
   getVenues,
   createBooking,
+  updateBookingCustomerDetailsAction,
   getMyBookingsAction,
   cancelUserBookingAction,
   completeUserBookingAction,
@@ -51,6 +52,8 @@ interface AppContextType {
     userCategoryLabel?: string | null;
     rateId?: string | null;
     items: BookingItem[];
+    bookingId?: string | null;
+    expiresAt?: string | null;
   } | null;
 
   // Actions
@@ -73,7 +76,9 @@ interface AppContextType {
     items: BookingItem[],
     userCategory?: UserCategory | null,
     rateId?: string | null,
-    userCategoryLabel?: string | null
+    userCategoryLabel?: string | null,
+    bookingId?: string | null,
+    expiresAt?: string | Date | null
   ) => void;
   completePayment: (
     bookingId: string,
@@ -426,6 +431,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     userCategoryLabel?: string | null;
     rateId?: string | null;
     items: BookingItem[];
+    bookingId?: string | null;
+    expiresAt?: string | null;
   } | null>(() => {
     if (typeof window === 'undefined') return null;
     try {
@@ -504,13 +511,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     items: BookingItem[],
     userCategory: UserCategory | null = null,
     rateId?: string | null,
-    userCategoryLabel?: string | null
+    userCategoryLabel?: string | null,
+    bookingId?: string | null,
+    expiresAt?: string | Date | null
   ) => {
-    const draft = { venueId, sportCategory, userCategory, userCategoryLabel, rateId, items };
+    const expiresAtStr = expiresAt ? new Date(expiresAt).toISOString() : null;
+    const draft = { venueId, sportCategory, userCategory, userCategoryLabel, rateId, items, bookingId, expiresAt: expiresAtStr };
     setActiveBookingDraft(draft);
     try {
       sessionStorage.setItem('gelora_checkout_draft_v1', JSON.stringify(draft));
-      sessionStorage.setItem('gelora_checkout_end_time_v1', (Date.now() + 300 * 1000).toString());
+      const endTimeMs = expiresAt ? new Date(expiresAt).getTime() : Date.now() + 600 * 1000;
+      sessionStorage.setItem('gelora_checkout_end_time_v1', endTimeMs.toString());
     } catch {
       // Penyimpanan dinonaktifkan
     }
@@ -519,12 +530,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const cancelActiveBookingDraft = () => {
+  const cancelActiveBookingDraft = async () => {
+    const bookingIdToCancel = activeBookingDraft?.bookingId;
     setActiveBookingDraft(null);
     try {
       sessionStorage.removeItem('gelora_checkout_draft_v1');
       sessionStorage.removeItem('gelora_checkout_end_time_v1');
     } catch {}
+
+    if (bookingIdToCancel) {
+      try {
+        await cancelUserBookingAction(bookingIdToCancel);
+        await refreshBookings();
+      } catch (err) {
+        console.error('[cancelActiveBookingDraft] Gagal membatalkan booking di server:', err);
+      }
+    }
   };
 
   const handleSetActiveView = (view: AppView) => {
@@ -548,38 +569,55 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!activeBookingDraft || !activeUser) return null;
 
     const totalAmount = activeBookingDraft.items.reduce((sum, item) => sum + item.price, 0);
+    let newBookingId = activeBookingDraft.bookingId;
+    let bookingCreatedAt = new Date().toISOString();
 
-    // Step 1: Create booking with PENDING_PAYMENT status
-    // `userId` tidak lagi dikirim: server menentukannya dari sesi login.
-    const res = await createBooking({
-      venueId: activeBookingDraft.venueId,
-      totalAmount: totalAmount,
-      paymentMethod: method,
-      sportCategory: activeBookingDraft.sportCategory as any,
-      userCategory: activeBookingDraft.userCategory,
-      rateId: activeBookingDraft.rateId || undefined,
-      nik: verificationData?.nik,
-      npwp: verificationData?.npwp,
-      senderName: verificationData?.senderName,
-      senderPhone: verificationData?.senderPhone,
-      paymentProofUrl: '', // Will be updated after upload
-      items: activeBookingDraft.items.map(i => ({ 
-        slotId: i.slotId, 
-        fieldId: i.fieldId,
-        date: i.date,
-        timeStart: i.timeStart,
-        timeEnd: i.timeEnd,
-        price: i.price,
-        isPeakHour: i.isPeakHour,
-        quantity: i.quantity || 1,
-      }))
-    });
+    if (newBookingId) {
+      // Booking sudah dikunci riil di database saat pre-hold. Update identitas pemesan
+      const updateRes = await updateBookingCustomerDetailsAction({
+        bookingId: newBookingId,
+        nik: verificationData?.nik,
+        npwp: verificationData?.npwp,
+        senderName: verificationData?.senderName,
+        senderPhone: verificationData?.senderPhone,
+      });
 
-    if (!res.success || !res.booking) {
-      return null;
+      if (!updateRes.success) {
+        throw new Error(updateRes.error || 'Gagal memperbarui data pemesan.');
+      }
+    } else {
+      // Fallback: Create booking with PENDING_PAYMENT status jika belum di-prehold
+      const res = await createBooking({
+        venueId: activeBookingDraft.venueId,
+        totalAmount: totalAmount,
+        paymentMethod: method,
+        sportCategory: activeBookingDraft.sportCategory as any,
+        userCategory: activeBookingDraft.userCategory,
+        rateId: activeBookingDraft.rateId || undefined,
+        nik: verificationData?.nik,
+        npwp: verificationData?.npwp,
+        senderName: verificationData?.senderName,
+        senderPhone: verificationData?.senderPhone,
+        paymentProofUrl: '', // Will be updated after upload
+        items: activeBookingDraft.items.map(i => ({ 
+          slotId: i.slotId, 
+          fieldId: i.fieldId,
+          date: i.date,
+          timeStart: i.timeStart,
+          timeEnd: i.timeEnd,
+          price: i.price,
+          isPeakHour: i.isPeakHour,
+          quantity: i.quantity || 1,
+        }))
+      });
+
+      if (!res.success || !res.booking) {
+        return null;
+      }
+
+      newBookingId = res.booking.id;
+      bookingCreatedAt = res.booking.createdAt.toString();
     }
-
-    const newBookingId = res.booking.id;
 
     // Step 2: If proof file provided, upload and validate
     if (verificationData?.paymentProofFile) {
@@ -613,8 +651,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         grandTotal: totalAmount,
         status: validationResult.newStatus === 'PAID_SUCCESS' ? 'PAID_SUCCESS' : ((validationResult.newStatus as any) || 'MENUNGGU_VALIDASI'),
         paymentMethod: method,
-        createdAt: res.booking.createdAt.toString(),
-        expiresAt: new Date(Date.now() + 60 * 60000).toISOString(),
+        createdAt: bookingCreatedAt,
+        expiresAt: new Date(Date.now() + 10 * 60000).toISOString(),
         qrCodeToken: `QR-${newBookingId}`,
         hasReviewed: false,
         nik: verificationData?.nik,
@@ -628,6 +666,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setBookings(prev => [mappedBooking, ...prev]);
       try {
         sessionStorage.removeItem('gelora_checkout_draft_v1');
+        sessionStorage.removeItem('gelora_checkout_end_time_v1');
       } catch {}
       await refreshBookings();
       // Draft tidak langsung diset null di sini agar CheckoutPage dan CheckoutModal
@@ -640,7 +679,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setVenues(data as any[]);
 
     const mappedBooking: Booking = {
-      id: res.booking.id,
+      id: newBookingId,
       userId: activeUser!.id,
       venueId: activeBookingDraft.venueId,
       venueName: venues.find(v => v.id === activeBookingDraft.venueId)?.name || 'Venue',
@@ -653,9 +692,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       grandTotal: totalAmount,
       status: 'PENDING_PAYMENT',
       paymentMethod: method,
-      createdAt: res.booking.createdAt.toString(),
-      expiresAt: new Date(Date.now() + 60 * 60000).toISOString(),
-      qrCodeToken: `QR-${res.booking.id}`,
+      createdAt: bookingCreatedAt,
+      expiresAt: new Date(Date.now() + 10 * 60000).toISOString(),
+      qrCodeToken: `QR-${newBookingId}`,
       hasReviewed: false,
       nik: verificationData?.nik,
       npwp: verificationData?.npwp,
