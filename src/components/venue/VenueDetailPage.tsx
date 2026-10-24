@@ -14,6 +14,7 @@ import {
 import { getPublicFieldSlots } from '../../actions/venueActions';
 import { USER_CATEGORY_LABELS, getUserCategoryLabel, rateCoversHour } from '../../lib/pricing';
 import { getWibTodayKey } from '../../lib/dateKeys';
+import { isServerActionMismatchError, handleServerActionMismatch } from '../../lib/actionErrorHandler';
 import type { UserCategory } from '@prisma/client';
 import {
   MapPin,
@@ -256,6 +257,11 @@ export const VenueDetailPage: React.FC = () => {
       })
       .catch((e: unknown) => {
         if (cancelled) return;
+        if (isServerActionMismatchError(e)) {
+          setSlotsError('Versi aplikasi telah diperbarui oleh server. Sedang memuat ulang jadwal...');
+          handleServerActionMismatch();
+          return;
+        }
         setSlotsError(
           e instanceof Error ? e.message : 'Gagal memuat jadwal.'
         );
@@ -1218,7 +1224,9 @@ export const VenueDetailPage: React.FC = () => {
                     >
                       <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                       <span>
-                        {slotsError
+                        {slotsError && isServerActionMismatchError(slotsError)
+                          ? 'Versi aplikasi telah diperbarui oleh server. Sedang menyinkronkan data terbaru...'
+                          : slotsError
                           ? `${slotsError} Jadwal di bawah adalah estimasi; ketersediaan sebenarnya diverifikasi server saat booking.`
                           : 'Memuat jadwal terbaru...'}
                       </span>
