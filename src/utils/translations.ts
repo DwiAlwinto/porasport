@@ -241,6 +241,14 @@ export const TRANSLATIONS = {
       tncPrivacy: "Privacy Policy",
       tncRules: "serta Peraturan dari pihak pengelola venue.",
       confirmPayment: "Konfirmasi Pembayaran",
+      cancelBooking: "Batalkan Pesanan",
+      cancelConfirmTitle: "Batalkan Pesanan Ini?",
+      cancelConfirmDesc: "Apakah Anda yakin ingin membatalkan pesanan ini? Slot jadwal yang sedang Anda kunci akan segera dilepaskan kembali untuk pengguna lain dan formulir yang telah Anda isi akan dihapus.",
+      continueBooking: "Tidak, Lanjutkan Pesanan",
+      confirmCancel: "Ya, Batalkan Pesanan",
+      timeoutTitle: "Waktu Pemesanan Telah Habis",
+      timeoutDesc: "Batas waktu 5 menit untuk menyelesaikan pembayaran telah berakhir. Slot jadwal telah dilepaskan kembali agar adil bagi pengguna lain.",
+      selectAnotherSchedule: "Pilih Jadwal Lain",
     },
 
     // User Dashboard
@@ -562,6 +570,14 @@ export const TRANSLATIONS = {
       tncPrivacy: "Privacy Policy",
       tncRules: "and Venue Management Rules.",
       confirmPayment: "Confirm Payment",
+      cancelBooking: "Cancel Booking",
+      cancelConfirmTitle: "Cancel This Booking?",
+      cancelConfirmDesc: "Are you sure you want to cancel this booking? The slot schedule currently held for you will be released for other users, and any filled form data will be cleared.",
+      continueBooking: "No, Continue Booking",
+      confirmCancel: "Yes, Cancel Booking",
+      timeoutTitle: "Booking Time Has Expired",
+      timeoutDesc: "The 5-minute time limit to complete payment has expired. The slots have been automatically released to maintain fair availability.",
+      selectAnotherSchedule: "Select Another Schedule",
     },
 
     // User Dashboard

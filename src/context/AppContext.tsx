@@ -61,6 +61,7 @@ interface AppContextType {
   setIsSchemaModalOpen: (open: boolean) => void;
   setIsCheckoutModalOpen: (open: boolean) => void;
   setActiveBookingDraft: (draft: any) => void;
+  cancelActiveBookingDraft: () => void;
   
   // Search actions
   handleSearchSubmit: (sport?: SportCategory, city?: CityLocation, date?: string) => void;
@@ -324,6 +325,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     setActiveView(view);
     setSearchFilters(fromUrlFilters);
+    if (view !== 'CHECKOUT') {
+      try {
+        sessionStorage.removeItem('gelora_checkout_draft_v1');
+        sessionStorage.removeItem('gelora_checkout_end_time_v1');
+      } catch {}
+    }
     if (venueId) {
       setPendingVenueId(venueId);
     }
@@ -381,6 +388,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       isNavigatingFromPopState.current = true;
       const { view, venueId } = parseRouteFromUrl(window.location.pathname, window.location.search);
       const fromUrlFilters = parseFiltersFromQuery(window.location.search, defaultSearchFilters);
+
+      if (lastPushedView.current === 'CHECKOUT' && view !== 'CHECKOUT') {
+        setActiveBookingDraft(null);
+        try {
+          sessionStorage.removeItem('gelora_checkout_draft_v1');
+          sessionStorage.removeItem('gelora_checkout_end_time_v1');
+        } catch {}
+      }
 
       setActiveView(view);
       setSearchFilters(fromUrlFilters);
@@ -495,12 +510,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setActiveBookingDraft(draft);
     try {
       sessionStorage.setItem('gelora_checkout_draft_v1', JSON.stringify(draft));
+      sessionStorage.setItem('gelora_checkout_end_time_v1', (Date.now() + 300 * 1000).toString());
     } catch {
       // Penyimpanan dinonaktifkan
     }
     setIsCheckoutModalOpen(false); // Just in case
     setActiveView('CHECKOUT');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelActiveBookingDraft = () => {
+    setActiveBookingDraft(null);
+    try {
+      sessionStorage.removeItem('gelora_checkout_draft_v1');
+      sessionStorage.removeItem('gelora_checkout_end_time_v1');
+    } catch {}
+  };
+
+  const handleSetActiveView = (view: AppView) => {
+    if (activeView === 'CHECKOUT' && view !== 'CHECKOUT') {
+      cancelActiveBookingDraft();
+    }
+    setActiveView(view);
   };
 
   async function completePayment(
@@ -782,10 +813,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setActiveUser,
         setSearchFilters,
         setSelectedVenue,
-        setActiveView,
+        setActiveView: handleSetActiveView,
         setIsSchemaModalOpen,
         setIsCheckoutModalOpen,
         setActiveBookingDraft,
+        cancelActiveBookingDraft,
         handleSearchSubmit,
         startBookingCheckout,
         completePayment,
@@ -840,6 +872,7 @@ export const useApp = () => {
       setIsSchemaModalOpen: () => {},
       setIsCheckoutModalOpen: () => {},
       setActiveBookingDraft: () => {},
+      cancelActiveBookingDraft: () => {},
       handleSearchSubmit: () => {},
       startBookingCheckout: () => {},
       completePayment: async () => null,

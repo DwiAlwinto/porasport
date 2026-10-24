@@ -371,7 +371,7 @@ export async function createBooking(data: {
           serviceFee,
           grandTotal,
           qrCodeToken: `QR-${crypto.randomUUID().replace(/-/g, '').slice(0, 20).toUpperCase()}`,
-          expiresAt: new Date(Date.now() + 60 * 60000), // 60 menit untuk transfer & upload bukti
+          expiresAt: new Date(Date.now() + 5 * 60000), // 5 menit untuk transfer & upload bukti
           nik: data.nik || null,
           npwp: data.npwp || null,
           senderName: data.senderName || null,

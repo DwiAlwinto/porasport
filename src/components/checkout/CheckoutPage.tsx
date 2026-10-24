@@ -23,6 +23,7 @@ export const CheckoutPage: React.FC = () => {
   const {
     activeBookingDraft,
     setActiveBookingDraft,
+    cancelActiveBookingDraft,
     activeUser,
     completePayment,
     setActiveView,
@@ -33,10 +34,24 @@ export const CheckoutPage: React.FC = () => {
 
   const [step, setStep] = useState<1 | 2>(1);
 
-  // 60 Minutes countdown timer in seconds (60 * 60 = 3600)
-  const [secondsLeft, setSecondsLeft] = useState<number>(3600);
+  // 5 Minutes (300s) countdown timer
+  const LOCK_DURATION = 300;
+  const [secondsLeft, setSecondsLeft] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const storedEnd = sessionStorage.getItem('gelora_checkout_end_time_v1');
+        if (storedEnd) {
+          const diff = Math.round((parseInt(storedEnd, 10) - Date.now()) / 1000);
+          if (diff > 0) return diff;
+        }
+      } catch {}
+    }
+    return LOCK_DURATION;
+  });
   const [isProcessing, setIsProcessing] = useState(false);
   const [completedBooking, setCompletedBooking] = useState<Booking | null>(null);
+  const [showCancelConfirmModal, setShowCancelConfirmModal] = useState(false);
+  const [showTimeoutModal, setShowTimeoutModal] = useState(false);
 
   // Form input verification states
   const [nik, setNik] = useState<string>('');
@@ -94,18 +109,56 @@ export const CheckoutPage: React.FC = () => {
       if (s.payment_notes) setPaymentNotesTxt(s.payment_notes);
     });
 
-    const interval = setInterval(() => {
-      setSecondsLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    if (typeof window !== 'undefined') {
+      let storedEnd = sessionStorage.getItem('gelora_checkout_end_time_v1');
+      if (!storedEnd) {
+        storedEnd = (Date.now() + LOCK_DURATION * 1000).toString();
+        try {
+          sessionStorage.setItem('gelora_checkout_end_time_v1', storedEnd);
+        } catch {}
+      }
 
-    return () => clearInterval(interval);
+      const updateTimer = () => {
+        const end = parseInt(sessionStorage.getItem('gelora_checkout_end_time_v1') || '0', 10);
+        const remaining = Math.max(0, Math.round((end - Date.now()) / 1000));
+        setSecondsLeft(remaining);
+
+        if (remaining <= 0) {
+          setShowTimeoutModal(true);
+        }
+      };
+
+      updateTimer();
+      const interval = setInterval(updateTimer, 1000);
+      return () => clearInterval(interval);
+    }
   }, []);
+
+  // Warning when leaving tab or closing window while draft is active
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (activeBookingDraft && !completedBooking) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [activeBookingDraft, completedBooking]);
+
+  const handleConfirmCancel = () => {
+    setShowCancelConfirmModal(false);
+    cancelActiveBookingDraft();
+    setActiveView('VENUE_DETAIL');
+  };
+
+  const handleTimeoutAcknowledge = () => {
+    setShowTimeoutModal(false);
+    cancelActiveBookingDraft();
+    setActiveView('VENUE_DETAIL');
+  };
 
   // Auto-fill sender phone from user profile
   useEffect(() => {
@@ -321,14 +374,28 @@ export const CheckoutPage: React.FC = () => {
 
         {/* TIMER */}
         {!completedBooking && (
-          <div className="mb-6 mx-auto max-w-2xl flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20">
-              <Lock className="h-5 w-5 text-amber-700" />
+          <div className={`mb-6 mx-auto max-w-2xl flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-xs transition-colors ${
+            secondsLeft < 60
+              ? 'border-red-300 bg-red-50 text-red-900 animate-pulse'
+              : 'border-amber-200 bg-amber-50 text-amber-900'
+          }`}>
+            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+              secondsLeft < 60 ? 'bg-red-500/20 text-red-700' : 'bg-amber-500/20 text-amber-700'
+            }`}>
+              <Lock className="h-5 w-5" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-black text-amber-900">{t.checkout.slotLockedTitle}</div>
-              <div className="text-xs text-amber-700 leading-relaxed">
-                {t.checkout.slotLockedNoticePrefix} <span className="font-black text-amber-900 bg-amber-200/50 px-1 rounded">{timerString}</span> {t.checkout.slotLockedNoticeSuffix}
+              <div className={`text-sm font-black ${secondsLeft < 60 ? 'text-red-950' : 'text-amber-900'}`}>
+                {t.checkout.slotLockedTitle}
+              </div>
+              <div className={`text-xs leading-relaxed ${secondsLeft < 60 ? 'text-red-800' : 'text-amber-700'}`}>
+                {t.checkout.slotLockedNoticePrefix}{' '}
+                <span className={`font-mono font-black px-1.5 py-0.5 rounded ${
+                  secondsLeft < 60 ? 'bg-red-200 text-red-900' : 'bg-amber-200/60 text-amber-950'
+                }`}>
+                  {timerString}
+                </span>{' '}
+                {t.checkout.slotLockedNoticeSuffix}
               </div>
             </div>
           </div>
@@ -492,10 +559,12 @@ export const CheckoutPage: React.FC = () => {
               {t.checkout.proceedToPayment}
             </button>
             <button
-              onClick={() => setActiveView('VENUE_DETAIL')}
-              className="w-full text-center text-sm font-bold text-slate-500 hover:text-slate-800"
+              type="button"
+              onClick={() => setShowCancelConfirmModal(true)}
+              className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-slate-200 bg-white py-3.5 text-sm font-bold text-slate-500 hover:border-red-300 hover:text-red-600 hover:bg-red-50/50 transition"
             >
-              {t.common.back}
+              <XCircle className="h-4 w-4" />
+              {t.checkout.cancelBooking}
             </button>
           </div>
         )}
@@ -990,13 +1059,11 @@ export const CheckoutPage: React.FC = () => {
                 <div className="flex flex-col sm:flex-row gap-3 pt-4">
                   <button
                     type="button"
-                    onClick={() => {
-                      setStep(1);
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                    className="flex-1 rounded-xl border-2 border-slate-200 bg-white py-4 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition text-center"
+                    onClick={() => setShowCancelConfirmModal(true)}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl border-2 border-slate-200 bg-white py-4 text-sm font-bold text-slate-600 hover:border-red-300 hover:text-red-600 hover:bg-red-50/50 transition text-center"
                   >
-                    {t.common.back}
+                    <XCircle className="h-4 w-4" />
+                    {t.checkout.cancelBooking}
                   </button>
                   <button
                     type="submit"
@@ -1047,6 +1114,87 @@ export const CheckoutPage: React.FC = () => {
                   className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition"
                 >
                   Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* POP-UP KONFIRMASI PEMBATALAN PESANAN */}
+        {showCancelConfirmModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md animate-in fade-in duration-200">
+            <div
+              className="relative max-w-md w-full rounded-3xl bg-white shadow-2xl p-6 sm:p-7 text-center ring-1 ring-slate-900/10 overflow-hidden animate-in zoom-in-95 duration-200"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600 ring-8 ring-red-500/10">
+                <AlertCircle className="h-7 w-7" />
+              </div>
+
+              <h3 className="text-lg font-black text-slate-900">
+                {t.checkout.cancelConfirmTitle}
+              </h3>
+              <p className="mt-2 text-xs text-slate-600 leading-relaxed">
+                {t.checkout.cancelConfirmDesc}
+              </p>
+
+              {activeBookingDraft && (
+                <div className="my-4 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3.5 text-xs text-left space-y-1">
+                  <div className="font-extrabold text-slate-900">{venue?.name}</div>
+                  <div className="text-slate-600 font-medium text-[11px]">
+                    {activeBookingDraft.items[0]?.date} • {activeBookingDraft.items.map((i) => i.timeStart).join(', ')} WIB
+                  </div>
+                  <div className="font-black text-emerald-700 text-sm pt-0.5">
+                    {formatRupiah(subtotal)}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-6 flex flex-col gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowCancelConfirmModal(false)}
+                  className="w-full rounded-xl bg-slate-900 py-3.5 text-xs font-black uppercase tracking-wider text-white hover:bg-slate-800 transition shadow-sm"
+                >
+                  {t.checkout.continueBooking}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmCancel}
+                  className="w-full rounded-xl border-2 border-red-200 py-3 text-xs font-bold text-red-600 hover:bg-red-50 hover:border-red-300 transition"
+                >
+                  {t.checkout.confirmCancel}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* POP-UP WAKTU PEMESANAN HABIS (TIMEOUT 5 MENIT) */}
+        {showTimeoutModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-md animate-in fade-in duration-200">
+            <div
+              className="relative max-w-md w-full rounded-3xl bg-white shadow-2xl p-6 sm:p-7 text-center ring-1 ring-slate-900/10 overflow-hidden animate-in zoom-in-95 duration-200"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 ring-8 ring-amber-500/10">
+                <Clock className="h-7 w-7 animate-pulse" />
+              </div>
+
+              <h3 className="text-lg font-black text-slate-900">
+                {t.checkout.timeoutTitle}
+              </h3>
+              <p className="mt-2 text-xs text-slate-600 leading-relaxed">
+                {t.checkout.timeoutDesc}
+              </p>
+
+              <div className="mt-6">
+                <button
+                  type="button"
+                  onClick={handleTimeoutAcknowledge}
+                  className="w-full rounded-xl bg-emerald-600 py-3.5 text-xs font-black uppercase tracking-wider text-white hover:bg-emerald-700 transition shadow-md shadow-emerald-600/20"
+                >
+                  {t.checkout.selectAnotherSchedule}
                 </button>
               </div>
             </div>
