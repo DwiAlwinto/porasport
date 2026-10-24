@@ -23,7 +23,7 @@ RINCIAN 18 MASALAH KRITIS, RISIKO OPERASIONAL & SOLUSI TEKNIS
 [DIMENSI 1: INTEGRITAS KUOTA & DATABASE CONCURRENCY]
 --------------------------------------------------------------------------------
 
-1. KERUSAKAN KUOTA MULTI-KAPASITAS (KOLAM RENANG AQUATIC & TREK ATLETIK)
+1. Done :  KERUSAKAN KUOTA MULTI-KAPASITAS (KOLAM RENANG AQUATIC & TREK ATLETIK)
    - Lokasi: src/actions/adminActions.ts & src/actions/paymentValidationActions.ts
    - Masalah: Pada Kolam Renang (kapasitas 30 orang), saat admin/cron membatalkan
      atau menyetujui tiket, status slot dipaksa menjadi 'BOOKED' atau 'AVAILABLE'
@@ -36,7 +36,7 @@ RINCIAN 18 MASALAH KRITIS, RISIKO OPERASIONAL & SOLUSI TEKNIS
        Jika bookedCapacity < maxCapacity, status menjadi AVAILABLE.
      * Lunas: Status hanya BOOKED jika bookedCapacity >= maxCapacity.
 
-4. KEBOCORAN SLOT LAMA SAAT RESCHEDULE KEDINASAN PEMDA
+4. Done : KEBOCORAN SLOT LAMA SAAT RESCHEDULE KEDINASAN PEMDA
    - Lokasi: src/actions/rescheduleActions.ts
    - Masalah: Saat warga menyetujui jadwal baru pengganti agenda resmi Pemda,
      sistem mengalokasikan slot baru namun LUPA melepas kuota pada slot lama yang
@@ -47,7 +47,7 @@ RINCIAN 18 MASALAH KRITIS, RISIKO OPERASIONAL & SOLUSI TEKNIS
    - Solusi: Dalam transaksi atomik yang sama, kurangi bookedCapacity slot lama
      dan kembalikan statusnya menjadi AVAILABLE.
 
-5. TABRAKAN KASIR OFFLINE (WALK-IN) DENGAN PENGUNCI ONLINE
+5. Done : TABRAKAN KASIR OFFLINE (WALK-IN) DENGAN PENGUNCI ONLINE
    - Lokasi: src/actions/adminActions.ts
    - Masalah: Kasir lapangan mencatat sewa langsung (walk-in cash) dengan perintah
      upsert tanpa conditional check apakah slot tersebut sedang di-lock oleh warga

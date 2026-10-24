@@ -336,6 +336,10 @@ export default function AdminSchedulePage() {
             </div>
             <div className="flex items-center gap-1.5">
               <span className="h-3 w-3 rounded-full bg-amber-500" />
+              <span>QRIS Hold Online (&lt; 10 Menit)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="h-3 w-3 rounded-full bg-amber-300" />
               <span>Terblokir / Acara Dinas (Maintenance)</span>
             </div>
           </>
@@ -387,10 +391,14 @@ export default function AdminSchedulePage() {
               const isBooked = isPool ? isPoolFull : slot.status === 'BOOKED';
               const isWalkIn = !isPool && isBooked && slot.booking?.id?.startsWith('WALKIN-');
               const isPartiallyBooked = isPool && bookedCap > 0 && bookedCap < maxCap && !isMaintenance;
+              const isQrisHold = !isPool && isBooked && slot.booking?.status === 'PENDING_PAYMENT' && slot.booking?.expiresAt && new Date(slot.booking.expiresAt).getTime() > Date.now();
+              const holdRemainingMin = isQrisHold ? Math.max(1, Math.ceil((new Date(slot.booking!.expiresAt).getTime() - Date.now()) / 60000)) : 0;
 
               let cardStyle = 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100/60';
               if (isMaintenance) {
                 cardStyle = 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100/60';
+              } else if (isQrisHold) {
+                cardStyle = 'border-amber-400 bg-amber-50/90 text-amber-900 hover:bg-amber-100/80';
               } else if (isWalkIn) {
                 cardStyle = 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100/60';
               } else if (isPartiallyBooked) {
@@ -420,6 +428,10 @@ export default function AdminSchedulePage() {
                           : 'bg-emerald-600 text-white'
                       }`}>
                         {bookedCap}/{maxCap}
+                      </span>
+                    ) : isQrisHold ? (
+                      <span className="rounded bg-amber-500 px-1.5 py-0.2 text-[8px] font-black text-white flex items-center gap-0.5">
+                        ⏳ Hold {holdRemainingMin}m
                       </span>
                     ) : isWalkIn ? (
                       <span className="rounded bg-blue-500 px-1.5 py-0.2 text-[8px] font-black text-white">
@@ -453,6 +465,10 @@ export default function AdminSchedulePage() {
                           </div>
                         )}
                       </div>
+                    ) : isQrisHold ? (
+                      <div className="text-[10px] font-bold text-amber-900 line-clamp-1">
+                        QRIS: {slot.booking?.senderName || 'Warga (Hold)'}
+                      </div>
                     ) : isWalkIn ? (
                       <div className="text-[10px] font-bold text-blue-700 line-clamp-1">
                         {slot.booking?.senderName || 'Kasir Walk-in'}
@@ -480,7 +496,9 @@ export default function AdminSchedulePage() {
         const modalBookedCap = activeSlotModal.bookedCapacity || 0;
         const modalRemCap = Math.max(0, modalMaxCap - modalBookedCap);
         const modalIsMaintenance = activeSlotModal.status === 'MAINTENANCE';
-        const canWalkIn = !modalIsMaintenance && modalRemCap > 0;
+        const modalIsQrisHold = !isPool && activeSlotModal.booking?.status === 'PENDING_PAYMENT' && activeSlotModal.booking?.expiresAt && new Date(activeSlotModal.booking.expiresAt).getTime() > Date.now();
+        const modalHoldRemainingMin = modalIsQrisHold ? Math.max(1, Math.ceil((new Date(activeSlotModal.booking!.expiresAt).getTime() - Date.now()) / 60000)) : 0;
+        const canWalkIn = !modalIsMaintenance && modalRemCap > 0 && !modalIsQrisHold;
         const allItems = activeSlotModal.bookingItems || [];
 
         return (
@@ -565,6 +583,19 @@ export default function AdminSchedulePage() {
               {/* TAB 1: KASIR WALK-IN */}
               {modalMode === 'WALK_IN' && (
                 <form onSubmit={handleConfirmWalkIn} className="space-y-3.5 text-xs">
+                  {modalIsQrisHold && (
+                    <div className="rounded-2xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-950 flex items-start gap-2.5">
+                      <span className="text-lg">⏳</span>
+                      <div>
+                        <div className="font-black text-amber-900">Slot Sedang Dalam Masa Pembayaran Online (QRIS)</div>
+                        <p className="text-[11px] text-amber-800 mt-0.5">
+                          Pemesan online ({activeSlotModal.booking?.senderName || 'Warga'}) sedang memindai QRIS dengan sisa waktu tunggu <strong>sekitar {modalHoldRemainingMin} menit</strong>.
+                          Transaksi walk-in ditolak sistem untuk mencegah bentrok fisik di lapangan.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   <div>
                     <label className="font-bold text-fg-subtle block mb-1">
                       Nama Pemesan Langsung (Wajib)
@@ -677,8 +708,8 @@ export default function AdminSchedulePage() {
                     </button>
                     <button
                       type="submit"
-                      disabled={isPending}
-                      className="rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white shadow-md hover:bg-blue-500 disabled:opacity-50"
+                      disabled={isPending || modalIsQrisHold || modalRemCap <= 0}
+                      className="rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white shadow-md hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Konfirmasi Booking Lunas (Walk-in)
                     </button>

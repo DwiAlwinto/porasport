@@ -501,6 +501,29 @@ export async function getFieldSlotsForDate(fieldId: string, dateStr: string) {
   try {
     const targetDate = dateFromKey(dateStr);
 
+    // 1. Bersihkan booking PENDING_PAYMENT yang sudah kedaluwarsa (> 10 menit)
+    const expiredPending = await prisma.booking.findMany({
+      where: {
+        status: 'PENDING_PAYMENT',
+        expiresAt: { lt: new Date() },
+        items: {
+          some: {
+            fieldId,
+            date: targetDate,
+          },
+        },
+      },
+      select: { id: true },
+    });
+
+    for (const exp of expiredPending) {
+      await cancelOrExpireBookingAction(
+        exp.id,
+        'EXPIRED',
+        'Auto-expired: Waktu hold 10 menit habis saat memuat jadwal kasir'
+      );
+    }
+
     let slots = await prisma.fieldSlot.findMany({
       where: {
         fieldId,
@@ -516,6 +539,8 @@ export async function getFieldSlotsForDate(fieldId: string, dateStr: string) {
             nik: true,
             senderName: true,
             adminNotes: true,
+            expiresAt: true,
+            createdAt: true,
             user: {
               select: {
                 name: true,
@@ -536,6 +561,7 @@ export async function getFieldSlotsForDate(fieldId: string, dateStr: string) {
                 adminNotes: true,
                 grandTotal: true,
                 createdAt: true,
+                expiresAt: true,
                 user: {
                   select: {
                     name: true,
@@ -745,7 +771,7 @@ export async function directWalkInBookingAction(data: {
         });
       }
 
-      // 2. Cek kuota slot terkini
+      // 2. Cek baris slot terkini di database
       let slot = await tx.fieldSlot.findUnique({
         where: {
           fieldId_date_hour: {
@@ -754,22 +780,170 @@ export async function directWalkInBookingAction(data: {
             hour: data.hour,
           },
         },
+        include: {
+          booking: {
+            select: {
+              id: true,
+              status: true,
+              expiresAt: true,
+              senderName: true,
+              userId: true,
+              user: { select: { name: true, phone: true } },
+            },
+          },
+        },
       });
 
       const maxCap = slot?.maxCapacity || field.maxCapacity || (isPool ? 30 : 1);
-      const currentBooked = slot?.bookedCapacity || 0;
-      const newBooked = currentBooked + quantity;
 
       if (slot && slot.status === 'MAINTENANCE') {
         throw new UserFacingError(`Slot jam ${timeStart} sedang diblokir/maintenance.`);
       }
 
-      if (newBooked > maxCap) {
-        const sisa = Math.max(0, maxCap - currentBooked);
-        throw new UserFacingError(`Slot jam ${timeStart} hanya tersisa ${sisa} kuota orang, Anda meminta ${quantity} orang.`);
+      // 3. Cek Penguncian Online (Pre-Hold QRIS 10 Menit)
+      const now = new Date();
+      const pendingItems = await tx.bookingItem.findMany({
+        where: {
+          fieldId: data.fieldId,
+          date: targetDate,
+          timeStart,
+          booking: {
+            status: 'PENDING_PAYMENT',
+          },
+        },
+        include: {
+          booking: {
+            select: {
+              id: true,
+              status: true,
+              expiresAt: true,
+              senderName: true,
+              userId: true,
+              user: { select: { name: true, phone: true } },
+            },
+          },
+        },
+      });
+
+      if (
+        slot?.booking &&
+        slot.booking.status === 'PENDING_PAYMENT' &&
+        !pendingItems.some((pi) => pi.booking.id === slot?.booking?.id)
+      ) {
+        pendingItems.push({
+          id: 'slot-booking-ref',
+          bookingId: slot.booking.id,
+          fieldId: data.fieldId,
+          slotId: slot.id,
+          quantity: slot.bookedCapacity || 1,
+          date: targetDate,
+          timeStart,
+          timeEnd,
+          price: slot.price,
+          isPeakHour: slot.isPeakHour,
+          createdAt: new Date(),
+          booking: slot.booking,
+        } as any);
       }
 
-      // 3. Buat Booking Lunas Langsung
+      // Bersihkan booking pending yang sudah kedaluwarsa (> 10 menit)
+      let currentBooked = slot?.bookedCapacity || 0;
+      const activePendingItems = [];
+
+      for (const item of pendingItems) {
+        if (item.booking.expiresAt <= now) {
+          await tx.booking.update({
+            where: { id: item.booking.id },
+            data: {
+              status: 'CANCELLED',
+              adminNotes: 'Kedaluwarsa otomatis (10 Menit) - Slot dibebaskan saat transaksi kasir offline walk-in.',
+            },
+          });
+          if (slot) {
+            const deductQty = item.quantity || 1;
+            currentBooked = Math.max(0, currentBooked - deductQty);
+            const isStillFull = currentBooked >= maxCap;
+            await tx.fieldSlot.update({
+              where: { id: slot.id },
+              data: {
+                bookedCapacity: currentBooked,
+                status: isStillFull ? 'BOOKED' : 'AVAILABLE',
+                bookingId: currentBooked === 0 ? null : (slot.bookingId === item.booking.id ? null : slot.bookingId),
+                bookedByUserId: currentBooked === 0 ? null : (slot.bookedByUserId === item.booking.userId ? null : slot.bookedByUserId),
+              },
+            });
+          }
+        } else {
+          activePendingItems.push(item);
+        }
+      }
+
+      // Tolak transaksi jika ada warga online yang sedang memindai QRIS (< 10 menit)
+      if (!isPool) {
+        if (activePendingItems.length > 0) {
+          const hold = activePendingItems[0];
+          const remainingMs = Math.max(0, hold.booking.expiresAt.getTime() - Date.now());
+          const remainingSec = Math.ceil(remainingMs / 1000);
+          const remainingMin = Math.ceil(remainingSec / 60);
+          const timeStr = remainingSec < 60 ? `${remainingSec} detik` : `${remainingMin} menit`;
+          const holderName = hold.booking.senderName || hold.booking.user?.name || 'Warga';
+          throw new UserFacingError(
+            `Slot jam ${timeStart} sedang di-lock oleh pemesan online (${holderName}) yang sedang memindai QRIS (sisa waktu tunggu: ${timeStr}). Transaksi kasir walk-in ditolak untuk mencegah bentrok jadwal di lapangan.`
+          );
+        }
+
+        if (currentBooked >= maxCap) {
+          throw new UserFacingError(`Slot jam ${timeStart} sudah dipesan dan lunas oleh penyewa lain.`);
+        }
+      } else {
+        const newBooked = currentBooked + quantity;
+        if (newBooked > maxCap) {
+          const sisa = Math.max(0, maxCap - currentBooked);
+          if (activePendingItems.length > 0) {
+            const onlinePendingQty = activePendingItems.reduce((acc, curr) => acc + (curr.quantity || 1), 0);
+            const latestExpiry = Math.max(...activePendingItems.map((p) => p.booking.expiresAt.getTime()));
+            const remainingMs = Math.max(0, latestExpiry - Date.now());
+            const remainingSec = Math.ceil(remainingMs / 1000);
+            const remainingMin = Math.ceil(remainingSec / 60);
+            const timeStr = remainingSec < 60 ? `${remainingSec} detik` : `${remainingMin} menit`;
+            throw new UserFacingError(
+              `Slot jam ${timeStart} hanya tersisa ${sisa} kuota orang (sebanyak ${onlinePendingQty} kuota sedang di-lock online oleh warga selama ${timeStr} ke depan). Anda meminta ${quantity} orang.`
+            );
+          } else {
+            throw new UserFacingError(
+              `Slot jam ${timeStart} hanya tersisa ${sisa} kuota orang (sudah lunas terisi). Anda meminta ${quantity} orang.`
+            );
+          }
+        }
+      }
+
+      // 4. Pastikan baris slot ada di database jika belum digenerate sebelumnya
+      const finalSlotId = slot ? slot.id : slotId;
+      if (!slot) {
+        try {
+          await tx.fieldSlot.create({
+            data: {
+              id: slotId,
+              fieldId: field.id,
+              date: targetDate,
+              hour: data.hour,
+              timeStart,
+              timeEnd,
+              price: finalPrice,
+              isPeakHour: data.hour >= 16,
+              maxCapacity: maxCap,
+              bookedCapacity: 0,
+              status: 'AVAILABLE',
+            },
+          });
+        } catch (createErr: any) {
+          if (createErr?.code !== 'P2002') {
+            throw createErr;
+          }
+        }
+      }
+
+      // 5. Buat Booking Lunas Langsung (Walk-in)
       const newBooking = await tx.booking.create({
         data: {
           id: bookingId,
@@ -790,7 +964,7 @@ export async function directWalkInBookingAction(data: {
             create: [
               {
                 fieldId: field.id,
-                slotId: slot ? slot.id : slotId,
+                slotId: finalSlotId,
                 quantity: quantity,
                 date: targetDate,
                 timeStart,
@@ -812,39 +986,29 @@ export async function directWalkInBookingAction(data: {
         },
       });
 
-      // 4. Update slot kuota dan status
-      const isFull = newBooked >= maxCap;
+      // 6. Update Slot Kuota & Status Secara Atomik (Conditional Atomic Update)
+      const nextBooked = currentBooked + quantity;
+      const isFull = nextBooked >= maxCap;
 
-      await tx.fieldSlot.upsert({
+      const updateResult = await tx.fieldSlot.updateMany({
         where: {
-          fieldId_date_hour: {
-            fieldId: data.fieldId,
-            date: targetDate,
-            hour: data.hour,
-          },
+          id: finalSlotId,
+          bookedCapacity: { lte: maxCap - quantity },
+          status: { not: 'MAINTENANCE' },
         },
-        update: {
-          bookedCapacity: newBooked,
+        data: {
+          bookedCapacity: nextBooked,
           status: isFull ? 'BOOKED' : 'AVAILABLE',
           bookingId: slot?.bookingId ? slot.bookingId : newBooking.id,
           bookedByUserId: slot?.bookedByUserId ? slot.bookedByUserId : user.id,
         },
-        create: {
-          id: slotId,
-          fieldId: field.id,
-          date: targetDate,
-          hour: data.hour,
-          timeStart,
-          timeEnd,
-          price: finalPrice,
-          isPeakHour: data.hour >= 16,
-          maxCapacity: maxCap,
-          bookedCapacity: newBooked,
-          status: isFull ? 'BOOKED' : 'AVAILABLE',
-          bookingId: newBooking.id,
-          bookedByUserId: user.id,
-        },
       });
+
+      if (updateResult.count === 0) {
+        throw new UserFacingError(
+          `Slot jam ${timeStart} baru saja terisi atau di-lock oleh pemesan lain di saat bersamaan. Transaksi walk-in dibatalkan untuk menghindari jadwal ganda.`
+        );
+      }
 
       return newBooking;
     }, { maxWait: 10000, timeout: 20000 });
