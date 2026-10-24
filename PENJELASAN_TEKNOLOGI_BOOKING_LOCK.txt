@@ -1,0 +1,69 @@
+================================================================================
+PENJELASAN TEKNOLOGI FITUR BOOKING LOCK 10 MENIT & ANTI-RACE CONDITION
+SISTEM RESERVASI FASILITAS OLAHRAGA DISBUDPORA KABUPATEN BEKASI
+================================================================================
+
+STATUS REPOSITORY:
+- Cabang (Branch) : main
+- Status Git      : Berhasil di-push ke remote GitHub (Commit: 8d5cc10)
+- Status Build    : Lolos uji kompilasi produksi (Next.js & TypeScript 0 error)
+
+--------------------------------------------------------------------------------
+1. LATAR BELAKANG & TUJUAN
+--------------------------------------------------------------------------------
+Fitur ini dibangun untuk menyelesaikan 2 masalah fatal dalam sistem reservasi:
+a. Phantom Lock (Kunci Semu): Jadwal hanya terkunci di memori browser pengguna,
+   sehingga pengguna lain di tempat berbeda masih bisa memilih dan membayar slot
+   yang sama.
+b. Race Condition (Double Booking): Dua atau lebih pengguna menekan tombol bayar
+   pada milidetik yang sama, mengakibatkan satu lapangan terjual ganda.
+
+--------------------------------------------------------------------------------
+2. TEKNOLOGI & ARSITEKTUR YANG DIGUNAKAN
+--------------------------------------------------------------------------------
+1. Next.js 16 App Router & Server Actions:
+   - Eksekusi logika pemesanan berjalan di sisi server (Server-Side Execution),
+     bebas dari manipulasi client/browser.
+
+2. PostgreSQL ACID Transaction (via Prisma ORM):
+   - Seluruh proses pembuatan reservasi dan penguncian slot dibungkus dalam blok
+     transaksi atomik `prisma.$transaction`. Jika terjadi kendala di tengah jalan,
+     semua perubahan dibatalkan (Rollback) secara utuh.
+
+3. Pessimistic Conditional Update (Atomic Compare-And-Swap):
+   - Mencegah race condition tanpa perlu Redis locking tambahan.
+   - Query pembaruan kuota menggunakan syarat ketat:
+     UPDATE field_slots
+     WHERE id = slot_id AND bookedCapacity <= (maxCap - addQty) AND status != 'MAINTENANCE';
+   - Jika 2 orang berebut di milidetik yang sama, database hanya mengizinkan 1 orang
+     (count = 1). Orang kedua mendapatkan (count = 0) dan langsung ditolak secara aman
+     tanpa merusak kuota lapangan.
+
+4. Real Database Pre-Hold (Standar 10 Menit):
+   - Durasi kunci: 10 Menit (600 detik), sesuai standar perilaku pembayaran QRIS /
+     m-Banking di Indonesia.
+   - Slot langsung ditandai PENDING_PAYMENT di database sejak pengguna selesai membaca
+     dan menyetujui ketentuan agenda resmi kedinasan Pemda.
+   - Admin walk-in di pos lapangan maupun pemesan online lain langsung melihat slot
+     tersebut berwarna merah/terkunci secara real-time.
+
+5. Otomasi Siklus Hidup & Pelepasan Kuota (Auto-Release Lifecycle):
+   - Batal Manual: Tombol "Batalkan Pesanan" dengan modal konfirmasi langsung melepas
+     slot di database seketika (Immediate Server Release).
+   - Keluar Halaman: Navigasi keluar dari halaman checkout memicu pelepasan draft di server.
+   - Cron Job Berkala: Membersihkan booking kedaluwarsa dengan batas toleransi upload
+     (Grace Period) 60 detik (total toleransi server = 11 menit). Hal ini menjamin pengguna
+     yang sedang mengunggah bukti bayar di menit 09:59 tidak terbatalkan mendadak.
+
+--------------------------------------------------------------------------------
+3. KEUNGGULAN BISNIS & OPERASIONAL DISBUDPORA
+--------------------------------------------------------------------------------
+1. Nol Insiden Double Booking: Lapangan tidak akan pernah bentrok jadwal.
+2. Kepastian Pelanggan: Selama 10 menit scan QRIS, jadwal aman tidak bisa direbut orang lain.
+3. Transparansi Agenda Pemda: Pengguna teredukasi sejak awal mengenai prioritas agenda resmi Pemkab.
+4. Kinerja Ringan & Efisien: Menggunakan locking bawaan PostgreSQL ACID, minim beban server.
+
+================================================================================
+Disusun untuk: DISBUDPORA Kabupaten Bekasi
+Arsitektur & Kode: 100% Selesai & Teruji
+================================================================================
