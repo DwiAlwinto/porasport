@@ -20,6 +20,7 @@ import {
   LOG_SLIDER_STEPS,
   RATE_UNIT_SHORT,
 } from '../../lib/pricing';
+import { getWibTodayKey } from '../../lib/dateKeys';
 import {
   Search,
   MapPin,
@@ -123,6 +124,8 @@ export const ExplorePage: React.FC = () => {
     t,
     activeLang,
   } = useApp();
+
+  const todayWib = getWibTodayKey();
 
   // State tampilan & pencarian
   const [nameQuery, setNameQuery] = useState('');
@@ -444,8 +447,15 @@ export const ExplorePage: React.FC = () => {
             <div className="relative">
               <input
                 type="date"
-                value={searchFilters.date || ''}
-                onChange={(e) => setSearchFilters((prev) => ({ ...prev, date: e.target.value }))}
+                min={todayWib}
+                value={searchFilters.date && searchFilters.date >= todayWib ? searchFilters.date : todayWib}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSearchFilters((prev) => ({
+                    ...prev,
+                    date: val && val >= todayWib ? val : todayWib,
+                  }));
+                }}
                 className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-2.5 text-xs font-bold text-slate-800 outline-none transition focus:border-[#05BB75] focus:bg-white cursor-pointer"
               />
             </div>

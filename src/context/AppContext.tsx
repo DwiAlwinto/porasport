@@ -26,6 +26,7 @@ import { validateAndProcessPaymentProof, uploadPaymentProofAction } from '../act
 import { getSystemSettings } from '../actions/settingsActions';
 import { parseFiltersFromQuery, serialiseFiltersToQuery } from '../lib/filterUrl';
 import { parseRouteFromUrl, buildRouteUrl, type AppView } from '../lib/navigationUrl';
+import { getWibTodayKey } from '../lib/dateKeys';
 import { stripPII } from '../lib/sanitize';
 import { TRANSLATIONS, type TranslationDictionary } from '../utils/translations';
 
@@ -111,7 +112,7 @@ interface AppContextType {
 const defaultSearchFilters: SearchFilters = {
   sport: 'ALL',
   city: 'ALL',
-  date: new Date().toISOString().split('T')[0],
+  date: getWibTodayKey(),
   // null = tanpa batas anggaran, bukan angka tetap yang bisa menyaring venue
   maxPrice: null,
   facilities: [],

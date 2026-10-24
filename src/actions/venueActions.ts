@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { SportCategory, UserCategory } from '@prisma/client';
 import { resolveFieldPrice } from '../lib/pricing';
-import { toDateKey, parseDateKey } from '../lib/dateKeys';
+import { toDateKey, parseDateKey, getWibTodayKey } from '../lib/dateKeys';
 import { getCurrentUserSession } from '../lib/userAuth';
 import { rateLimit } from '../lib/rateLimit';
 import { toPublicMessage, UserFacingError } from '../lib/userFacingError';
@@ -288,17 +288,24 @@ export async function createBooking(data: {
       return { success: false, error: 'Pilih minimal satu slot jadwal.' };
     }
 
-    // Validasi waktu: dibuka sementara untuk testing user
-    // const nowTime = Date.now();
-    // for (const item of data.items) {
-    //   const slotStartTime = new Date(`${item.date}T${item.timeStart}:00+07:00`);
-    //   if (!Number.isNaN(slotStartTime.getTime()) && slotStartTime.getTime() <= nowTime) {
-    //     return {
-    //       success: false,
-    //       error: `Slot jam ${item.timeStart} pada tanggal ${item.date} sudah lewat dan tidak dapat dipesan lagi.`,
-    //     };
-    //   }
-    // }
+    // Validasi ketat tanggal dan jam: cegah pemesanan slot di masa lalu
+    const todayWib = getWibTodayKey();
+    const nowTime = Date.now();
+    for (const item of data.items) {
+      if (!item.date || item.date < todayWib) {
+        return {
+          success: false,
+          error: `Tanggal ${item.date} sudah lewat. Pemesanan hanya dapat dilakukan untuk hari ini (${todayWib}) atau tanggal mendatang.`,
+        };
+      }
+      const slotStartTime = new Date(`${item.date}T${item.timeStart}:00+07:00`);
+      if (!Number.isNaN(slotStartTime.getTime()) && slotStartTime.getTime() <= nowTime) {
+        return {
+          success: false,
+          error: `Slot jam ${item.timeStart} pada tanggal ${item.date} sudah lewat dan tidak dapat dipesan lagi.`,
+        };
+      }
+    }
 
     // Harga SELALU dihitung ulang di server dari tabel field_rates.
     const fields = await prisma.venueField.findMany({

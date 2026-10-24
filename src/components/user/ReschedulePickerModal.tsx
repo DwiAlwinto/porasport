@@ -19,6 +19,7 @@ import {
   getRescheduleAvailableSlotsAction,
   confirmCustomerRescheduleAction,
 } from '../../actions/rescheduleActions';
+import { getWibTodayKey, addDaysToKey } from '../../lib/dateKeys';
 
 interface ReschedulePickerModalProps {
   booking: Booking;
@@ -31,10 +32,9 @@ export const ReschedulePickerModal: React.FC<ReschedulePickerModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  // Ambil tanggal besok sebagai tanggal default pilihan
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const defaultDateStr = tomorrow.toISOString().split('T')[0];
+  // Ambil tanggal besok (WIB) sebagai tanggal default pilihan
+  const todayWib = getWibTodayKey();
+  const defaultDateStr = addDaysToKey(todayWib, 1);
 
   const [selectedDate, setSelectedDate] = useState<string>(defaultDateStr);
   const [slots, setSlots] = useState<any[]>([]);
@@ -101,11 +101,9 @@ export const ReschedulePickerModal: React.FC<ReschedulePickerModalProps> = ({
     }
   };
 
-  // Batas minimal tanggal (hari ini) dan maksimal (30 hari ke depan)
-  const todayStr = new Date().toISOString().split('T')[0];
-  const maxDate = new Date();
-  maxDate.setDate(maxDate.getDate() + 30);
-  const maxDateStr = maxDate.toISOString().split('T')[0];
+  // Batas minimal tanggal (hari ini WIB) dan maksimal (30 hari ke depan)
+  const todayStr = getWibTodayKey();
+  const maxDateStr = addDaysToKey(todayStr, 30);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
@@ -169,7 +167,16 @@ export const ReschedulePickerModal: React.FC<ReschedulePickerModalProps> = ({
               min={todayStr}
               max={maxDateStr}
               value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val && val < todayStr) {
+                  setSelectedDate(todayStr);
+                } else if (val && val > maxDateStr) {
+                  setSelectedDate(maxDateStr);
+                } else {
+                  setSelectedDate(val);
+                }
+              }}
               className="w-full rounded-xl border border-line-strong bg-field py-2.5 px-3.5 text-xs font-bold text-fg outline-none focus:border-emerald-500 shadow-sm"
             />
             <p className="text-[10px] text-fg-muted mt-1">

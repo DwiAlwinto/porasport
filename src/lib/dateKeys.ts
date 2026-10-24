@@ -17,9 +17,37 @@ export function toDateKey(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-/** `YYYY-MM-DD` untuk hari ini. */
+/**
+ * Mengambil tanggal hari ini dalam zona waktu resmi WIB (Asia/Jakarta, UTC+7) dalam format YYYY-MM-DD.
+ * Digunakan untuk batas minimal kalender (min) agar tidak bergeser tanggal saat dini hari di Bekasi.
+ */
+export function getWibTodayKey(): string {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Jakarta',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    return formatter.format(new Date());
+  } catch {
+    const d = new Date(Date.now() + 7 * 3600 * 1000);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+}
+
+/** `YYYY-MM-DD` untuk hari ini dalam zona waktu WIB. */
 export function todayKey(): string {
-  return toDateKey(new Date());
+  return getWibTodayKey();
+}
+
+/** Periksa apakah sebuah tanggal (YYYY-MM-DD) berada di masa lalu (sebelum hari ini WIB). */
+export function isDateInPast(dateKey: string): boolean {
+  if (!dateKey) return false;
+  return dateKey < getWibTodayKey();
 }
 
 /** Parse `YYYY-MM-DD` menjadi tengah malam UTC, konsisten dengan toDateKey. */

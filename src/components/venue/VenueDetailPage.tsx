@@ -13,6 +13,7 @@ import {
 } from '../../lib/slotUtils';
 import { getPublicFieldSlots } from '../../actions/venueActions';
 import { USER_CATEGORY_LABELS, getUserCategoryLabel, rateCoversHour } from '../../lib/pricing';
+import { getWibTodayKey } from '../../lib/dateKeys';
 import type { UserCategory } from '@prisma/client';
 import {
   MapPin,
@@ -139,9 +140,9 @@ export const VenueDetailPage: React.FC = () => {
     setMainImageIndex(0);
   }, [selectedVenue?.id]);
 
-  // Selected date
+  // Selected date (WIB)
   const [selectedDate, setSelectedDate] = useState<string>(() => {
-    return new Date().toISOString().split('T')[0];
+    return getWibTodayKey();
   });
 
   // Multi-slot selection state: Array of selected FieldSlot objects
@@ -295,6 +296,12 @@ export const VenueDetailPage: React.FC = () => {
   const handleSlotToggle = (slot: FieldSlot) => {
     if (slot.status !== 'AVAILABLE') return;
 
+    const todayWib = getWibTodayKey();
+    if (selectedDate < todayWib) {
+      alert('Tidak dapat memilih slot jadwal pada tanggal yang sudah lewat.');
+      return;
+    }
+
     const isPool = activeField?.sportType === 'RENANG' && userCategory !== 'PERTANDINGAN';
     const remCap =
       slot.remainingCapacity ??
@@ -321,7 +328,12 @@ export const VenueDetailPage: React.FC = () => {
   };
 
   const handleDateChange = (newDate: string) => {
-    setSelectedDate(newDate);
+    const todayWib = getWibTodayKey();
+    if (!newDate || newDate < todayWib) {
+      setSelectedDate(todayWib);
+    } else {
+      setSelectedDate(newDate);
+    }
     setSelectedSlots([]); // reset selection when date changes
   };
 
@@ -757,7 +769,7 @@ export const VenueDetailPage: React.FC = () => {
                   <input
                     type="date"
                     value={selectedDate}
-                    min={getWibDateTime().todayKey}
+                    min={getWibTodayKey()}
                     onChange={(e) => handleDateChange(e.target.value)}
                     className="rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2 text-xs font-bold text-slate-800 shadow-sm outline-none focus:border-emerald-500"
                   />

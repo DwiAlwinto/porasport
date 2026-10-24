@@ -6,6 +6,7 @@ import {
   CityLocation,
 } from '../../types';
 import { Search } from 'lucide-react';
+import { getWibTodayKey } from '../../lib/dateKeys';
 
 export const HeroSection: React.FC = () => {
   const { handleSearchSubmit, searchFilters, activeLang, venues, t } = useApp();
@@ -42,11 +43,15 @@ export const HeroSection: React.FC = () => {
     'Cikarang Timur': 'Cikarang Timur',
   };
 
+  const todayWib = getWibTodayKey();
   const [selectedSport, setSelectedSport] = useState<SportCategory>(searchFilters.sport);
   const [selectedCity, setSelectedCity] = useState<CityLocation>(searchFilters.city);
-  const [selectedDate, setSelectedDate] = useState<string>(
-    searchFilters.date || new Date().toISOString().split('T')[0]
-  );
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    if (searchFilters.date && searchFilters.date >= todayWib) {
+      return searchFilters.date;
+    }
+    return todayWib;
+  });
 
   // Dynamic Options derived from Venues Data
   const filteredByCity = selectedCity === 'ALL' ? venues : venues.filter(v => v.city === selectedCity);
@@ -212,8 +217,16 @@ export const HeroSection: React.FC = () => {
               <input
                 ref={dateInputRef}
                 type="date"
+                min={todayWib}
                 value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val && val < todayWib) {
+                    setSelectedDate(todayWib);
+                  } else {
+                    setSelectedDate(val);
+                  }
+                }}
                 onClick={(e) => {
                   e.stopPropagation();
                   if ('showPicker' in e.currentTarget) {
