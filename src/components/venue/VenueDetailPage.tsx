@@ -306,6 +306,58 @@ export const VenueDetailPage: React.FC = () => {
     );
   }, [activeField, remoteSlots, selectedDate, userCategory]);
 
+  // Helper: Mengecek apakah paket seharian valid dan seluruh jamnya AVAILABLE tanpa slot bolong
+  const checkDailyPackageAvailability = (rate: FieldRate, slots: FieldSlot[], dateStr: string) => {
+    let targetSlots = slots;
+    if (rate.timeStart && rate.timeEnd) {
+      const startHour = parseInt(rate.timeStart.split(':')[0], 10);
+      const endHour = parseInt(rate.timeEnd.split(':')[0], 10);
+      targetSlots = slots.filter((s) => s.hour >= startHour && s.hour < endHour);
+    }
+    if (targetSlots.length === 0) {
+      return { available: false, reason: 'Tidak ada jadwal slot jam pada tanggal ini.', targetSlots: [] };
+    }
+
+    const unavail = targetSlots.filter(
+      (s) => s.status !== 'AVAILABLE' || isSlotPast(dateStr, s.hour, s.timeStart) || (s.bookedCapacity || 0) > 0
+    );
+
+    if (unavail.length > 0) {
+      return {
+        available: false,
+        reason: `${unavail.length} jam sudah terisi/lewat (${unavail.map((s) => s.timeStart).slice(0, 3).join(', ')}${unavail.length > 3 ? '...' : ''})`,
+        targetSlots,
+        unavailCount: unavail.length,
+      };
+    }
+
+    return { available: true, targetSlots, reason: 'Seluruh jam operasional tersedia' };
+  };
+
+  // Helper: Mengecek apakah ada minimal satu blok kontinu berurutan tanpa jeda untuk paket multi-jam
+  const checkMultiHourAvailability = (rate: FieldRate, blockHours: number, slots: FieldSlot[], dateStr: string) => {
+    let candidateSlots = slots;
+    if (rate.timeStart && rate.timeEnd) {
+      const startHour = parseInt(rate.timeStart.split(':')[0], 10);
+      const endHour = parseInt(rate.timeEnd.split(':')[0], 10);
+      candidateSlots = slots.filter((s) => s.hour >= startHour && s.hour < endHour);
+    }
+    const sorted = [...candidateSlots].sort((a, b) => a.hour - b.hour);
+
+    for (let i = 0; i <= sorted.length - blockHours; i++) {
+      const block = sorted.slice(i, i + blockHours);
+      const isConsecutive = block.every((s, idx) => idx === 0 || s.hour === block[idx - 1].hour + 1);
+      const allAvail = block.every(
+        (s) => s.status === 'AVAILABLE' && !isSlotPast(dateStr, s.hour, s.timeStart) && (s.bookedCapacity || 0) === 0
+      );
+      if (isConsecutive && allAvail) {
+        return { available: true, firstBlock: block };
+      }
+    }
+
+    return { available: false, firstBlock: null };
+  };
+
   const handleSlotToggle = (slot: FieldSlot) => {
     if (slot.status !== 'AVAILABLE') return;
 
@@ -313,6 +365,24 @@ export const VenueDetailPage: React.FC = () => {
     if (selectedDate < todayWib) {
       alert('Tidak dapat memilih slot jadwal pada tanggal yang sudah lewat.');
       return;
+    }
+
+    // Jika sedang memilih Paket Seharian, deseleksi parsial dilarang karena merusak kontinuitas paket (slot bolong)
+    if (selectedRate?.unit === 'PER_HARI') {
+      const check = checkDailyPackageAvailability(selectedRate, daySlots, selectedDate);
+      if (!check.available) {
+        alert(`Paket Seharian tidak dapat dipilih: ${check.reason}. Silakan pilih tarif Per Jam Reguler.`);
+        return;
+      }
+      if (selectedSlots.length === check.targetSlots.length) {
+        alert(
+          'Paket Seharian mencakup SELURUH jam operasional lapangan. Anda tidak dapat melepas sebagian jam. Jika ingin menyewa jam tertentu saja, silakan pilih tarif Per Jam Reguler.'
+        );
+        return;
+      } else {
+        setSelectedSlots(check.targetSlots);
+        return;
+      }
     }
 
     const isPool = activeField?.sportType === 'RENANG' && userCategory !== 'PERTANDINGAN';
@@ -370,6 +440,35 @@ export const VenueDetailPage: React.FC = () => {
   };
 
   const handleRateSelect = (rate: FieldRate) => {
+    if (rate.unit === 'PER_HARI') {
+      const check = checkDailyPackageAvailability(rate, daySlots, selectedDate);
+      if (!check.available) {
+        alert(
+          `Perhatian: Paket Seharian tidak dapat dipilih untuk tanggal ini karena ${check.reason}. Seluruh jam operasional harus berstatus kosong tanpa jeda/slot bolong.`
+        );
+        return;
+      }
+      setSelectedRateId(rate.id);
+      setUserCategory(rate.category);
+      setSelectedSlots(check.targetSlots);
+      return;
+    }
+
+    if (rate.unit === 'PER_2_JAM' || rate.unit === 'PER_3_JAM' || rate.unit === 'PER_4_JAM') {
+      const count = rate.unit === 'PER_2_JAM' ? 2 : rate.unit === 'PER_3_JAM' ? 3 : 4;
+      const check = checkMultiHourAvailability(rate, count, daySlots, selectedDate);
+      if (!check.available || !check.firstBlock) {
+        alert(
+          `Perhatian: Tidak ada ${count} jam berurutan yang tersedia tanpa jeda/slot bolong untuk Paket ${count} Jam pada tanggal ini. Silakan pilih tanggal lain atau tarif per jam.`
+        );
+        return;
+      }
+      setSelectedRateId(rate.id);
+      setUserCategory(rate.category);
+      setSelectedSlots(check.firstBlock);
+      return;
+    }
+
     setSelectedRateId(rate.id);
     setUserCategory(rate.category);
     setSelectedSlots([]);
@@ -388,36 +487,25 @@ export const VenueDetailPage: React.FC = () => {
   };
 
   const handleSelectAllPackageSlots = (rate: FieldRate) => {
-    if (!rate.timeStart || !rate.timeEnd) {
-      const available = daySlots.filter(
-        (s) => s.status === 'AVAILABLE' && !isSlotPast(selectedDate, s.hour, s.timeStart)
+    const check = checkDailyPackageAvailability(rate, daySlots, selectedDate);
+    if (!check.available) {
+      alert(
+        `Paket Seharian tidak dapat dipilih karena ${check.reason}. Seluruh jam operasional harus kosong tanpa jeda/slot bolong agar tidak bentrok dengan penyewa reguler.`
       );
-      setSelectedSlots(available);
       return;
     }
-    const startHour = parseInt(rate.timeStart.split(':')[0], 10);
-    const endHour = parseInt(rate.timeEnd.split(':')[0], 10);
-    const matching = daySlots.filter((s) => {
-      const inRange = s.hour >= startHour && s.hour < endHour;
-      const isPast = isSlotPast(selectedDate, s.hour, s.timeStart);
-      return inRange && s.status === 'AVAILABLE' && !isPast;
-    });
-    setSelectedSlots(matching);
+    setSelectedSlots(check.targetSlots);
   };
 
   const handleSelectMultiHourBlock = (rate: FieldRate, blockHours: number) => {
-    let candidateSlots = daySlots;
-    if (rate.timeStart && rate.timeEnd) {
-      const startHour = parseInt(rate.timeStart.split(':')[0], 10);
-      const endHour = parseInt(rate.timeEnd.split(':')[0], 10);
-      candidateSlots = candidateSlots.filter(
-        (s) => s.hour >= startHour && s.hour < endHour
+    const check = checkMultiHourAvailability(rate, blockHours, daySlots, selectedDate);
+    if (!check.available || !check.firstBlock) {
+      alert(
+        `Tidak ditemukan ${blockHours} jam berurutan yang kosong tanpa jeda/slot bolong untuk Paket ${blockHours} Jam pada tanggal ini.`
       );
+      return;
     }
-    const available = candidateSlots.filter(
-      (s) => s.status === 'AVAILABLE' && !isSlotPast(selectedDate, s.hour, s.timeStart)
-    );
-    setSelectedSlots(available.slice(0, blockHours));
+    setSelectedSlots(check.firstBlock);
   };
 
   // Calculate total price of selected slots
@@ -451,6 +539,64 @@ export const VenueDetailPage: React.FC = () => {
     if (!isLoggedIn) {
       setShowLoginGate(true);
       return;
+    }
+
+    // 1. Validasi Kontinuitas Paket Seharian
+    if (selectedRate?.unit === 'PER_HARI') {
+      const check = checkDailyPackageAvailability(selectedRate, daySlots, selectedDate);
+      if (!check.available) {
+        alert(
+          `Pemesanan Paket Seharian dibatalkan karena ${check.reason}. Seluruh jam operasional harus tersedia tanpa slot bolong.`
+        );
+        return;
+      }
+
+      if (selectedSlots.length < check.targetSlots.length) {
+        alert(
+          `Pemesanan Paket Seharian harus mencakup SELURUH jam operasional (${check.targetSlots.length} jam). Anda baru memilih ${selectedSlots.length} jam (terdapat slot bolong).`
+        );
+        return;
+      }
+
+      const sortedHours = selectedSlots.map((s) => s.hour).sort((a, b) => a - b);
+      for (let i = 1; i < sortedHours.length; i++) {
+        if (sortedHours[i] !== sortedHours[i - 1] + 1) {
+          alert('Jadwal Paket Seharian harus berurutan secara kontinu tanpa jeda waktu (slot bolong).');
+          return;
+        }
+      }
+    }
+
+    // 2. Validasi Kontinuitas Paket Multi-Jam
+    const isMultiHour =
+      selectedRate?.unit === 'PER_2_JAM' ||
+      selectedRate?.unit === 'PER_3_JAM' ||
+      selectedRate?.unit === 'PER_4_JAM';
+
+    if (isMultiHour) {
+      const count =
+        selectedRate?.unit === 'PER_2_JAM'
+          ? 2
+          : selectedRate?.unit === 'PER_3_JAM'
+          ? 3
+          : 4;
+
+      if (selectedSlots.length % count !== 0) {
+        alert(
+          `Jumlah jam untuk Paket ${count} Jam harus kelipatan dari ${count} jam (misal ${count} jam, ${count * 2} jam). Anda memilih ${selectedSlots.length} jam.`
+        );
+        return;
+      }
+
+      const sortedHours = selectedSlots.map((s) => s.hour).sort((a, b) => a - b);
+      for (let i = 1; i < sortedHours.length; i++) {
+        if (sortedHours[i] !== sortedHours[i - 1] + 1) {
+          alert(
+            `Jadwal Paket ${count} Jam harus berurutan secara kontinu tanpa jeda waktu (slot bolong di tengah permainan).`
+          );
+          return;
+        }
+      }
     }
 
     // Tampilkan Pop-up Ketentuan Agenda Pemda terlebih dahulu
@@ -950,14 +1096,20 @@ export const VenueDetailPage: React.FC = () => {
                           const isNight =
                             rate.timeStart && parseInt(rate.timeStart.split(':')[0], 10) >= 18;
 
+                          const dailyCheck = isDaily ? checkDailyPackageAvailability(rate, daySlots, selectedDate) : null;
+                          const multiCheck = isMultiHour ? checkMultiHourAvailability(rate, multiHourCount, daySlots, selectedDate) : null;
+                          const isPackageDisabled = (isDaily && !dailyCheck?.available) || (isMultiHour && !multiCheck?.available);
+
                           return (
                             <div
                               key={rate.id}
                               onClick={() => handleRateSelect(rate)}
-                              className={`group relative flex flex-col justify-between rounded-2xl border p-3.5 cursor-pointer transition-all duration-200 ${
-                                isRateSelected
-                                  ? 'border-emerald-600 bg-emerald-50/90 text-slate-900 shadow-md ring-2 ring-emerald-500/40'
-                                  : 'border-slate-200 bg-white text-slate-800 hover:border-emerald-300 hover:bg-slate-50/80 shadow-xs'
+                              className={`group relative flex flex-col justify-between rounded-2xl border p-3.5 transition-all duration-200 ${
+                                isPackageDisabled
+                                  ? 'border-dashed border-red-200 bg-slate-50/90 text-slate-400 opacity-60 cursor-not-allowed'
+                                  : isRateSelected
+                                  ? 'border-emerald-600 bg-emerald-50/90 text-slate-900 shadow-md ring-2 ring-emerald-500/40 cursor-pointer'
+                                  : 'border-slate-200 bg-white text-slate-800 hover:border-emerald-300 hover:bg-slate-50/80 shadow-xs cursor-pointer'
                               }`}
                             >
                               <div>
@@ -1007,6 +1159,28 @@ export const VenueDetailPage: React.FC = () => {
                                   </div>
                                 </div>
 
+                                {/* Status Ketersediaan Kontinu Paket */}
+                                {isDaily && !dailyCheck?.available && (
+                                  <div className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-red-100 px-2 py-0.5 text-[9px] font-bold text-red-700">
+                                    <span>❌ Tidak Tersedia ({dailyCheck?.reason})</span>
+                                  </div>
+                                )}
+                                {isDaily && dailyCheck?.available && (
+                                  <div className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-800">
+                                    <span>✓ Seluruh {dailyCheck?.targetSlots.length} Jam Kosong Penuh</span>
+                                  </div>
+                                )}
+                                {isMultiHour && !multiCheck?.available && (
+                                  <div className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-[9px] font-bold text-amber-800">
+                                    <span>⚠️ Tidak ada {multiHourCount} jam bersambung</span>
+                                  </div>
+                                )}
+                                {isMultiHour && multiCheck?.available && (
+                                  <div className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-blue-100 px-2 py-0.5 text-[9px] font-bold text-blue-800">
+                                    <span>✓ Tersedia Blok {multiHourCount} Jam</span>
+                                  </div>
+                                )}
+
                                 <div className="mt-2">
                                   <div className="flex items-center gap-1.5 text-xs font-black text-slate-900">
                                     <Clock className="h-3.5 w-3.5 text-slate-400" />
@@ -1043,7 +1217,7 @@ export const VenueDetailPage: React.FC = () => {
                               </div>
 
                               {/* Tombol Aksi Cepat Pilih Paket Seharian */}
-                              {isRateSelected && isDaily && rate.category !== 'PERTANDINGAN' && (
+                              {isRateSelected && isDaily && rate.category !== 'PERTANDINGAN' && dailyCheck?.available && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -1060,7 +1234,7 @@ export const VenueDetailPage: React.FC = () => {
                               )}
 
                               {/* Tombol Aksi Cepat Pilih Paket Multi Jam */}
-                              {isRateSelected && isMultiHour && rate.category !== 'PERTANDINGAN' && (
+                              {isRateSelected && isMultiHour && rate.category !== 'PERTANDINGAN' && multiCheck?.available && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -1071,7 +1245,7 @@ export const VenueDetailPage: React.FC = () => {
                                 >
                                   <Zap className="h-3.5 w-3.5" />
                                   <span>
-                                    ⚡ Pilih Paket {multiHourCount} Jam
+                                    ⚡ Pilih Paket {multiHourCount} Jam Bersambung
                                   </span>
                                 </button>
                               )}

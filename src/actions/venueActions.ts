@@ -342,6 +342,49 @@ export async function createBooking(data: {
     const allRates = fields.flatMap((f) => f.rates);
     const selectedRate = data.rateId ? allRates.find((r) => r.id === data.rateId) : null;
 
+    // VALIDASI KONTINUITAS PAKET SEHARIAN & MULTI-JAM (ANTI SLOT BOLONG)
+    if (selectedRate && selectedRate.unit === 'PER_HARI') {
+      const startH = selectedRate.timeStart ? parseInt(selectedRate.timeStart.split(':')[0], 10) : 8;
+      const endH = selectedRate.timeEnd ? parseInt(selectedRate.timeEnd.split(':')[0], 10) : 20;
+      const requiredSlotsCount = endH - startH;
+
+      if (pricedItems.length < requiredSlotsCount) {
+        throw new UserFacingError(
+          `Pemesanan Paket Seharian harus mencakup seluruh ${requiredSlotsCount} jam operasional (${startH.toString().padStart(2, '0')}:00 - ${endH.toString().padStart(2, '0')}:00). Anda hanya memesan ${pricedItems.length} jam (terdapat slot bolong).`
+        );
+      }
+
+      const sortedHours = pricedItems.map((it) => parseInt(it.timeStart.split(':')[0], 10)).sort((a, b) => a - b);
+      for (let i = 1; i < sortedHours.length; i++) {
+        if (sortedHours[i] !== sortedHours[i - 1] + 1) {
+          throw new UserFacingError(
+            `Jadwal Paket Seharian harus berurutan secara kontinu tanpa ada jeda/slot bolong di tengahnya.`
+          );
+        }
+      }
+    } else if (
+      selectedRate &&
+      (selectedRate.unit === 'PER_2_JAM' || selectedRate.unit === 'PER_3_JAM' || selectedRate.unit === 'PER_4_JAM')
+    ) {
+      const packageDuration =
+        selectedRate.unit === 'PER_2_JAM' ? 2 : selectedRate.unit === 'PER_3_JAM' ? 3 : 4;
+
+      if (pricedItems.length % packageDuration !== 0) {
+        throw new UserFacingError(
+          `Jumlah jam untuk Paket ${packageDuration} Jam harus kelipatan dari ${packageDuration} jam. Anda memilih ${pricedItems.length} jam.`
+        );
+      }
+
+      const sortedHours = pricedItems.map((it) => parseInt(it.timeStart.split(':')[0], 10)).sort((a, b) => a - b);
+      for (let i = 1; i < sortedHours.length; i++) {
+        if (sortedHours[i] !== sortedHours[i - 1] + 1) {
+          throw new UserFacingError(
+            `Jadwal Paket ${packageDuration} Jam harus berurutan secara kontinu tanpa jeda waktu (slot bolong).`
+          );
+        }
+      }
+    }
+
     let serverTotal: number;
     if (selectedRate && selectedRate.unit === 'PER_HARI') {
       serverTotal = selectedRate.price;
@@ -349,6 +392,27 @@ export async function createBooking(data: {
       pricedItems.forEach((i) => {
         i.price = perSlot;
       });
+      const sumItems = pricedItems.reduce((acc, curr) => acc + curr.price, 0);
+      const diff = serverTotal - sumItems;
+      if (diff !== 0 && pricedItems.length > 0) {
+        pricedItems[pricedItems.length - 1].price += diff;
+      }
+    } else if (
+      selectedRate &&
+      (selectedRate.unit === 'PER_2_JAM' || selectedRate.unit === 'PER_3_JAM' || selectedRate.unit === 'PER_4_JAM')
+    ) {
+      const packageDuration =
+        selectedRate.unit === 'PER_2_JAM' ? 2 : selectedRate.unit === 'PER_3_JAM' ? 3 : 4;
+      serverTotal = Math.round((pricedItems.length / packageDuration) * selectedRate.price);
+      const perSlot = Math.round(serverTotal / pricedItems.length);
+      pricedItems.forEach((i) => {
+        i.price = perSlot;
+      });
+      const sumItems = pricedItems.reduce((acc, curr) => acc + curr.price, 0);
+      const diff = serverTotal - sumItems;
+      if (diff !== 0 && pricedItems.length > 0) {
+        pricedItems[pricedItems.length - 1].price += diff;
+      }
     } else {
       serverTotal = pricedItems.reduce((sum, i) => sum + i.price, 0);
     }

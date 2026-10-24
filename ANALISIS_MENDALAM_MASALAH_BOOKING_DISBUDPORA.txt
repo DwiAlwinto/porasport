@@ -57,8 +57,8 @@ RINCIAN 18 MASALAH KRITIS, RISIKO OPERASIONAL & SOLUSI TEKNIS
    - Solusi: Pasang conditional atomic update pada kasir walk-in. Jika slot sedang
      di-lock online (< 10 menit), tolak transaksi walk-in dan tampilkan sisa waktu tunggu.
 
-7. CACAT PEMESANAN PAKET SEHARIAN & MULTI-JAM (SLOT BOLONG)
-   - Lokasi: src/components/venue/VenueDetailPage.tsx
+7. Done : CACAT PEMESANAN PAKET SEHARIAN & MULTI-JAM (SLOT BOLONG)
+   - Lokasi: src/components/venue/VenueDetailPage.tsx & src/actions/venueActions.ts
    - Masalah: Pada "Paket Seharian" (06:00 - 23:00) atau "Paket 3 Jam", jika ada 1 atau 2
      jam di tengahnya yang sudah terisi penyewa reguler, sistem tetap membiarkan warga
      memilih sisa jamnya namun tetap menagih tarif seharian penuh (full price).
