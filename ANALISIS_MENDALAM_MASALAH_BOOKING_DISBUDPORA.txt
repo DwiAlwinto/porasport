@@ -67,8 +67,8 @@ RINCIAN 18 MASALAH KRITIS, RISIKO OPERASIONAL & SOLUSI TEKNIS
    - Solusi: Validasi kontinuitas paket: opsi "Paket Seharian" hanya aktif jika SELURUH
      rentang jam operasional berstatus AVAILABLE.
 
-13. RISIKO DATABASE DEADLOCK PADA PEMESANAN MULTI-SLOT SEKALIGUS
-   - Lokasi: src/actions/venueActions.ts
+13. Done : RISIKO DATABASE DEADLOCK PADA PEMESANAN MULTI-SLOT SEKALIGUS
+   - Lokasi: src/actions/venueActions.ts, src/actions/adminActions.ts & src/actions/paymentValidationActions.ts
    - Masalah: Saat pengguna memesan 2 slot sekaligus (Slot A jam 19:00 dan Slot B jam 20:00),
      sistem melakukan perulangan mengunci baris slot. Jika Pengguna 1 mengunci urutan [A, B]
      dan Pengguna 2 mengunci urutan [B, A], PostgreSQL akan melempar Deadlock (Error 40P01).
@@ -78,7 +78,7 @@ RINCIAN 18 MASALAH KRITIS, RISIKO OPERASIONAL & SOLUSI TEKNIS
      sortedItems = [...pricedItems].sort((a, b) => a.slotId.localeCompare(b.slotId)).
      Dengan mengunci selalu dari ID terkecil ke terbesar, deadlock mustahil terjadi.
 
-14. SELISIH PEMBULATAN PECAHAN RUPIAH PADA PAKET MULTI-JAM (AUDIT BPK)
+14. Done : SELISIH PEMBULATAN PECAHAN RUPIAH PADA PAKET MULTI-JAM (AUDIT BPK)
    - Lokasi: src/actions/venueActions.ts
    - Masalah: Ketika total paket dibagi rata ke beberapa slot (misal Rp 100.000 / 3 slot =
      Rp 33.333,33), pembulatan Math.round menghasilkan 33.333 * 3 = 99.999. Terdapat selisih

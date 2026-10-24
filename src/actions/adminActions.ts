@@ -274,7 +274,8 @@ export async function manualVerifyPayment(bookingId: string, adminNotes?: string
         },
       });
 
-      // 4. Perbarui status FieldSlot sesuai kapasitas riil
+      // 4. Perbarui status FieldSlot sesuai kapasitas riil (urutan deterministik anti-deadlock)
+      const slotsToUpdate: any[] = [];
       for (const item of booking.items) {
         const slot = await tx.fieldSlot.findFirst({
           where: {
@@ -283,19 +284,22 @@ export async function manualVerifyPayment(bookingId: string, adminNotes?: string
             timeStart: item.timeStart,
           },
         });
+        if (slot) slotsToUpdate.push(slot);
+      }
 
-        if (slot) {
-          const isFull = slot.bookedCapacity >= slot.maxCapacity;
-          const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (isFull ? 'BOOKED' : 'AVAILABLE');
-          await tx.fieldSlot.update({
-            where: { id: slot.id },
-            data: {
-              status: newStatus,
-              bookingId: slot.bookingId ? slot.bookingId : booking.id,
-              bookedByUserId: slot.bookedByUserId ? slot.bookedByUserId : booking.userId,
-            },
-          });
-        }
+      slotsToUpdate.sort((a, b) => a.id.localeCompare(b.id));
+
+      for (const slot of slotsToUpdate) {
+        const isFull = slot.bookedCapacity >= slot.maxCapacity;
+        const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (isFull ? 'BOOKED' : 'AVAILABLE');
+        await tx.fieldSlot.update({
+          where: { id: slot.id },
+          data: {
+            status: newStatus,
+            bookingId: slot.bookingId ? slot.bookingId : booking.id,
+            bookedByUserId: slot.bookedByUserId ? slot.bookedByUserId : booking.userId,
+          },
+        });
       }
 
       return updatedBooking;
@@ -344,7 +348,8 @@ export async function cancelOrExpireBookingAction(
         },
       });
 
-      // Bebaskan Slot Lapangan secara proporsional sesuai kapasitas yang dibatalkan
+      // Bebaskan Slot Lapangan secara proporsional sesuai kapasitas yang dibatalkan (urutan deterministik anti-deadlock)
+      const slotsToRelease: { slot: any; item: any }[] = [];
       for (const item of booking.items) {
         const slot = await tx.fieldSlot.findFirst({
           where: {
@@ -353,22 +358,27 @@ export async function cancelOrExpireBookingAction(
             timeStart: item.timeStart,
           },
         });
-
         if (slot) {
-          const qty = item.quantity || 1;
-          const newBooked = Math.max(0, slot.bookedCapacity - qty);
-          const isFull = newBooked >= slot.maxCapacity;
-          const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (isFull ? 'BOOKED' : 'AVAILABLE');
-          await tx.fieldSlot.update({
-            where: { id: slot.id },
-            data: {
-              bookedCapacity: newBooked,
-              status: newStatus,
-              bookingId: newBooked === 0 ? null : (slot.bookingId === booking.id ? null : slot.bookingId),
-              bookedByUserId: newBooked === 0 ? null : (slot.bookedByUserId === booking.userId ? null : slot.bookedByUserId),
-            },
-          });
+          slotsToRelease.push({ slot, item });
         }
+      }
+
+      slotsToRelease.sort((a, b) => a.slot.id.localeCompare(b.slot.id));
+
+      for (const { slot, item } of slotsToRelease) {
+        const qty = item.quantity || 1;
+        const newBooked = Math.max(0, slot.bookedCapacity - qty);
+        const isFull = newBooked >= slot.maxCapacity;
+        const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (isFull ? 'BOOKED' : 'AVAILABLE');
+        await tx.fieldSlot.update({
+          where: { id: slot.id },
+          data: {
+            bookedCapacity: newBooked,
+            status: newStatus,
+            bookingId: newBooked === 0 ? null : (slot.bookingId === booking.id ? null : slot.bookingId),
+            bookedByUserId: newBooked === 0 ? null : (slot.bookedByUserId === booking.userId ? null : slot.bookedByUserId),
+          },
+        });
       }
     }, { maxWait: 10000, timeout: 20000 });
 
@@ -410,7 +420,8 @@ export async function rejectPaymentWithReasonAction(bookingId: string, reason: s
         },
       });
 
-      // Lepaskan slot lapangan secara proporsional sesuai kapasitas yang ditolak
+      // Lepaskan slot lapangan secara proporsional sesuai kapasitas yang ditolak (urutan deterministik anti-deadlock)
+      const slotsToRelease: { slot: any; item: any }[] = [];
       for (const item of booking.items) {
         const slot = await tx.fieldSlot.findFirst({
           where: {
@@ -419,22 +430,27 @@ export async function rejectPaymentWithReasonAction(bookingId: string, reason: s
             timeStart: item.timeStart,
           },
         });
-
         if (slot) {
-          const qty = item.quantity || 1;
-          const newBooked = Math.max(0, slot.bookedCapacity - qty);
-          const isFull = newBooked >= slot.maxCapacity;
-          const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (isFull ? 'BOOKED' : 'AVAILABLE');
-          await tx.fieldSlot.update({
-            where: { id: slot.id },
-            data: {
-              bookedCapacity: newBooked,
-              status: newStatus,
-              bookingId: newBooked === 0 ? null : (slot.bookingId === booking.id ? null : slot.bookingId),
-              bookedByUserId: newBooked === 0 ? null : (slot.bookedByUserId === booking.userId ? null : slot.bookedByUserId),
-            },
-          });
+          slotsToRelease.push({ slot, item });
         }
+      }
+
+      slotsToRelease.sort((a, b) => a.slot.id.localeCompare(b.slot.id));
+
+      for (const { slot, item } of slotsToRelease) {
+        const qty = item.quantity || 1;
+        const newBooked = Math.max(0, slot.bookedCapacity - qty);
+        const isFull = newBooked >= slot.maxCapacity;
+        const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (isFull ? 'BOOKED' : 'AVAILABLE');
+        await tx.fieldSlot.update({
+          where: { id: slot.id },
+          data: {
+            bookedCapacity: newBooked,
+            status: newStatus,
+            bookingId: newBooked === 0 ? null : (slot.bookingId === booking.id ? null : slot.bookingId),
+            bookedByUserId: newBooked === 0 ? null : (slot.bookedByUserId === booking.userId ? null : slot.bookedByUserId),
+          },
+        });
       }
       return updated;
     }, { maxWait: 10000, timeout: 20000 });

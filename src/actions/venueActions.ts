@@ -469,7 +469,11 @@ export async function createBooking(data: {
       });
 
       // 2. Kunci kuota slot yang dipesan secara atomik (Pessimistic Conditional Lock)
-      for (const item of pricedItems) {
+      // PENTING (SOLUSI ANTI-DEADLOCK): Lakukan pengurutan deterministik berdasar slotId (ID ascending).
+      // Mengunci baris tabel fieldSlot selalu dengan urutan yang sama persis mencegah circular wait (PostgreSQL Error 40P01)
+      // ketika 2 atau lebih pemesan memilih kombinasi slot yang bersinggungan di milidetik yang sama.
+      const deterministicItemsToLock = [...pricedItems].sort((a, b) => (a.slotId || '').localeCompare(b.slotId || ''));
+      for (const item of deterministicItemsToLock) {
         const slot = await tx.fieldSlot.findUnique({
           where: { id: item.slotId },
         });
@@ -796,6 +800,8 @@ export async function cancelUserBookingAction(bookingId: string) {
 
     await prisma.$transaction(async (tx) => {
       // 1. Bebaskan kuota slot
+      // PENTING (SOLUSI ANTI-DEADLOCK): Ambil slot terlebih dahulu lalu urutkan secara deterministik berdasar ID
+      const slotsToRelease: { slot: any; item: any }[] = [];
       for (const item of booking.items) {
         const slot = await tx.fieldSlot.findFirst({
           where: {
@@ -804,21 +810,26 @@ export async function cancelUserBookingAction(bookingId: string) {
             timeStart: item.timeStart,
           },
         });
-
         if (slot) {
-          const qty = item.quantity || 1;
-          const newBooked = Math.max(0, slot.bookedCapacity - qty);
-          const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (newBooked >= slot.maxCapacity ? 'BOOKED' : 'AVAILABLE');
-          await tx.fieldSlot.update({
-            where: { id: slot.id },
-            data: {
-              bookedCapacity: newBooked,
-              status: newStatus,
-              bookingId: newBooked === 0 ? null : slot.bookingId,
-              bookedByUserId: newBooked === 0 ? null : slot.bookedByUserId,
-            },
-          });
+          slotsToRelease.push({ slot, item });
         }
+      }
+
+      slotsToRelease.sort((a, b) => a.slot.id.localeCompare(b.slot.id));
+
+      for (const { slot, item } of slotsToRelease) {
+        const qty = item.quantity || 1;
+        const newBooked = Math.max(0, slot.bookedCapacity - qty);
+        const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (newBooked >= slot.maxCapacity ? 'BOOKED' : 'AVAILABLE');
+        await tx.fieldSlot.update({
+          where: { id: slot.id },
+          data: {
+            bookedCapacity: newBooked,
+            status: newStatus,
+            bookingId: newBooked === 0 ? null : slot.bookingId,
+            bookedByUserId: newBooked === 0 ? null : slot.bookedByUserId,
+          },
+        });
       }
 
       // 2. Update status booking menjadi CANCELLED

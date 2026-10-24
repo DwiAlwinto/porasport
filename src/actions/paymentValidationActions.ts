@@ -354,6 +354,7 @@ export async function triggerOCRValidation(bookingId: string): Promise<Validatio
           },
         })
 
+        const slotsToUpdate: any[] = [];
         for (const item of booking.items) {
           const slot = await tx.fieldSlot.findFirst({
             where: {
@@ -362,19 +363,22 @@ export async function triggerOCRValidation(bookingId: string): Promise<Validatio
               timeStart: item.timeStart,
             },
           });
+          if (slot) slotsToUpdate.push(slot);
+        }
 
-          if (slot) {
-            const isFull = slot.bookedCapacity >= slot.maxCapacity;
-            const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (isFull ? 'BOOKED' : 'AVAILABLE');
-            await tx.fieldSlot.update({
-              where: { id: slot.id },
-              data: {
-                status: newStatus,
-                bookingId: slot.bookingId ? slot.bookingId : booking.id,
-                bookedByUserId: slot.bookedByUserId ? slot.bookedByUserId : booking.userId,
-              },
-            });
-          }
+        slotsToUpdate.sort((a, b) => a.id.localeCompare(b.id));
+
+        for (const slot of slotsToUpdate) {
+          const isFull = slot.bookedCapacity >= slot.maxCapacity;
+          const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (isFull ? 'BOOKED' : 'AVAILABLE');
+          await tx.fieldSlot.update({
+            where: { id: slot.id },
+            data: {
+              status: newStatus,
+              bookingId: slot.bookingId ? slot.bookingId : booking.id,
+              bookedByUserId: slot.bookedByUserId ? slot.bookedByUserId : booking.userId,
+            },
+          });
         }
       }
     })
@@ -445,6 +449,7 @@ export async function manualApproveBooking(
         },
       })
 
+      const slotsToUpdate: any[] = [];
       for (const item of booking.items) {
         const slot = await tx.fieldSlot.findFirst({
           where: {
@@ -453,19 +458,22 @@ export async function manualApproveBooking(
             timeStart: item.timeStart,
           },
         });
+        if (slot) slotsToUpdate.push(slot);
+      }
 
-        if (slot) {
-          const isFull = slot.bookedCapacity >= slot.maxCapacity;
-          const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (isFull ? 'BOOKED' : 'AVAILABLE');
-          await tx.fieldSlot.update({
-            where: { id: slot.id },
-            data: {
-              status: newStatus,
-              bookingId: slot.bookingId ? slot.bookingId : booking.id,
-              bookedByUserId: slot.bookedByUserId ? slot.bookedByUserId : booking.userId,
-            },
-          });
-        }
+      slotsToUpdate.sort((a, b) => a.id.localeCompare(b.id));
+
+      for (const slot of slotsToUpdate) {
+        const isFull = slot.bookedCapacity >= slot.maxCapacity;
+        const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (isFull ? 'BOOKED' : 'AVAILABLE');
+        await tx.fieldSlot.update({
+          where: { id: slot.id },
+          data: {
+            status: newStatus,
+            bookingId: slot.bookingId ? slot.bookingId : booking.id,
+            bookedByUserId: slot.bookedByUserId ? slot.bookedByUserId : booking.userId,
+          },
+        });
       }
     })
 
