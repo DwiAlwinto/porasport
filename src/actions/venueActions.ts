@@ -334,7 +334,7 @@ export async function createBooking(data: {
               adminNotes: 'Kedaluwarsa otomatis (Batas waktu pembayaran 10 menit berakhir)',
             },
           });
-        });
+        }, { maxWait: 3000, timeout: 5000 });
       } catch (err) {
         console.warn(`[createBooking] Gagal membersihkan pesanan kedaluwarsa ${exp.id}:`, err);
       }
@@ -606,7 +606,7 @@ export async function createBooking(data: {
       }
 
       return newBooking;
-    }, { maxWait: 10000, timeout: 20000 });
+    }, { maxWait: 3000, timeout: 5000 });
 
     revalidatePath('/'); // Memastikan data terbaru diambil dari server
     
@@ -914,7 +914,7 @@ export async function cancelUserBookingAction(bookingId: string) {
           adminNotes: booking.adminNotes || 'Dibatalkan oleh pemesan',
         },
       });
-    }, { maxWait: 10000, timeout: 20000 });
+    }, { maxWait: 3000, timeout: 5000 });
 
     revalidatePath('/');
     revalidatePath('/dashboard');

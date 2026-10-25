@@ -93,7 +93,7 @@ export async function initiatePemdaRescheduleAction(params: {
           adminNotes: updatedNotes,
         },
       });
-    }, { maxWait: 10000, timeout: 20000 });
+    }, { maxWait: 3000, timeout: 5000 });
 
     revalidatePath('/');
     revalidatePath('/dashboard');
@@ -382,7 +382,7 @@ export async function confirmCustomerRescheduleAction(params: {
           rescheduleCustomerNotes: customerNotes?.trim() || null,
         },
       });
-    }, { maxWait: 15000, timeout: 30000 });
+    }, { maxWait: 3000, timeout: 5000 });
 
     revalidatePath('/');
     revalidatePath('/dashboard');
@@ -462,7 +462,7 @@ export async function requestRescheduleRefundAction(bookingId: string, refundNot
           adminNotes: `${booking.adminNotes ? booking.adminNotes + ' | ' : ''}Pengajuan Refund oleh Warga: ${refundNotes?.trim() || 'Berhalangan di tanggal lain'}`,
         },
       });
-    }, { maxWait: 10000, timeout: 20000 });
+    }, { maxWait: 3000, timeout: 5000 });
 
     revalidatePath('/dashboard');
     revalidatePath('/admin/bookings');

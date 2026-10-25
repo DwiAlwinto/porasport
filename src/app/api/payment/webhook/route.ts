@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
             });
           }
         }
-      }, { maxWait: 10000, timeout: 20000 });
+      }, { maxWait: 3000, timeout: 5000 });
 
       console.log(`[PAYMENT WEBHOOK] Successfully verified PAID for booking ${orderId}`);
       return NextResponse.json({
@@ -209,7 +209,7 @@ export async function POST(req: NextRequest) {
             }
           }
         }
-      }, { maxWait: 10000, timeout: 20000 });
+      }, { maxWait: 3000, timeout: 5000 });
 
       console.log(`[PAYMENT WEBHOOK] Booking ${orderId} released as ${targetBookingStatus}`);
       return NextResponse.json({

@@ -303,7 +303,7 @@ export async function manualVerifyPayment(bookingId: string, adminNotes?: string
       }
 
       return updatedBooking;
-    }, { maxWait: 10000, timeout: 20000 });
+    }, { maxWait: 3000, timeout: 5000 });
 
     revalidatePath('/');
     return { success: true, booking: result };
@@ -380,7 +380,7 @@ export async function cancelOrExpireBookingAction(
           },
         });
       }
-    }, { maxWait: 10000, timeout: 20000 });
+    }, { maxWait: 3000, timeout: 5000 });
 
     revalidatePath('/');
     return { success: true };
@@ -453,7 +453,7 @@ export async function rejectPaymentWithReasonAction(bookingId: string, reason: s
         });
       }
       return updated;
-    }, { maxWait: 10000, timeout: 20000 });
+    }, { maxWait: 3000, timeout: 5000 });
 
     revalidatePath('/');
     return { success: true, booking: result };
@@ -771,22 +771,22 @@ export async function directWalkInBookingAction(data: {
     const timeEnd = `${(data.hour + 1).toString().padStart(2, '0')}:00`;
     const slotId = `${field.id}-${data.dateStr}-${data.hour}`;
 
+    // Dapatkan atau buat dummy user pemesan walk-in DI LUAR transaksi untuk menghemat waktu koneksi pool
+    let user = await prisma.user.findFirst({ where: { email: 'walkin@sportbekasi.id' } });
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          id: 'walkin-guest',
+          name: 'Tamu Booking Langsung (Walk-in)',
+          email: 'walkin@sportbekasi.id',
+          phone: '0800000000',
+          role: 'USER',
+        },
+      });
+    }
+
     // Jalankan dalam transaksi aman anti overbooking
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Dapatkan atau buat dummy user pemesan walk-in jika belum ada user ID
-      let user = await tx.user.findFirst({ where: { email: 'walkin@sportbekasi.id' } });
-      if (!user) {
-        user = await tx.user.create({
-          data: {
-            id: 'walkin-guest',
-            name: 'Tamu Booking Langsung (Walk-in)',
-            email: 'walkin@sportbekasi.id',
-            phone: '0800000000',
-            role: 'USER',
-          },
-        });
-      }
-
       // 2. Cek baris slot terkini di database
       let slot = await tx.fieldSlot.findUnique({
         where: {
@@ -1027,7 +1027,7 @@ export async function directWalkInBookingAction(data: {
       }
 
       return newBooking;
-    }, { maxWait: 10000, timeout: 20000 });
+    }, { maxWait: 3000, timeout: 5000 });
 
     revalidatePath('/');
     return { success: true, booking: result };
@@ -1080,7 +1080,7 @@ export async function unblockOrReleaseSlotAction(data: {
           bookedByUserId: null,
         },
       });
-    }, { maxWait: 10000, timeout: 20000 });
+    }, { maxWait: 3000, timeout: 5000 });
 
     revalidatePath('/');
     return { success: true };
@@ -1129,7 +1129,7 @@ export async function cancelSpecificBookingInSlot(bookingId: string, slotId: str
           },
         });
       }
-    }, { maxWait: 10000, timeout: 20000 });
+    }, { maxWait: 3000, timeout: 5000 });
 
     revalidatePath('/');
     return { success: true };
@@ -1304,7 +1304,7 @@ export async function createSuperAdminBookingAction(input: CreateSuperAdminBooki
       });
 
       return newBooking;
-    }, { maxWait: 10000, timeout: 20000 });
+    }, { maxWait: 3000, timeout: 5000 });
 
     revalidatePath('/');
     revalidatePath('/admin/bookings');
@@ -1431,7 +1431,7 @@ export async function updateSuperAdminBookingAction(input: UpdateSuperAdminBooki
           }
         }
       }
-    }, { maxWait: 10000, timeout: 20000 });
+    }, { maxWait: 3000, timeout: 5000 });
 
     revalidatePath('/');
     revalidatePath('/admin/bookings');
@@ -1500,7 +1500,7 @@ export async function deleteSuperAdminBookingAction(bookingId: string) {
       await tx.payment.deleteMany({ where: { bookingId } });
       await tx.bookingItem.deleteMany({ where: { bookingId } });
       await tx.booking.delete({ where: { id: bookingId } });
-    }, { maxWait: 10000, timeout: 20000 });
+    }, { maxWait: 3000, timeout: 5000 });
 
     // 3. Bersihkan seluruh file fisik bukti transfer/QRIS dari folder penyimpanan Supabase & server
     try {

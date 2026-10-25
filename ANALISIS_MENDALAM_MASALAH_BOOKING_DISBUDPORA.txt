@@ -189,7 +189,7 @@ RINCIAN 18 MASALAH KRITIS, RISIKO OPERASIONAL & SOLUSI TEKNIS
      GOR/Stadion tanpa membayar.
    - Solusi: Batasi maksimal 1 (atau maksimal 2) pesanan aktif berstatus PENDING_PAYMENT per akun.
 
-16. DATABASE CONNECTION POOL STARVATION SAAT PUNCAK TRAFIK
+16. Done : DATABASE CONNECTION POOL STARVATION SAAT PUNCAK TRAFIK
    - Lokasi: src/actions/venueActions.ts & src/actions/adminActions.ts
    - Masalah: Opsi prisma.$transaction(..., { timeout: 20000 }) menahan koneksi database hingga 20 detik.
      Jika 20 pengguna serentak memesan tiket turnamen, batas koneksi PostgreSQL (biasanya 10-20 pool) langsung habis.
@@ -203,7 +203,7 @@ RINCIAN 18 MASALAH KRITIS, RISIKO OPERASIONAL & SOLUSI TEKNIS
    - Masalah: Saat warga menekan "Setuju & Lanjutkan Pemesanan", server berhasil mengunci slot di database.
      Namun sinyal 4G warga tiba-tiba putus sebelum respons balik tiba di browser. Browser menampilkan error.
      Saat warga merefresh halaman 5 detik kemudian, slot yang ingin ia sewa berstatus MERAH (Terkunci oleh dirinya
-     sendiri) dan ia tidak bisa memilihnya selama 10 menit!
+     sendiri) dan ia tidak bisa memilihnya selama 10 menit! 
    - Risiko: Pengalaman pengguna sangat buruk; warga merasa sistem buggy dan jadwalnya direbut orang.
    - Solusi (Fitur Ghost Draft Recovery):
      Saat halaman venue dimuat: jika slot berstatus PENDING_PAYMENT dan bookedByUserId === user.id, tampilkan
