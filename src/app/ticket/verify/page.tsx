@@ -138,16 +138,34 @@ function TicketVerifyContent() {
               className={`rounded-3xl border p-6 text-center shadow-2xl relative overflow-hidden ${
                 data.ticket.isValid
                   ? 'border-emerald-500/40 bg-gradient-to-b from-emerald-950/70 via-slate-900 to-slate-900'
+                  : data.ticket.isAlreadyCheckedIn
+                  ? 'border-red-500/60 bg-gradient-to-b from-red-950/80 via-slate-900 to-slate-900'
                   : 'border-amber-500/40 bg-gradient-to-b from-amber-950/70 via-slate-900 to-slate-900'
               }`}
             >
-              <div className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-black tracking-wide uppercase shadow-lg mb-3 ${
-                data.ticket.isValid ? 'bg-emerald-500 text-slate-950' : 'bg-amber-500 text-slate-950'
-              }">
+              <div
+                className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-black tracking-wide uppercase shadow-lg mb-3 ${
+                  data.ticket.isValid
+                    ? 'bg-emerald-500 text-slate-950'
+                    : data.ticket.isAlreadyCheckedIn
+                    ? 'bg-red-600 text-white'
+                    : 'bg-amber-500 text-slate-950'
+                }`}
+              >
                 {data.ticket.isValid ? (
                   <>
                     <CheckCircle2 className="h-4 w-4" />
                     <span>TIKET RESMI &amp; VALID (LUNAS)</span>
+                  </>
+                ) : data.ticket.isAlreadyCheckedIn ? (
+                  <>
+                    <XCircle className="h-4 w-4" />
+                    <span>TIKET SUDAH DIGUNAKAN (CHECKED-IN)</span>
+                  </>
+                ) : data.ticket.isExpired ? (
+                  <>
+                    <AlertTriangle className="h-4 w-4" />
+                    <span>TIKET KEDALUWARSA</span>
                   </>
                 ) : (
                   <>
@@ -172,6 +190,88 @@ function TicketVerifyContent() {
                 </div>
               )}
             </div>
+
+            {/* Peringatan Double Check-in (Anti Screenshot Sharing - Poin 3) */}
+            {data.ticket.isAlreadyCheckedIn && (
+              <div className="rounded-3xl border-2 border-red-500 bg-red-950/80 p-5 text-center shadow-2xl space-y-2.5">
+                <div className="inline-flex items-center gap-2 rounded-full bg-red-600 px-3 py-1 text-xs font-black uppercase text-white shadow-md">
+                  <XCircle className="h-4 w-4" />
+                  <span>⛔ PERINGATAN KERAS: TIKET SUDAH DIGUNAKAN</span>
+                </div>
+                <h3 className="text-base font-black text-white">
+                  DILARANG CHECK-IN ULANG (PENCEGAHAN SCREENSHOT)
+                </h3>
+                <p className="text-xs text-red-200">
+                  Tiket ini telah dipakai masuk ke lapangan pada:
+                </p>
+                <div className="rounded-xl bg-slate-950/80 border border-red-500/50 p-2.5 font-mono text-xs font-bold text-red-300">
+                  {data.ticket.checkedInAt}
+                </div>
+                <p className="text-[11px] text-red-300/80">
+                  Petugas gerbang dilarang mengizinkan masuk rombongan lain yang membawa salinan/screenshot dari tiket yang sama.
+                </p>
+              </div>
+            )}
+
+            {/* Peringatan Kedaluwarsa / Jadwal Belum Tiba (Poin 10) */}
+            {data.ticket.isExpired && (
+              <div className="rounded-3xl border-2 border-rose-500/60 bg-rose-950/70 p-4 text-center space-y-1.5 shadow-xl">
+                <div className="inline-flex items-center gap-1.5 font-black text-rose-300 text-xs uppercase tracking-wider">
+                  <AlertTriangle className="h-4 w-4 text-rose-400" />
+                  <span>TIKET KEDALUWARSA (JADWAL TELAH LEWAT)</span>
+                </div>
+                <p className="text-xs text-rose-200">
+                  {data.ticket.timingNotice}
+                </p>
+              </div>
+            )}
+
+            {data.ticket.isFuture && (
+              <div className="rounded-3xl border-2 border-amber-500/60 bg-amber-950/70 p-4 text-center space-y-1.5 shadow-xl">
+                <div className="inline-flex items-center gap-1.5 font-black text-amber-300 text-xs uppercase tracking-wider">
+                  <Calendar className="h-4 w-4 text-amber-400" />
+                  <span>JADWAL SEWA BELUM BERLAKU</span>
+                </div>
+                <p className="text-xs text-amber-200">
+                  {data.ticket.timingNotice}
+                </p>
+              </div>
+            )}
+
+            {!data.ticket.isExpired && !data.ticket.isFuture && data.ticket.timingNotice && (
+              <div
+                className={`rounded-2xl border p-3 text-xs flex items-center justify-between ${
+                  data.ticket.sessionStatus === 'ACTIVE'
+                    ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-200'
+                    : data.ticket.sessionStatus === 'EARLY'
+                    ? 'border-amber-500/40 bg-amber-950/40 text-amber-200'
+                    : 'border-slate-700 bg-slate-800/60 text-slate-300'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 shrink-0" />
+                  <span>{data.ticket.timingNotice}</span>
+                </div>
+                {data.ticket.sessionStatus === 'ACTIVE' && (
+                  <span className="rounded-md bg-emerald-500/20 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-300">
+                    Sesi Aktif
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Banner Verifikasi Tarif Subsidi Pelajar / Siswa (Poin 12) */}
+            {data.ticket.requiresIdVerification && (
+              <div className="rounded-3xl border-2 border-yellow-400 bg-gradient-to-r from-yellow-950/90 via-slate-900 to-yellow-950/90 p-4.5 text-xs text-yellow-200 space-y-2 shadow-xl">
+                <div className="flex items-center gap-2 font-black text-yellow-300 text-sm">
+                  <span className="text-lg">🎓</span>
+                  <span>{data.ticket.userCategoryLabel || 'TARIF SUBSIDI PEMDA'}</span>
+                </div>
+                <p className="text-yellow-100 font-bold leading-relaxed bg-yellow-900/40 border border-yellow-500/40 rounded-xl p-2.5">
+                  {data.ticket.verificationInstruction}
+                </p>
+              </div>
+            )}
 
             {/* Banner Khusus Penyesuaian Agenda Dinas Pemda */}
             {(data.ticket as any).rescheduleStatus === 'PENDING_CUSTOMER' && (
@@ -231,7 +331,25 @@ function TicketVerifyContent() {
               {data.ticket.nik && (
                 <div className="flex items-center justify-between border-b border-slate-700/60 pb-2">
                   <span className="text-xs text-slate-400">NIK / NISN</span>
-                  <span className="text-xs font-mono font-bold text-emerald-400">{data.ticket.nik}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono font-bold text-emerald-400">{data.ticket.nik}</span>
+                    {data.ticket.isVerifiedByAdmin ? (
+                      <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">
+                        Admin View
+                      </span>
+                    ) : (
+                      <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[9px] font-bold text-slate-400">
+                        Sensor Privasi
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {data.ticket.userCategoryLabel && (
+                <div className="flex items-center justify-between border-b border-slate-700/60 pb-2">
+                  <span className="text-xs text-slate-400">Kategori Tarif</span>
+                  <span className="text-xs font-bold text-yellow-300">{data.ticket.userCategoryLabel}</span>
                 </div>
               )}
 

@@ -27,11 +27,22 @@ export async function GET(request: Request) {
     // Toleransi (grace period) 60 detik: melindungi berkas bukti transfer yang
     // sedang dalam proses pengiriman via jaringan agar tidak dibatalkan sepihak.
     const gracePeriodThreshold = new Date(Date.now() - 60 * 1000);
+    // Batas waktu toleransi verifikasi manual admin (SLA 2 jam): mencegah struk bodong
+    // menyandera kuota lapangan tanpa batas waktu (Poin 6).
+    const validationSlaThreshold = new Date(Date.now() - 2 * 60 * 60 * 1000);
     
     const expiredBookings = await prisma.booking.findMany({
       where: {
-        status: 'PENDING_PAYMENT',
-        expiresAt: { lt: gracePeriodThreshold },
+        OR: [
+          {
+            status: 'PENDING_PAYMENT',
+            expiresAt: { lt: gracePeriodThreshold },
+          },
+          {
+            status: 'MENUNGGU_VALIDASI',
+            updatedAt: { lt: validationSlaThreshold },
+          },
+        ],
       },
       include: { items: true },
     })
@@ -48,10 +59,15 @@ export async function GET(request: Request) {
     const results = []
     for (const booking of expiredBookings) {
       try {
+        const isValidationTimeout = booking.status === 'MENUNGGU_VALIDASI';
+        const cancelReason = isValidationTimeout
+          ? 'SLA MENUNGGU_VALIDASI Expired - Dibatalkan otomatis oleh cron karena melebihi batas waktu 2 jam'
+          : 'SLA Expired - Auto cancelled by cron (no payment proof uploaded)';
+
         const result = await cancelOrExpireBookingAction(
           booking.id,
           'EXPIRED',
-          'SLA Expired - Auto cancelled by cron (no payment proof uploaded)'
+          cancelReason
         )
         results.push({
           bookingId: booking.id,

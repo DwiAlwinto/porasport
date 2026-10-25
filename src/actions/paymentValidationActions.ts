@@ -138,8 +138,25 @@ export async function validateAndProcessPaymentProof(
       }
     }
 
-    if (booking.status !== 'PENDING_PAYMENT') {
+    if (booking.status !== 'PENDING_PAYMENT' && (booking.status as string) !== 'MENUNGGU_VALIDASI') {
       return { success: false, error: `Booking sudah berstatus ${booking.status}` }
+    }
+
+    // Poin 6: Batasi maksimal 2 kali percobaan upload per pesanan (Anti-Spam Struk Bodong)
+    let uploadCount = 1;
+    if (booking.adminNotes && booking.adminNotes.includes('UPLOAD_COUNT:')) {
+      const match = booking.adminNotes.match(/UPLOAD_COUNT:(\d+)/);
+      if (match) {
+        uploadCount = parseInt(match[1], 10) + 1;
+      }
+    }
+
+    if (uploadCount > 2) {
+      return {
+        success: false,
+        error:
+          'Batas maksimal 2 kali percobaan unggah bukti transfer telah habis untuk pesanan ini. Demi mencegah penyalahgunaan dan pemblokiran slot berulang, silakan lakukan pemesanan baru.',
+      };
     }
 
     // Pastikan berkas diubah ke Node.js Buffer asli
@@ -188,11 +205,18 @@ export async function validateAndProcessPaymentProof(
 
     const newStatus = ocrResult?.passed ? 'PAID_SUCCESS' : 'MENUNGGU_VALIDASI';
 
+    const existingNotes = booking.adminNotes || '';
+    const cleanedNotes = existingNotes.replace(/UPLOAD_COUNT:\d+;?\s*/g, '').trim();
+    const newAdminNotes = cleanedNotes
+      ? `${cleanedNotes}; UPLOAD_COUNT:${uploadCount}`
+      : `UPLOAD_COUNT:${uploadCount}`;
+
     await prisma.$transaction(async (tx) => {
       await tx.booking.update({
         where: { id: bookingId },
         data: {
           status: newStatus as any,
+          adminNotes: newAdminNotes,
           ocrExtractedText: ocrResult?.extractedText || null,
           ocrValidationResult: (ocrResult as any) || null,
           ocrProcessedAt: ocrResult ? new Date() : null,

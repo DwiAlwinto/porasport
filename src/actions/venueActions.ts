@@ -519,6 +519,7 @@ export async function createBooking(data: {
           senderName: data.senderName || null,
           senderPhone: data.senderPhone || null,
           paymentProofUrl: data.paymentProofUrl || null,
+          adminNotes: data.userCategory ? `KATEGORI:${data.userCategory}` : null,
           items: {
             create: pricedItems.map(item => ({
               fieldId: item.fieldId,

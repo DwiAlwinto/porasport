@@ -91,7 +91,7 @@ RINCIAN 18 MASALAH KRITIS, RISIKO OPERASIONAL & SOLUSI TEKNIS
 [DIMENSI 2: KEAMANAN SIBER, E-TICKETING & ANTI-FRAUD]
 --------------------------------------------------------------------------------
 
-3. TIKET QR GANDA VIA SCREENSHOT SHARING (MULTI CHECK-IN DI GERBANG)
+3. Done : TIKET QR GANDA VIA SCREENSHOT SHARING (MULTI CHECK-IN DI GERBANG)
    - Lokasi: src/actions/ticketActions.ts
    - Masalah: Fungsi checkInTicketAction saat ini hanya menambahkan teks string ke adminNotes
      tanpa memblokir tiket yang sudah pernah di-check-in sebelumnya.
@@ -100,17 +100,17 @@ RINCIAN 18 MASALAH KRITIS, RISIKO OPERASIONAL & SOLUSI TEKNIS
    - Solusi: Pasang pengecekan tegas: jika tiket sudah berstatus pernah masuk (CHECKED_IN:),
      tolak pemindaian dan tampilkan peringatan: "Tiket ini SUDAH DIGUNAKAN pada pukul ... WIB".
 
-6. SPAM PENGUNGGAHAN BUKTI BAYAR BODONG / STRUK PALSU
-   - Lokasi: src/actions/paymentValidationActions.ts
+6. Done : SPAM PENGUNGGAHAN BUKTI BAYAR BODONG / STRUK PALSU
+   - Lokasi: src/actions/paymentValidationActions.ts & src/app/api/cron/expire-bookings/route.ts
    - Masalah: Pengguna dapat mengunggah gambar hoax/struk palsu berkali-kali untuk memperpanjang
      status MENUNGGU_VALIDASI agar slot tidak lepas.
    - Risiko: Lapangan aslinya kosong tapi terkunci berjam-jam karena admin kasir harus memeriksa
      antrean struk palsu.
    - Solusi: Batasi maksimal 2 kali percobaan upload ulang per pesanan. Jika 2 kali ditolak admin,
-     batalkan pesanan dan lepaskan slot seketika.
+     batalkan pesanan dan lepaskan slot seketika. Pasang SLA pembersihan otomatis 2 jam di cron.
 
-10. SCANNER TIKET TIDAK MENGECEK TANGGAL & JAM KEDALUWARSA
-   - Lokasi: src/actions/ticketActions.ts
+10. Done : SCANNER TIKET TIDAK MENGECEK TANGGAL & JAM KEDALUWARSA
+   - Lokasi: src/actions/ticketActions.ts & src/app/ticket/verify/page.tsx
    - Masalah: Scanner hanya mengecek status === 'PAID_SUCCESS'. Tanggal sewa (item.date) dan jam
      berakhir tidak diverifikasi.
    - Risiko: Tiket bulan lalu jika di-scan hari ini tetap menampilkan centang hijau "TIKET SAH & VALID".
@@ -118,8 +118,8 @@ RINCIAN 18 MASALAH KRITIS, RISIKO OPERASIONAL & SOLUSI TEKNIS
      * Jika tanggal sewa bukan hari ini: tolak dengan pesan "Tiket Kedaluwarsa (Jadwal: [Tanggal])".
      * Atur jendela masuk resmi: 30 menit sebelum timeStart hingga sesi timeEnd berakhir.
 
-12. KEBOCORAN SUBSIDI TARIF PELAJAR / ATLET DI PINTU GERBANG
-   - Lokasi: src/actions/ticketActions.ts
+12. Done : KEBOCORAN SUBSIDI TARIF PELAJAR / ATLET DI PINTU GERBANG
+   - Lokasi: src/actions/ticketActions.ts & src/app/ticket/verify/page.tsx
    - Masalah: Pelajar/sekolah mendapatkan diskon retribusi resmi. Namun pada tampilan scanner
      petugas gerbang, tidak ada instruksi tegas apakah penyewa adalah kategori Pelajar.
    - Risiko: Klub umum/orang dewasa menyalahgunakan tarif subsidi pelajar untuk menghemat biaya
@@ -127,14 +127,14 @@ RINCIAN 18 MASALAH KRITIS, RISIKO OPERASIONAL & SOLUSI TEKNIS
    - Solusi: Tampilkan banner mencolok pada layar scanner petugas:
      "Kategori: Pelajar/Sekolah - PETUGAS WAJIB PERIKSA KARTU PELAJAR / SURAT TUGAS".
 
-15. CELAH IDOR (INSECURE DIRECT OBJECT REFERENCE) PADA PEMINDAI TIKET
-   - Lokasi: src/actions/ticketActions.ts
+15. Done : CELAH IDOR (INSECURE DIRECT OBJECT REFERENCE) PADA PEMINDAI TIKET
+   - Lokasi: src/actions/ticketActions.ts & src/actions/adminActions.ts
    - Masalah: Fungsi verifikasi publik saat ini mengizinkan pencarian tiket berdasarkan ID database
      langsung ({ id: clean } seperti GLR-xxx atau WALKIN-xxx).
    - Risiko: ID walk-in yang berbasis timestamp (WALKIN-1729...) dapat ditebak oleh pihak luar
      untuk mengintip data pribadi warga (Nama, NIK, No Telepon) atau check-in tanpa token QR fisik.
    - Solusi: Hapus pencarian berbasis ID langsung untuk verifikasi publik. Wajibkan pencarian tiket
-     HANYA menggunakan token acak berentropi tinggi qrCodeToken.
+     HANYA menggunakan token acak berentropi tinggi qrCodeToken. Sensor PII (NIK & No HP) untuk publik.
 
 --------------------------------------------------------------------------------
 [DIMENSI 3: KEUANGAN DAERAH, KASIR & REGULASI PEMDA]
@@ -212,29 +212,29 @@ RINCIAN 18 MASALAH KRITIS, RISIKO OPERASIONAL & SOLUSI TEKNIS
 ================================================================================
 MATRIKS PRIORITAS EKSEKUSI
 ================================================================================
-TAHAP 1 (PRIORITAS KRITIS - INTEGRITAS DATABASE & ANTI-DEADLOCK):
-- Poin 1 : Koreksi kuota decrement Kolam Renang / Aquatic
-- Poin 4 : Pelepasan slot lama pada Reschedule Pemda
-- Poin 13: Deterministic sort slot locking (Anti-Deadlock)
-- Poin 2 : Limit 1 pending booking per akun (Anti-Monopoli)
-- Poin 17: Ghost lock recovery saat sinyal warga terputus
+TAHAP 1 (PRIORITAS KRITIS - INTEGRITAS DATABASE & ANTI-DEADLOCK) [SELESAI 100%]:
+- [x] Poin 1 : Koreksi kuota decrement Kolam Renang / Aquatic
+- [x] Poin 4 : Pelepasan slot lama pada Reschedule Pemda
+- [x] Poin 13: Deterministic sort slot locking (Anti-Deadlock)
+- [x] Poin 2 : Limit 1-2 pending booking per akun (Anti-Monopoli)
+- [x] Poin 17: Ghost lock recovery saat sinyal warga terputus
 
-TAHAP 2 (PRIORITAS KEAMANAN SIBER & E-TICKETING):
-- Poin 3 : Anti-Double Check-in tiket QR (Blokir Screenshot Sharing)
-- Poin 10: Validasi tanggal & jam kedaluwarsa tiket di gerbang
-- Poin 15: Hapus celah IDOR (Wajibkan pencarian tiket via qrCodeToken)
-- Poin 12: Banner verifikasi Kartu Pelajar / Atlet subsidi
-- Poin 6 : Batasi percobaan bukti transfer bodong (Maksimal 2x)
+TAHAP 2 (PRIORITAS KEAMANAN SIBER & E-TICKETING) [SELESAI 100%]:
+- [x] Poin 3 : Anti-Double Check-in tiket QR (Blokir Screenshot Sharing)
+- [x] Poin 10: Validasi tanggal & jam kedaluwarsa tiket di gerbang
+- [x] Poin 15: Hapus celah IDOR (Wajibkan token acak qrCodeToken & sensor PII)
+- [x] Poin 12: Banner verifikasi Kartu Pelajar / Atlet subsidi
+- [x] Poin 6 : Batasi percobaan bukti transfer bodong (Maksimal 2x & SLA cron)
 
 TAHAP 3 (PRIORITAS OPERASIONAL KASIR, KEUANGAN BPK & PEMDA):
-- Poin 5 : Conditional atomic check pada kasir walk-in
-- Poin 7 : Kontinuitas Paket Seharian (Blokir paket jika slot bolong)
-- Poin 14: Alokasi selisih pecahan rupiah standar audit BPK
-- Poin 8 : Proteksi slot pemeliharaan vs booking lunas
-- Poin 9 : Fitur Late Payment Recovery (Uang masuk tapi pesanan expired)
-- Poin 11: Formulir rekening refund resmi Pemda
-- Poin 18: Audit log immutable & kunci pembatalan sewa tunai kasir
-- Poin 16: Optimasi connection pool & timeout transaksi ke 5 detik
+- [x] Poin 5 : Conditional atomic check pada kasir walk-in (Selesai)
+- [x] Poin 7 : Kontinuitas Paket Seharian (Blokir paket jika slot bolong) (Selesai)
+- [x] Poin 14: Alokasi selisih pecahan rupiah standar audit BPK (Selesai)
+- [ ] Poin 8 : Proteksi slot pemeliharaan vs booking lunas
+- [ ] Poin 9 : Fitur Late Payment Recovery (Uang masuk tapi pesanan expired)
+- [ ] Poin 11: Formulir rekening refund resmi Pemda
+- [ ] Poin 18: Audit log immutable & kunci pembatalan sewa tunai kasir
+- [x] Poin 16: Optimasi connection pool & timeout transaksi ke 5 detik (Selesai)
 
 ================================================================================
 Dokumen disiapkan untuk: DISBUDPORA Kabupaten Bekasi
