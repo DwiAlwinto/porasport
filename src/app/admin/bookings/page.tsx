@@ -42,6 +42,7 @@ import {
 } from '@/actions/adminActions';
 import { reTriggerOCRValidation } from '../../../actions/paymentValidationActions';
 import { initiatePemdaRescheduleAction } from '../../../actions/rescheduleActions';
+import { AdminNotesBadgeView } from '@/utils/notesFormatter';
 import { BookingStatus } from '@prisma/client';
 
 const getIdentityLabel = (idNum?: string | null) => {
@@ -769,11 +770,7 @@ export default function AdminBookingsPage() {
                 <div>Lapangan: <strong>{selectedBooking.items?.[0]?.field?.name}</strong></div>
                 <div>Tanggal: <strong>{selectedBooking.items?.[0]?.date ? new Date(selectedBooking.items[0].date).toLocaleDateString('id-ID') : '-'}</strong></div>
                 <div>Jam: <strong>{selectedBooking.items?.map((i: any) => i.timeStart).join(', ')} WIB</strong></div>
-                {selectedBooking.adminNotes && (
-                  <div className="mt-2 text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200">
-                    <strong>Catatan:</strong> {selectedBooking.adminNotes}
-                  </div>
-                )}
+                <AdminNotesBadgeView notes={selectedBooking.adminNotes} />
               </div>
             </div>
 

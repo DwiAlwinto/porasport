@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
 import { handleImageError, getFallbackImageForUrl } from '../../utils/imageUtils';
+import { formatAdminNotesToHuman } from '../../utils/notesFormatter';
 import { useApp } from '../../context/AppContext';
 import {
   Booking,
@@ -538,7 +539,7 @@ export const UserDashboard: React.FC = () => {
                             <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
                             <div>
                               <span className="font-bold">Alasan Dibatalkan: </span>
-                              <span>{booking.adminNotes || 'Dibatalkan oleh pemesan / Waktu pembayaran telah habis'}</span>
+                              <span>{formatAdminNotesToHuman(booking.adminNotes)?.humanSummary || 'Dibatalkan oleh pemesan / Waktu pembayaran telah habis'}</span>
                             </div>
                           </div>
                         </div>

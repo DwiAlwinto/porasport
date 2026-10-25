@@ -25,6 +25,7 @@ import {
   unblockOrReleaseSlotAction,
   cancelSpecificBookingInSlot,
 } from '../../../actions/adminActions';
+import { AdminNotesBadgeView } from '@/utils/notesFormatter';
 
 export default function AdminSchedulePage() {
   const [venues, setVenues] = useState<any[]>([]);
@@ -799,9 +800,7 @@ export default function AdminSchedulePage() {
                                 </div>
 
                                 {b?.adminNotes && (
-                                  <div className="text-[10px] text-fg-muted italic">
-                                    Catatan: {b.adminNotes}
-                                  </div>
+                                  <AdminNotesBadgeView notes={b.adminNotes} className="!mt-1 !p-2" />
                                 )}
 
                                 <div className="pt-1 flex justify-end">
@@ -834,9 +833,7 @@ export default function AdminSchedulePage() {
                             </span>
                           </div>
                           {activeSlotModal.booking?.adminNotes && (
-                            <div className="text-fg-muted italic text-[11px] pt-1">
-                              {activeSlotModal.booking.adminNotes}
-                            </div>
+                            <AdminNotesBadgeView notes={activeSlotModal.booking.adminNotes} className="!mt-1 !p-2" />
                           )}
                         </div>
                       ) : (
