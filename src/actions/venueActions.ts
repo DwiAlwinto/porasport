@@ -135,6 +135,8 @@ export type PublicSlot = {
   maxCapacity: number;
   bookedCapacity: number;
   remainingCapacity: number;
+  bookingId?: string | null;
+  bookedByUserId?: string | null;
 };
 
 /**
@@ -228,6 +230,8 @@ export async function getPublicFieldSlots(params: {
         maxCapacity: maxCap,
         bookedCapacity: bookedCap,
         remainingCapacity: remainingCap,
+        bookingId: r.bookingId,
+        bookedByUserId: r.bookedByUserId,
       };
     });
 
@@ -1104,6 +1108,55 @@ export async function updateBookingCustomerDetailsAction(data: {
   } catch (error: any) {
     console.error('[updateBookingCustomerDetailsAction] Gagal memperbarui data:', error);
     return { success: false, error: toPublicMessage(error, 'Gagal memperbarui data pemesan.') };
+  }
+}
+
+/**
+ * Fitur Ghost Draft Recovery:
+ * Mengambil pesanan aktif berstatus PENDING_PAYMENT milik user pada venue ini (jika ada).
+ * Memungkinkan pemulihan checkout ketika sinyal internet warga drop / terputus di tengah jalan.
+ */
+export async function getUserActivePendingBookingForVenue(venueId: string) {
+  try {
+    const session = await getCurrentUserSession();
+    if (!session || !session.userId) return null;
+
+    const now = new Date();
+    const booking = await prisma.booking.findFirst({
+      where: {
+        userId: session.userId,
+        venueId,
+        status: 'PENDING_PAYMENT',
+        expiresAt: { gt: now },
+      },
+      include: {
+        items: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!booking) return null;
+
+    return {
+      id: booking.id,
+      venueId: booking.venueId,
+      sportCategory: booking.sportCategory,
+      grandTotal: booking.grandTotal,
+      expiresAt: booking.expiresAt ? booking.expiresAt.toISOString() : null,
+      items: booking.items.map((it) => ({
+        slotId: it.slotId || '',
+        fieldId: it.fieldId,
+        date: it.date instanceof Date ? it.date.toISOString().split('T')[0] : String(it.date).split('T')[0],
+        timeStart: it.timeStart,
+        timeEnd: it.timeEnd,
+        price: it.price,
+        isPeakHour: it.isPeakHour,
+        quantity: it.quantity || 1,
+      })),
+    };
+  } catch (err) {
+    console.error('Failed to get user active pending booking for venue:', err);
+    return null;
   }
 }
 

@@ -198,7 +198,7 @@ RINCIAN 18 MASALAH KRITIS, RISIKO OPERASIONAL & SOLUSI TEKNIS
      * Turunkan timeout transaksi menjadi maksimal 5 detik.
      * Lakukan pembacaan data statis (nama venue, rate, user session) DI LUAR transaksi.
 
-17. GHOST DRAFT RECOVERY SAAT SINYAL WARGA DROP / TERPUTUS
+17. Done : GHOST DRAFT RECOVERY SAAT SINYAL WARGA DROP / TERPUTUS
    - Lokasi: src/components/venue/VenueDetailPage.tsx
    - Masalah: Saat warga menekan "Setuju & Lanjutkan Pemesanan", server berhasil mengunci slot di database.
      Namun sinyal 4G warga tiba-tiba putus sebelum respons balik tiba di browser. Browser menampilkan error.

@@ -7,11 +7,17 @@ import {
   FieldSlot,
   BookingItem,
   FieldRate,
+  SportCategory,
 } from '../../types';
 import {
   generateDaySlotsForField,
 } from '../../lib/slotUtils';
-import { getPublicFieldSlots, reserveTemporaryBookingAction } from '../../actions/venueActions';
+import {
+  getPublicFieldSlots,
+  reserveTemporaryBookingAction,
+  getUserActivePendingBookingForVenue,
+  cancelUserBookingAction,
+} from '../../actions/venueActions';
 import { USER_CATEGORY_LABELS, getUserCategoryLabel, rateCoversHour } from '../../lib/pricing';
 import { getWibTodayKey } from '../../lib/dateKeys';
 import { isServerActionMismatchError, handleServerActionMismatch } from '../../lib/actionErrorHandler';
@@ -109,6 +115,7 @@ export const VenueDetailPage: React.FC = () => {
     setActiveView,
     startBookingCheckout,
     isLoggedIn,
+    activeUser,
     t,
     activeLang,
     systemSettings,
@@ -132,6 +139,101 @@ export const VenueDetailPage: React.FC = () => {
   const [isReservingLock, setIsReservingLock] = useState(false);
   const [slotConflictError, setSlotConflictError] = useState<string | null>(null);
   const [slotRefreshTrigger, setSlotRefreshTrigger] = useState(0);
+
+  // Ghost Draft Recovery: Pemulihan transaksi saat sinyal internet warga drop / terputus
+  const [activeGhostDraft, setActiveGhostDraft] = useState<{
+    id: string;
+    venueId: string;
+    sportCategory: SportCategory;
+    grandTotal: number;
+    expiresAt: string | null;
+    items: any[];
+  } | null>(null);
+  const [ghostRemainingSec, setGhostRemainingSec] = useState<number>(0);
+  const [isCancellingGhost, setIsCancellingGhost] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!selectedVenue || !isLoggedIn) {
+      setActiveGhostDraft(null);
+      setGhostRemainingSec(0);
+      return;
+    }
+
+    let isSubscribed = true;
+    getUserActivePendingBookingForVenue(selectedVenue.id).then((draft) => {
+      if (!isSubscribed) return;
+      if (draft && draft.expiresAt) {
+        const diffMs = new Date(draft.expiresAt).getTime() - Date.now();
+        const diffSec = Math.max(0, Math.floor(diffMs / 1000));
+        if (diffSec > 0) {
+          setActiveGhostDraft(draft);
+          setGhostRemainingSec(diffSec);
+        } else {
+          setActiveGhostDraft(null);
+          setGhostRemainingSec(0);
+        }
+      } else {
+        setActiveGhostDraft(null);
+        setGhostRemainingSec(0);
+      }
+    });
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [selectedVenue, isLoggedIn, slotRefreshTrigger]);
+
+  useEffect(() => {
+    if (!activeGhostDraft || ghostRemainingSec <= 0) return;
+
+    const timer = setInterval(() => {
+      setGhostRemainingSec((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setActiveGhostDraft(null);
+          setSlotRefreshTrigger((p) => p + 1);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [activeGhostDraft, ghostRemainingSec]);
+
+  const handleResumeGhostDraft = (draft: any) => {
+    const itemsWithFieldName = draft.items.map((it: any) => ({
+      ...it,
+      fieldName: activeField?.name || 'Lapangan',
+    }));
+    startBookingCheckout(
+      draft.venueId,
+      draft.sportCategory,
+      itemsWithFieldName,
+      userCategory,
+      selectedRateId,
+      selectedCategoryLabel,
+      draft.id,
+      draft.expiresAt
+    );
+  };
+
+  const handleCancelGhostDraft = async (bookingId: string) => {
+    if (!confirm('Apakah Anda yakin ingin membatalkan pesanan ini dan melepas jadwal untuk warga lain?')) {
+      return;
+    }
+    setIsCancellingGhost(true);
+    try {
+      await cancelUserBookingAction(bookingId);
+      setActiveGhostDraft(null);
+      setGhostRemainingSec(0);
+      setSlotRefreshTrigger((p) => p + 1);
+    } catch (e) {
+      console.error('Failed to cancel ghost draft:', e);
+    } finally {
+      setIsCancellingGhost(false);
+    }
+  };
 
   // CATATAN: Semua hook harus dijalankan tanpa syarat. Karena itu early return
   // untuk venue yang tidak ditemukan diletakkan SESUDAH semua hook di bawah.
@@ -1431,6 +1533,53 @@ export const VenueDetailPage: React.FC = () => {
                 </div>
               ) : (
                 <>
+                  {/* GHOST DRAFT RECOVERY BANNER (PULIHKAN JADWAL TERKUNCI SAAT SINYAL DROP) */}
+                  {activeGhostDraft && ghostRemainingSec > 0 && (
+                    <div className="mt-4 overflow-hidden rounded-3xl border-2 border-emerald-400 bg-gradient-to-br from-emerald-900/95 via-slate-900/95 to-teal-950 p-5 text-white shadow-2xl backdrop-blur-md">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex items-start gap-3.5">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-300 ring-2 ring-emerald-400/50 shadow-inner">
+                            <Clock className="h-6 w-6 animate-pulse" />
+                          </div>
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-full bg-emerald-500/30 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-300 border border-emerald-400/30">
+                                ⚡ Ghost Draft Recovery
+                              </span>
+                              <span className="font-mono text-xs font-black text-amber-300 bg-amber-950/70 border border-amber-400/50 rounded-lg px-2.5 py-0.5 shadow-xs">
+                                ⏳ Sisa Waktu Bayar: {Math.floor(ghostRemainingSec / 60).toString().padStart(2, '0')}:{(ghostRemainingSec % 60).toString().padStart(2, '0')} Menit
+                              </span>
+                            </div>
+                            <h4 className="mt-1.5 text-sm md:text-base font-black text-white">
+                              Anda Memiliki Pemesanan yang Belum Selesai di Venue Ini!
+                            </h4>
+                            <p className="mt-0.5 text-xs text-slate-300 leading-relaxed">
+                              Jadwal ({activeGhostDraft.items.map((it: any) => `${it.date} jam ${it.timeStart}`).join(', ')}) <strong>sudah terkunci aman untuk Anda di database</strong>. Jika koneksi sempat terputus, Anda dapat langsung melanjutkan checkout tanpa kehilangan jadwal.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2.5 self-start md:self-center shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleResumeGhostDraft(activeGhostDraft)}
+                            className="rounded-2xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 px-5 py-3 text-xs font-black text-slate-950 shadow-lg shadow-emerald-500/30 transition flex items-center gap-2 cursor-pointer"
+                          >
+                            <span>Lanjutkan Pembayaran Sekarang</span>
+                            <ChevronRight className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isCancellingGhost}
+                            onClick={() => handleCancelGhostDraft(activeGhostDraft.id)}
+                            className="rounded-2xl border border-red-400/40 bg-red-950/40 hover:bg-red-900/60 active:scale-95 px-4 py-3 text-xs font-bold text-red-300 transition cursor-pointer"
+                          >
+                            {isCancellingGhost ? 'Melepas...' : 'Batalkan Jadwal'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="mt-4 flex flex-wrap items-center gap-4 text-xs font-semibold">
                     <div className="flex items-center gap-1.5">
                       <div className="h-3 w-3 rounded bg-emerald-100 border border-emerald-400" />
@@ -1440,6 +1589,12 @@ export const VenueDetailPage: React.FC = () => {
                       <div className="h-3 w-3 rounded bg-emerald-600" />
                       <span className="text-slate-900 font-bold">Terpilih ({selectedSlots.length})</span>
                     </div>
+                    {activeGhostDraft && (
+                      <div className="flex items-center gap-1.5">
+                        <div className="h-3 w-3 rounded bg-amber-400 border border-amber-600 animate-pulse" />
+                        <span className="text-amber-800 font-extrabold">Dikunci Anda (Menunggu Bayar)</span>
+                      </div>
+                    )}
                     {selectedRate?.timeStart && selectedRate?.timeEnd && (
                       <div className="flex items-center gap-1.5">
                         <div className="h-3 w-3 rounded bg-emerald-100 border-2 border-emerald-500 ring-1 ring-emerald-400/50" />
@@ -1496,7 +1651,13 @@ export const VenueDetailPage: React.FC = () => {
                           const isBooked = slot.status === 'BOOKED' || isPoolFull;
                           const isMaintenance = slot.status === 'MAINTENANCE';
                           const isPast = isSlotPast(selectedDate, slot.hour, slot.timeStart);
-                          const isDisabled = isBooked || isMaintenance || isPast;
+                          const isMyLock = Boolean(
+                            activeUser?.id &&
+                            slot.bookedByUserId === activeUser.id &&
+                            activeGhostDraft &&
+                            activeGhostDraft.items.some((it: any) => it.slotId === slot.id || (it.date === selectedDate && it.timeStart === slot.timeStart))
+                          );
+                          const isDisabled = isMyLock ? false : (isBooked || isMaintenance || isPast);
                           const isInWindow =
                             selectedRate?.timeStart && selectedRate?.timeEnd
                               ? rateCoversHour(
@@ -1512,9 +1673,11 @@ export const VenueDetailPage: React.FC = () => {
                             <button
                               key={slot.id}
                               disabled={isDisabled}
-                              onClick={() => handleSlotToggle(slot)}
+                              onClick={() => (isMyLock ? handleResumeGhostDraft(activeGhostDraft) : handleSlotToggle(slot))}
                               className={`relative flex flex-col items-center justify-center rounded-xl border p-3 text-center transition ${
-                                isSelected
+                                isMyLock
+                                  ? 'border-amber-400 bg-amber-50/95 text-amber-950 font-bold ring-2 ring-amber-400/60 shadow-md cursor-pointer hover:bg-amber-100 scale-[1.02]'
+                                  : isSelected
                                   ? 'border-emerald-600 bg-emerald-600 text-white shadow-md scale-[1.02] ring-2 ring-emerald-500/50'
                                   : isBooked
                                   ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
@@ -1530,7 +1693,16 @@ export const VenueDetailPage: React.FC = () => {
                               <div className="text-sm font-black">
                                 {slot.timeStart} - {slot.timeEnd}
                               </div>
-                              {isBooked ? (
+                              {isMyLock ? (
+                                <div className="mt-0.5 flex flex-col items-center gap-0.5">
+                                  <span className="rounded-full bg-amber-200/90 px-2 py-0.5 text-[8px] font-black uppercase text-amber-900 border border-amber-300">
+                                    🔒 Dikunci Anda
+                                  </span>
+                                  <span className="text-[8px] font-bold text-amber-700">
+                                    Klik utk bayar
+                                  </span>
+                                </div>
+                              ) : isBooked ? (
                                 <span className="mt-0.5 text-[10px] font-semibold uppercase text-slate-400">
                                   {isPoolFull ? 'Penuh (30/30)' : 'Booked'}
                                 </span>
@@ -1607,7 +1779,13 @@ export const VenueDetailPage: React.FC = () => {
                           const isBooked = slot.status === 'BOOKED' || isPoolFull;
                           const isMaintenance = slot.status === 'MAINTENANCE';
                           const isPast = isSlotPast(selectedDate, slot.hour, slot.timeStart);
-                          const isDisabled = isBooked || isMaintenance || isPast;
+                          const isMyLock = Boolean(
+                            activeUser?.id &&
+                            slot.bookedByUserId === activeUser.id &&
+                            activeGhostDraft &&
+                            activeGhostDraft.items.some((it: any) => it.slotId === slot.id || (it.date === selectedDate && it.timeStart === slot.timeStart))
+                          );
+                          const isDisabled = isMyLock ? false : (isBooked || isMaintenance || isPast);
                           const isInWindow =
                             selectedRate?.timeStart && selectedRate?.timeEnd
                               ? rateCoversHour(
@@ -1623,9 +1801,11 @@ export const VenueDetailPage: React.FC = () => {
                             <button
                               key={slot.id}
                               disabled={isDisabled}
-                              onClick={() => handleSlotToggle(slot)}
+                              onClick={() => (isMyLock ? handleResumeGhostDraft(activeGhostDraft) : handleSlotToggle(slot))}
                               className={`relative flex flex-col items-center justify-center rounded-xl border p-3 text-center transition ${
-                                isSelected
+                                isMyLock
+                                  ? 'border-amber-400 bg-amber-50/95 text-amber-950 font-bold ring-2 ring-amber-400/60 shadow-md cursor-pointer hover:bg-amber-100 scale-[1.02]'
+                                  : isSelected
                                   ? 'border-emerald-600 bg-emerald-600 text-white shadow-md scale-[1.02] ring-2 ring-emerald-500/50'
                                   : isBooked
                                   ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
@@ -1641,7 +1821,16 @@ export const VenueDetailPage: React.FC = () => {
                               <div className="text-sm font-black">
                                 {slot.timeStart} - {slot.timeEnd}
                               </div>
-                              {isBooked ? (
+                              {isMyLock ? (
+                                <div className="mt-0.5 flex flex-col items-center gap-0.5">
+                                  <span className="rounded-full bg-amber-200/90 px-2 py-0.5 text-[8px] font-black uppercase text-amber-900 border border-amber-300">
+                                    🔒 Dikunci Anda
+                                  </span>
+                                  <span className="text-[8px] font-bold text-amber-700">
+                                    Klik utk bayar
+                                  </span>
+                                </div>
+                              ) : isBooked ? (
                                 <span className="mt-0.5 text-[10px] font-semibold uppercase text-slate-400">
                                   {isPoolFull ? 'Penuh (30/30)' : 'Booked'}
                                 </span>

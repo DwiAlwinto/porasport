@@ -70,8 +70,8 @@ export interface FieldSlot {
   price: number;
   isPeakHour: boolean;
   status: 'AVAILABLE' | 'BOOKED' | 'MAINTENANCE';
-  bookedByUserId?: string;
-  bookingId?: string;
+  bookedByUserId?: string | null;
+  bookingId?: string | null;
   maxCapacity?: number;
   bookedCapacity?: number;
   remainingCapacity?: number;
