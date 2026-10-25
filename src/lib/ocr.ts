@@ -1,5 +1,6 @@
 import { ImageAnnotatorClient } from '@google-cloud/vision'
 import { downloadProof, MAX_PROOF_BYTES } from './storage'
+import { UserFacingError } from './userFacingError'
 
 const credentialsJson = process.env.GOOGLE_CLOUD_CREDENTIALS_JSON
 
@@ -133,7 +134,9 @@ export async function runOCRValidation(
   expectedKeywords: string[] = DEFAULT_KEYWORDS
 ): Promise<OCRValidationResult> {
   if (!visionClient) {
-    throw new Error('Layanan OCR belum dikonfigurasi. Hubungi admin sistem.');
+    throw new UserFacingError(
+      'Layanan Google Cloud Vision OCR belum dikonfigurasi di server produksi (variabel GOOGLE_CLOUD_CREDENTIALS_JSON belum disetel). Silakan gunakan tombol hijau "Setujui Lunas & Terbitkan Tiket" untuk validasi manual kasir.'
+    );
   }
 
   const imageBuffer = await downloadProof(proofRef);
