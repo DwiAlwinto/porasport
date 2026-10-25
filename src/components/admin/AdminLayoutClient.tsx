@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { adminLogoutAction } from '../../actions/authActions';
 import { AdminSessionProvider } from '../../context/AdminSessionContext';
+import { AdminIdleTimeout } from './AdminIdleTimeout';
 
 interface AdminLayoutClientProps {
   session: {
@@ -256,6 +257,7 @@ export const AdminLayoutClient: React.FC<AdminLayoutClientProps> = ({ session, c
         {/* Page Children */}
         <main className="flex-1 overflow-y-auto bg-canvas p-6 lg:p-8">
           <AdminSessionProvider session={session}>
+            <AdminIdleTimeout />
             {children}
           </AdminSessionProvider>
         </main>

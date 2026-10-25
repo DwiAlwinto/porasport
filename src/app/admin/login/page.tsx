@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useTransition } from 'react';
-import { Lock, Mail, Eye, EyeOff, ArrowRight, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useTransition } from 'react';
+import { Lock, Mail, Eye, EyeOff, ArrowRight, AlertCircle, Clock } from 'lucide-react';
 import { adminLoginAction } from '../../../actions/authActions';
 
 export default function AdminLoginPage() {
@@ -10,7 +10,17 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [timeoutNotice, setTimeoutNotice] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('reason') === 'timeout') {
+        setTimeoutNotice(true);
+      }
+    }
+  }, []);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,6 +72,18 @@ export default function AdminLoginPage() {
                 Sistem Manajemen Fasilitas
               </p>
             </div>
+
+            {timeoutNotice && (
+              <div className="mb-5 flex items-start gap-2.5 rounded-2xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900 animate-in fade-in">
+                <Clock className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                <div>
+                  <div className="font-bold text-amber-950">Sesi Berakhir Demi Keamanan</div>
+                  <div className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                    Sesi administrator Anda telah ditutup secara otomatis karena tidak ada aktivitas selama 20 menit. Silakan login kembali.
+                  </div>
+                </div>
+              </div>
+            )}
 
             {errorMessage && (
               <div className="mb-5 flex items-start gap-2.5 rounded-2xl border border-red-200 bg-red-50 p-3.5 text-xs font-medium text-red-600 animate-in fade-in">
