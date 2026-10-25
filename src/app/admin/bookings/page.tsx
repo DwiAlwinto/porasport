@@ -38,6 +38,7 @@ import {
   createSuperAdminBookingAction,
   updateSuperAdminBookingAction,
   deleteSuperAdminBookingAction,
+  recoverLatePaymentBookingAction,
 } from '@/actions/adminActions';
 import { reTriggerOCRValidation } from '../../../actions/paymentValidationActions';
 import { initiatePemdaRescheduleAction } from '../../../actions/rescheduleActions';
@@ -200,6 +201,35 @@ export default function AdminBookingsPage() {
   const [pemdaReason, setPemdaReason] = useState<string>('Agenda Resmi Kedinasan Pemerintah Kabupaten Bekasi / DISBUDPORA');
   const [pemdaAdminNotes, setPemdaAdminNotes] = useState<string>('');
   const [isSubmittingPemda, setIsSubmittingPemda] = useState<boolean>(false);
+
+  // Modal Late Payment Recovery State (Poin 9)
+  const [isLateRecoveryModalOpen, setIsLateRecoveryModalOpen] = useState(false);
+  const [recoveryMutationRef, setRecoveryMutationRef] = useState('');
+  const [recoveryNotes, setRecoveryNotes] = useState('');
+  const [isSubmittingRecovery, setIsSubmittingRecovery] = useState(false);
+
+  const handleConfirmLateRecovery = () => {
+    if (!selectedBooking || !recoveryMutationRef.trim()) return;
+    setIsSubmittingRecovery(true);
+    startTransition(async () => {
+      const res = await recoverLatePaymentBookingAction({
+        bookingId: selectedBooking.id,
+        bankMutationRef: recoveryMutationRef.trim(),
+        notes: recoveryNotes.trim(),
+      });
+      setIsSubmittingRecovery(false);
+      if (res.success) {
+        showToast(res.message || `Pesanan #${selectedBooking.id} berhasil dipulihkan!`);
+        setIsLateRecoveryModalOpen(false);
+        setSelectedBooking(null);
+        setRecoveryMutationRef('');
+        setRecoveryNotes('');
+        fetchData();
+      } else {
+        alert(res.error || 'Gagal memulihkan pesanan.');
+      }
+    });
+  };
 
   const handleConfirmPemdaReschedule = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -788,6 +818,18 @@ export default function AdminBookingsPage() {
                     <span>Jalankan Ulang OCR</span>
                   </button>
                 </div>
+              )}
+
+              {/* Action button for Late Payment Recovery on CANCELLED bookings (Poin 9) */}
+              {selectedBooking.status === 'CANCELLED' && (
+                <button
+                  onClick={() => setIsLateRecoveryModalOpen(true)}
+                  className="flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100 transition shadow-sm"
+                  title="Warga mentransfer setelah pesanan kedaluwarsa oleh sistem (Late Payment Recovery)"
+                >
+                  <RefreshCw className="h-4 w-4 text-amber-700" />
+                  <span>Pulihkan Pembayaran Telat (Late Recovery)</span>
+                </button>
               )}
             </div>
           </div>
@@ -1383,6 +1425,101 @@ export default function AdminBookingsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL LATE PAYMENT RECOVERY (Poin 9) */}
+      {isLateRecoveryModalOpen && selectedBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl border border-line bg-surface p-6 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-line pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                  <RefreshCw className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-fg">Pemulihan Pembayaran Telat (Late Payment)</h3>
+                  <p className="text-[11px] text-fg-muted">Validasi mutasi bank atas pesanan yang sudah kedaluwarsa</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsLateRecoveryModalOpen(false)}
+                className="rounded-lg p-2 text-fg-muted hover:bg-subtle hover:text-fg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4 text-xs">
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-3.5 text-amber-900 leading-relaxed text-[11px]">
+                <div className="font-bold mb-1 flex items-center gap-1.5 text-amber-950">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <span>SOP Verifikasi Pemulihan Telat:</span>
+                </div>
+                <p>
+                  Gunakan fitur ini jika warga mentransfer dana ke rekening Kas Daerah setelah batas waktu habis (10 menit / 2 jam), namun dana telah terbukti masuk ke rekening koran / mutasi bank.
+                </p>
+                <p className="mt-1 font-semibold">
+                  Sistem akan memvalidasi apakah slot jadwal masih kosong dan mengaktifkan kembali tiket resmi.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-line bg-field p-3 space-y-1">
+                <div>ID Pesanan: <strong className="font-mono text-fg">{selectedBooking.id}</strong></div>
+                <div>Pemesan: <strong>{selectedBooking.user?.name || selectedBooking.senderName}</strong></div>
+                <div>Total Tagihan: <strong>Rp {selectedBooking.totalPrice?.toLocaleString('id-ID')}</strong></div>
+                <div>Jadwal: <strong>{selectedBooking.items?.map((i: any) => `${i.date?.split('T')[0]} (${i.timeStart} WIB)`).join(', ')}</strong></div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-fg mb-1">
+                  Nomor Referensi Mutasi Bank / RRN / Trx ID Kasda <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Contoh: BJB-MUT-20261025-09882 / RRN9821738"
+                  value={recoveryMutationRef}
+                  onChange={(e) => setRecoveryMutationRef(e.target.value)}
+                  className="w-full rounded-xl border border-line-strong bg-field py-2.5 px-3 text-xs font-mono font-bold text-fg outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-fg mb-1">
+                  Catatan Audit Rekonsiliasi (Opsional):
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Contoh: Bukti mutasi Bank BJB diverifikasi oleh bendahara penerimaan DISBUDPORA"
+                  value={recoveryNotes}
+                  onChange={(e) => setRecoveryNotes(e.target.value)}
+                  className="w-full rounded-xl border border-line-strong bg-field py-2 px-3 text-xs text-fg outline-none focus:border-amber-500 resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 border-t border-line pt-4">
+                <button
+                  type="button"
+                  disabled={isSubmittingRecovery}
+                  onClick={() => setIsLateRecoveryModalOpen(false)}
+                  className="rounded-xl border border-line-strong px-4 py-2.5 text-xs font-bold text-fg-subtle hover:bg-subtle transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmittingRecovery || !recoveryMutationRef.trim()}
+                  onClick={handleConfirmLateRecovery}
+                  className="flex items-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 text-xs font-black text-white hover:bg-amber-700 shadow-md shadow-amber-600/20 transition disabled:opacity-50"
+                >
+                  {isSubmittingRecovery && <RefreshCw className="h-4 w-4 animate-spin" />}
+                  <span>Validasi &amp; Terbitkan Tiket</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -400,10 +400,21 @@ export async function confirmCustomerRescheduleAction(params: {
   }
 }
 
+export interface RescheduleRefundInput {
+  bankName: string;
+  accountNumber: string;
+  accountHolderName: string;
+  reason?: string;
+}
+
 /**
  * 5. Warga Menolak Jadwal Pengganti dan Mengajukan Pengembalian Dana (Refund)
+ * Dilengkapi formulir rekening bank resmi terstruktur (Poin 11).
  */
-export async function requestRescheduleRefundAction(bookingId: string, refundNotes?: string) {
+export async function requestRescheduleRefundAction(
+  bookingId: string,
+  refundData?: string | RescheduleRefundInput
+) {
   try {
     const userSession = await getCurrentUserSession();
     if (!userSession) {
@@ -423,8 +434,21 @@ export async function requestRescheduleRefundAction(bookingId: string, refundNot
       return { success: false, error: 'Akses ditolak.' };
     }
 
+    let refundNoteStr: string;
+    if (typeof refundData === 'object' && refundData !== null) {
+      if (!refundData.bankName || !refundData.accountNumber || !refundData.accountHolderName) {
+        return {
+          success: false,
+          error: 'Nama Bank, Nomor Rekening, dan Nama Pemilik Rekening wajib diisi lengkap.',
+        };
+      }
+      refundNoteStr = `REFUND_REK: ${refundData.bankName} - No: ${refundData.accountNumber.trim()} a/n ${refundData.accountHolderName.trim()}${refundData.reason ? ` • Alasan: ${refundData.reason.trim()}` : ''}`;
+    } else {
+      refundNoteStr = refundData?.trim() || 'Berhalangan di tanggal lain';
+    }
+
     await prisma.$transaction(async (tx) => {
-      // Bebaskan kuota slot lama jika masih terikat pada booking ini
+      // Bebaskan kuota slot lama jika masih terikat pada booking ini (Poin 4)
       for (const item of booking.items) {
         if (item.slotId) {
           const oldSlot = await tx.fieldSlot.findUnique({
@@ -459,7 +483,7 @@ export async function requestRescheduleRefundAction(bookingId: string, refundNot
         where: { id: bookingId },
         data: {
           rescheduleStatus: 'REJECTED_REFUND',
-          adminNotes: `${booking.adminNotes ? booking.adminNotes + ' | ' : ''}Pengajuan Refund oleh Warga: ${refundNotes?.trim() || 'Berhalangan di tanggal lain'}`,
+          adminNotes: `${booking.adminNotes ? booking.adminNotes + ' | ' : ''}Pengajuan Refund oleh Warga: ${refundNoteStr}`,
         },
       });
     }, { maxWait: 3000, timeout: 5000 });
@@ -469,7 +493,8 @@ export async function requestRescheduleRefundAction(bookingId: string, refundNot
 
     return {
       success: true,
-      message: 'Pengajuan pengembalian dana telah tercatat. Tim keuangan DISBUDPORA akan menghubungi Anda atau Anda dapat langsung konfirmasi via WhatsApp resmi.',
+      message:
+        'Pengajuan pengembalian dana telah tercatat lengkap beserta rekening bank Anda. Bendahara DISBUDPORA akan memproses transfer pengembalian dana.',
     };
   } catch (error: any) {
     console.error('Failed to request refund:', error);

@@ -1,6 +1,4 @@
-"use client";
-
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ShieldCheck,
   Calendar,
@@ -13,8 +11,11 @@ import {
   FileText,
   AlertCircle,
   Award,
+  CreditCard,
+  CheckCircle2,
 } from 'lucide-react';
 import { Booking } from '../../types';
+import { requestRescheduleRefundAction } from '../../actions/rescheduleActions';
 
 interface PemdaNoticeModalProps {
   booking: Booking;
@@ -22,6 +23,18 @@ interface PemdaNoticeModalProps {
   onClose: () => void;
   onOpenPicker: (booking: Booking) => void;
 }
+
+const BANK_OPTIONS = [
+  'Bank BJB (Bank Daerah Jawa Barat / Banten)',
+  'Bank Central Asia (BCA)',
+  'Bank Mandiri',
+  'Bank Rakyat Indonesia (BRI)',
+  'Bank Negara Indonesia (BNI)',
+  'Bank Syariah Indonesia (BSI)',
+  'Bank CIMB Niaga',
+  'Bank Permata',
+  'Bank Danamon',
+];
 
 export const PemdaNoticeModal: React.FC<PemdaNoticeModalProps> = ({
   booking,
@@ -35,11 +48,55 @@ export const PemdaNoticeModal: React.FC<PemdaNoticeModalProps> = ({
   const originalTime = booking.rescheduleOriginalTime || booking.items?.map(i => `${i.timeStart}-${i.timeEnd}`).join(', ') + ' WIB';
   const reason = booking.rescheduleReason || 'Agenda Resmi Kedinasan Pemerintah Kabupaten Bekasi / DISBUDPORA';
 
+  // Refund Form State (Poin 11: Rekening Refund Terstruktur)
+  const [showRefundForm, setShowRefundForm] = useState(false);
+  const [bankName, setBankName] = useState(BANK_OPTIONS[0]);
+  const [accountNumber, setAccountNumber] = useState('');
+  const [accountHolderName, setAccountHolderName] = useState(recipientName);
+  const [refundReason, setRefundReason] = useState('Jadwal bentrok dengan agenda pribadi');
+  const [isSubmittingRefund, setIsSubmittingRefund] = useState(false);
+
   // Format link WhatsApp CS DISBUDPORA untuk opsi refund / bantuan
   const waHelpText = encodeURIComponent(
     `Halo Admin DISBUDPORA Kab. Bekasi, saya ${recipientName} ingin menanyakan/konfirmasi perihal pergeseran jadwal dinas Pemda untuk pesanan saya #${booking.id} di ${booking.venueName}.`
   );
   const waHelpUrl = `https://wa.me/6281234567890?text=${waHelpText}`;
+
+  const handleSubmitRefund = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accountNumber.trim() || !accountHolderName.trim()) {
+      alert('Nomor Rekening dan Nama Pemilik Rekening wajib diisi.');
+      return;
+    }
+
+    if (!confirm(`Konfirmasi pengajuan refund sebesar Rp ${booking.grandTotal.toLocaleString('id-ID')} ke rekening ${bankName} no: ${accountNumber} a/n ${accountHolderName}?`)) {
+      return;
+    }
+
+    setIsSubmittingRefund(true);
+    try {
+      const res = await requestRescheduleRefundAction(booking.id, {
+        bankName,
+        accountNumber: accountNumber.trim(),
+        accountHolderName: accountHolderName.trim(),
+        reason: refundReason.trim(),
+      });
+
+      if (res.success) {
+        alert(res.message || 'Pengajuan refund berhasil dicatat! Bendahara DISBUDPORA akan memproses transfer pengembalian dana.');
+        onClose();
+        if (typeof window !== 'undefined') {
+          window.location.reload();
+        }
+      } else {
+        alert(res.error || 'Gagal memproses pengajuan refund.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Terjadi kesalahan sistem saat mengajukan refund.');
+    } finally {
+      setIsSubmittingRefund(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
@@ -152,24 +209,118 @@ export const PemdaNoticeModal: React.FC<PemdaNoticeModalProps> = ({
               <li className="flex items-start gap-2">
                 <Sparkles className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
                 <span>
-                  <strong className="text-white">Opsi Refund Dana Penuh:</strong> Jika Anda berhalangan di hari lain, Anda dapat mengajukan pengembalian dana 100% dengan menghubungi layanan bantuan kami.
+                  <strong className="text-white">Opsi Refund Dana Penuh 100%:</strong> Jika Anda berhalangan di hari lain, Anda dapat mengajukan nomor rekening pengembalian dana resmi langsung melalui formulir di bawah ini.
                 </span>
               </li>
             </ul>
           </div>
+
+          {/* FORMULIR REKENING REFUND RESMI (POIN 11) */}
+          {showRefundForm && (
+            <form onSubmit={handleSubmitRefund} className="rounded-2xl border-2 border-amber-500/50 bg-slate-950/90 p-4.5 space-y-3 shadow-xl">
+              <div className="flex items-center gap-2 font-black text-amber-300 text-sm border-b border-slate-800 pb-2">
+                <CreditCard className="h-5 w-5 text-amber-400" />
+                <span>Formulir Pengajuan Rekening Pengembalian Dana (Refund 100%)</span>
+              </div>
+              <p className="text-[11px] text-slate-300">
+                Dana retribusi sebesar <strong className="text-emerald-300 font-mono">Rp {booking.grandTotal.toLocaleString('id-ID')}</strong> akan ditransfer langsung oleh Bendahara DISBUDPORA ke rekening resmi yang Anda daftarkan:
+              </p>
+
+              <div className="space-y-2.5 pt-1">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">Pilihan Bank Penerima *</label>
+                  <select
+                    value={bankName}
+                    onChange={(e) => setBankName(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2.5 text-xs text-white font-semibold outline-none focus:border-amber-400"
+                  >
+                    {BANK_OPTIONS.map((b) => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Nomor Rekening Bank *</label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: 0123456789"
+                      value={accountNumber}
+                      onChange={(e) => setAccountNumber(e.target.value)}
+                      required
+                      className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2.5 text-xs font-mono font-bold text-emerald-400 outline-none focus:border-amber-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Nama Pemilik Rekening *</label>
+                    <input
+                      type="text"
+                      placeholder="Sesuai buku tabungan"
+                      value={accountHolderName}
+                      onChange={(e) => setAccountHolderName(e.target.value)}
+                      required
+                      className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2.5 text-xs text-white font-bold outline-none focus:border-amber-400"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">Alasan Penolakan / Catatan Tambahan</label>
+                  <input
+                    type="text"
+                    value={refundReason}
+                    onChange={(e) => setRefundReason(e.target.value)}
+                    placeholder="Contoh: Tim berhalangan di tanggal pengganti"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2.5 text-xs text-white outline-none focus:border-amber-400"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowRefundForm(false)}
+                  className="rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingRefund}
+                  className="rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-4 py-2 text-xs transition shadow-lg shadow-amber-950/40 disabled:opacity-50"
+                >
+                  {isSubmittingRefund ? 'Memproses Pengajuan...' : 'Kirim Pengajuan Refund Resmi'}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
 
         {/* Modal Footer Actions */}
         <div className="border-t border-slate-800 bg-slate-950/70 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <a
-            href={waHelpUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition py-1"
-          >
-            <MessageCircle className="h-4 w-4" />
-            <span>Butuh Bantuan / Ajukan Refund?</span>
-          </a>
+          <div className="flex items-center gap-3">
+            <a
+              href={waHelpUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition py-1"
+            >
+              <MessageCircle className="h-4 w-4" />
+              <span>WhatsApp CS</span>
+            </a>
+
+            {!showRefundForm && (
+              <button
+                type="button"
+                onClick={() => setShowRefundForm(true)}
+                className="flex items-center gap-1.5 text-xs font-bold text-amber-400 hover:text-amber-300 transition underline underline-offset-4 py-1"
+              >
+                <CreditCard className="h-3.5 w-3.5" />
+                <span>Ajukan Refund 100% (Form Rekening)</span>
+              </button>
+            )}
+          </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             <button

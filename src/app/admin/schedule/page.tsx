@@ -178,10 +178,31 @@ export default function AdminSchedulePage() {
 
       if (res.success) {
         showToast(
-          `Slot ${activeSlotModal.timeStart}-${activeSlotModal.timeEnd} berhasil diblokir (${blockReason})!`
+          res.message || `Slot ${activeSlotModal.timeStart}-${activeSlotModal.timeEnd} berhasil diblokir (${blockReason})!`
         );
         setActiveSlotModal(null);
         fetchSlots();
+      } else if (res.requiresRescheduleConfirmation) {
+        if (
+          confirm(
+            `${res.error}\n\nApakah Anda ingin melanjutkan pemblokiran dan secara otomatis mengalihkan pesanan warga ke Penyesuaian Jadwal Resmi Pemda (Reschedule Gratis)?`
+          )
+        ) {
+          const forceRes = await blockSlotAction({
+            fieldId: selectedFieldId,
+            dateStr: selectedDate,
+            hour: activeSlotModal.hour,
+            reason: blockReason,
+            forceWithReschedule: true,
+          });
+          if (forceRes.success) {
+            showToast(forceRes.message || 'Slot berhasil diblokir dan jadwal warga dialihkan.');
+            setActiveSlotModal(null);
+            fetchSlots();
+          } else {
+            alert(forceRes.error || 'Gagal memblokir slot.');
+          }
+        }
       } else {
         alert(res.error || 'Gagal memblokir slot.');
       }

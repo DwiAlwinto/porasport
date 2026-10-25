@@ -659,10 +659,44 @@ export async function blockSlotAction(data: {
   dateStr: string;
   hour: number;
   reason?: string;
+  forceWithReschedule?: boolean;
 }) {
   await verifySuperAdmin();
   try {
     const targetDate = dateFromKey(data.dateStr);
+    const startStr = `${data.hour.toString().padStart(2, '0')}:00`;
+    const endStr = `${(data.hour + 1).toString().padStart(2, '0')}:00`;
+
+    // Poin 8: Periksa apakah slot yang akan diblokir sudah memiliki pesanan LUNAS dari warga
+    const paidBookingItems = await prisma.bookingItem.findMany({
+      where: {
+        fieldId: data.fieldId,
+        date: targetDate,
+        timeStart: startStr,
+        booking: {
+          status: 'PAID_SUCCESS',
+          rescheduleStatus: { not: 'PENDING_CUSTOMER' },
+        },
+      },
+      include: {
+        booking: {
+          include: { user: true },
+        },
+      },
+    });
+
+    if (paidBookingItems.length > 0 && !data.forceWithReschedule) {
+      const names = paidBookingItems
+        .map((it) => it.booking.senderName || it.booking.user?.name || 'Warga')
+        .filter(Boolean);
+      return {
+        success: false,
+        requiresRescheduleConfirmation: true,
+        paidCount: paidBookingItems.length,
+        customerNames: names,
+        error: `PERINGATAN: Terdapat ${paidBookingItems.length} pesanan LUNAS dari warga pada slot ini (${names.join(', ')}). Memblokir slot ini untuk pemeliharaan/acara dinas wajib menyertakan pengalihan jadwal resmi (Reschedule). Silakan konfirmasi untuk melanjutkan.`,
+      };
+    }
 
     const slotId = `${data.fieldId}-${data.dateStr}-${data.hour}`;
 
@@ -683,36 +717,69 @@ export async function blockSlotAction(data: {
 
     const defaultCap = field?.maxCapacity || (field?.sportType === 'RENANG' ? 30 : 1);
 
-    const slot = await prisma.fieldSlot.upsert({
-      where: {
-        fieldId_date_hour: {
+    const slot = await prisma.$transaction(async (tx) => {
+      // 1. Jika ada pesanan lunas, alihkan ke rescheduleStatus: 'PENDING_CUSTOMER'
+      if (paidBookingItems.length > 0) {
+        for (const item of paidBookingItems) {
+          await tx.booking.update({
+            where: { id: item.bookingId },
+            data: {
+              rescheduleStatus: 'PENDING_CUSTOMER',
+              rescheduleReason:
+                data.reason || 'Pemeliharaan / Perawatan Lapangan oleh Dinas DISBUDPORA',
+              rescheduleNoticeDate: new Date(),
+              rescheduleOriginalDate: targetDate,
+              rescheduleOriginalTime: `${startStr} - ${endStr}`,
+            },
+          });
+        }
+      }
+
+      // 2. Update status slot menjadi MAINTENANCE
+      return await tx.fieldSlot.upsert({
+        where: {
+          fieldId_date_hour: {
+            fieldId: data.fieldId,
+            date: targetDate,
+            hour: data.hour,
+          },
+        },
+        update: {
+          status: 'MAINTENANCE',
+          bookedCapacity: 0,
+          bookingId: null,
+          bookedByUserId: `BLOCKED: ${data.reason || 'Maintenance / Acara Dinas'}`,
+        },
+        create: {
+          id: slotId,
           fieldId: data.fieldId,
           date: targetDate,
           hour: data.hour,
+          timeStart: startStr,
+          timeEnd: endStr,
+          price: blockedPrice,
+          isPeakHour: isPeak,
+          maxCapacity: defaultCap,
+          bookedCapacity: 0,
+          status: 'MAINTENANCE',
+          bookedByUserId: `BLOCKED: ${data.reason || 'Maintenance / Acara Dinas'}`,
         },
-      },
-      update: {
-        status: 'MAINTENANCE',
-        bookedByUserId: `BLOCKED: ${data.reason || 'Maintenance / Acara Dinas'}`,
-      },
-      create: {
-        id: slotId,
-        fieldId: data.fieldId,
-        date: targetDate,
-        hour: data.hour,
-        timeStart: `${data.hour.toString().padStart(2, '0')}:00`,
-        timeEnd: `${(data.hour + 1).toString().padStart(2, '0')}:00`,
-        price: blockedPrice,
-        isPeakHour: isPeak,
-        maxCapacity: defaultCap,
-        bookedCapacity: 0,
-        status: 'MAINTENANCE',
-        bookedByUserId: `BLOCKED: ${data.reason || 'Maintenance / Acara Dinas'}`,
-      },
-    });
+      });
+    }, { maxWait: 3000, timeout: 5000 });
 
     revalidatePath('/');
-    return { success: true, slot };
+    revalidatePath('/dashboard');
+    revalidatePath('/admin/schedule');
+    revalidatePath('/admin/bookings');
+    return {
+      success: true,
+      slot,
+      rescheduledCount: paidBookingItems.length,
+      message:
+        paidBookingItems.length > 0
+          ? `Slot berhasil diblokir untuk pemeliharaan dan ${paidBookingItems.length} pesanan warga dialihkan ke penyesuaian jadwal (Reschedule).`
+          : 'Slot berhasil diblokir (MAINTENANCE).',
+    };
   } catch (error: any) {
     console.error("Failed to block slot:", error);
     return { success: false, error: toPublicMessage(error, "Gagal memblokir jadwal slot.") };
@@ -1091,24 +1158,61 @@ export async function unblockOrReleaseSlotAction(data: {
 }
 
 /**
- * 11. Batalkan Booking Tertentu pada Slot (Admin Kasir / Operasional)
+ * 11. Batalkan Booking Tertentu pada Slot (Admin Kasir / Operasional Lapangan)
+ * Dilengkapi proteksi Anti-Fraud Transaksi Tunai Walk-in & Audit Log Trail (Poin 18).
  */
-export async function cancelSpecificBookingInSlot(bookingId: string, slotId: string) {
-  await verifySuperAdmin();
+export async function cancelSpecificBookingInSlot(
+  bookingId: string,
+  slotId: string,
+  cancelReason?: string
+) {
+  const admin = await verifyAdminOrSuperAdmin();
   try {
     await prisma.$transaction(async (tx) => {
-      const bookingItem = await tx.bookingItem.findFirst({
-        where: { bookingId, slotId },
+      const booking = await tx.booking.findUnique({
+        where: { id: bookingId },
+        include: { items: true },
       });
 
+      if (!booking) {
+        throw new UserFacingError("Pesanan tidak ditemukan.");
+      }
+
+      const bookingItem = booking.items.find(
+        (it) => it.slotId === slotId || it.bookingId === bookingId
+      );
+
+      // Proteksi Anti-Fraud Transaksi Tunai / Walk-in (Poin 18):
+      // Jika pembayaran TUNAI/CASH (Walk-in), periksa apakah sesi jam pemakaian sudah lewat/berlangsung!
+      const isCashWalkIn =
+        booking.paymentMethod === 'TUNAI_CASH' ||
+        booking.id.startsWith('WALKIN-') ||
+        (booking.adminNotes && booking.adminNotes.includes('WALK-IN'));
+
+      if (isCashWalkIn && bookingItem) {
+        const itemDateStr = bookingItem.date.toISOString().split('T')[0];
+        const sessionEnd = new Date(`${itemDateStr}T${bookingItem.timeEnd}:00+07:00`);
+
+        if (Date.now() >= sessionEnd.getTime() && admin.role !== 'SUPERADMIN') {
+          throw new UserFacingError(
+            "AKSES DITOLAK: Transaksi tunai/walk-in yang jam pemakaiannya telah selesai atau lewat TIDAK DAPAT dibatalkan oleh kasir reguler demi pencegahan penggelapan Pendapatan Asli Daerah (PAD). Pembatalan sesi lewat wajib mendapatkan otorisasi SuperAdmin Disbudpora."
+          );
+        }
+      }
+
       const qtyToRelease = bookingItem?.quantity || 1;
+
+      // Catat Audit Trail Pembatalan ke adminNotes (Poin 18)
+      const nowWib = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+      const auditStamp = `AUDIT_CANCEL: Oleh ${admin.name} (${admin.role}) pada ${nowWib} WIB - Alasan: ${cancelReason || 'Dibatalkan Petugas Kasir/Operasional Lapangan'}`;
+      const newAdminNotes = booking.adminNotes ? `${booking.adminNotes} | ${auditStamp}` : auditStamp;
 
       // Update status booking menjadi CANCELLED
       await tx.booking.update({
         where: { id: bookingId },
         data: {
           status: 'CANCELLED',
-          adminNotes: 'Dibatalkan oleh Admin Kasir / Operasional Lapangan',
+          adminNotes: newAdminNotes,
         },
       });
 
@@ -1132,10 +1236,136 @@ export async function cancelSpecificBookingInSlot(bookingId: string, slotId: str
     }, { maxWait: 3000, timeout: 5000 });
 
     revalidatePath('/');
+    revalidatePath('/admin/schedule');
+    revalidatePath('/admin/bookings');
     return { success: true };
   } catch (error: any) {
     console.error("Failed to cancel specific booking in slot:", error);
     return { success: false, error: toPublicMessage(error, "Gagal membatalkan pesanan.") };
+  }
+}
+
+/**
+ * 11.1 Late Payment Recovery / Resolusi Pembayaran Tertunda (Poin 9)
+ * Memulihkan pesanan yang telanjur dibatalkan cron padahal warga sudah mentransfer uangnya.
+ */
+export async function recoverLatePaymentBookingAction(params: {
+  bookingId: string;
+  bankMutationRef: string;
+  notes?: string;
+}) {
+  const admin = await verifyAdminOrSuperAdmin();
+  try {
+    const { bookingId, bankMutationRef, notes } = params;
+
+    if (!bankMutationRef || !bankMutationRef.trim()) {
+      return { success: false, error: 'Nomor referensi mutasi bank / kode transaksi wajib disertakan.' };
+    }
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { items: true, payment: true },
+    });
+
+    if (!booking) {
+      return { success: false, error: 'Pesanan tidak ditemukan.' };
+    }
+
+    if (booking.status === 'PAID_SUCCESS') {
+      return { success: false, error: 'Pesanan ini sudah berstatus LUNAS (PAID_SUCCESS).' };
+    }
+
+    // Periksa apakah slot asli masih AVAILABLE
+    const conflictSlots: string[] = [];
+    for (const item of booking.items) {
+      const slot = await prisma.fieldSlot.findFirst({
+        where: {
+          fieldId: item.fieldId,
+          date: item.date,
+          timeStart: item.timeStart,
+        },
+      });
+      if (!slot) continue;
+      const rem = (slot.maxCapacity || 1) - (slot.bookedCapacity || 0);
+      if (slot.status === 'MAINTENANCE' || rem < (item.quantity || 1)) {
+        conflictSlots.push(`${item.timeStart}-${item.timeEnd}`);
+      }
+    }
+
+    if (conflictSlots.length > 0) {
+      return {
+        success: false,
+        slotTaken: true,
+        error: `Slot asli (${conflictSlots.join(', ')}) telah terisi penyewa lain atau sedang dalam pemeliharaan. Silakan tawarkan jadwal alternatif melalui fitur Reschedule atau lakukan proses pengembalian dana (refund).`,
+      };
+    }
+
+    // Pulihkan pesanan menjadi PAID_SUCCESS dan kunci kembali slotnya
+    const nowWib = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+    const auditStamp = `LATE_PAYMENT_RECOVERY: Dipulihkan oleh ${admin.name} (${admin.role}) pada ${nowWib} WIB via Mutasi: ${bankMutationRef.trim()} • Catatan: ${notes?.trim() || 'Pembayaran Telat Diverifikasi Manual'}`;
+    const newAdminNotes = booking.adminNotes ? `${booking.adminNotes} | ${auditStamp}` : auditStamp;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.booking.update({
+        where: { id: bookingId },
+        data: {
+          status: 'PAID_SUCCESS',
+          adminNotes: newAdminNotes,
+        },
+      });
+
+      await tx.payment.upsert({
+        where: { bookingId },
+        update: {
+          status: 'PAID',
+          paidAt: new Date(),
+          paymentGatewayRef: `RECOVERED: ${bankMutationRef.trim()}`,
+        },
+        create: {
+          bookingId,
+          amount: booking.grandTotal,
+          paymentMethod: booking.paymentMethod,
+          status: 'PAID',
+          paidAt: new Date(),
+          paymentGatewayRef: `RECOVERED: ${bankMutationRef.trim()}`,
+        },
+      });
+
+      // Kunci kembali slot secara proporsional
+      for (const item of booking.items) {
+        const slot = await tx.fieldSlot.findFirst({
+          where: {
+            fieldId: item.fieldId,
+            date: item.date,
+            timeStart: item.timeStart,
+          },
+        });
+        if (slot) {
+          const qty = item.quantity || 1;
+          const newBooked = slot.bookedCapacity + qty;
+          const isFull = newBooked >= slot.maxCapacity;
+          await tx.fieldSlot.update({
+            where: { id: slot.id },
+            data: {
+              bookedCapacity: newBooked,
+              status: isFull ? 'BOOKED' : 'AVAILABLE',
+              bookingId: slot.bookingId ? slot.bookingId : booking.id,
+              bookedByUserId: slot.bookedByUserId ? slot.bookedByUserId : booking.userId,
+            },
+          });
+        }
+      }
+    }, { maxWait: 3000, timeout: 5000 });
+
+    revalidatePath('/admin/bookings');
+    revalidatePath('/dashboard');
+    return {
+      success: true,
+      message: `Pesanan #${bookingId} berhasil dipulihkan menjadi LUNAS dan slot telah dikunci kembali untuk warga.`,
+    };
+  } catch (error: any) {
+    console.error('[recoverLatePaymentBookingAction] Error:', error);
+    return { success: false, error: toPublicMessage(error, 'Gagal memulihkan pesanan.') };
   }
 }
 
