@@ -873,8 +873,12 @@ export async function cancelUserBookingAction(bookingId: string) {
       return { success: false, error: 'Akses ditolak.' };
     }
 
-    if (booking.status !== 'PENDING_PAYMENT' && booking.status !== 'MENUNGGU_VALIDASI') {
-      return { success: false, error: 'Pesanan yang sudah diproses atau selesai tidak dapat dibatalkan.' };
+    if (booking.status !== 'PENDING_PAYMENT') {
+      return { success: false, error: 'Pesanan yang sudah memiliki bukti bayar atau sedang divalidasi tidak dapat dibatalkan secara otomatis.' };
+    }
+
+    if (booking.paymentProofUrl) {
+      return { success: false, error: 'Pesanan yang sudah mengunggah bukti bayar tidak dapat dibatalkan secara otomatis.' };
     }
 
     await prisma.$transaction(async (tx) => {

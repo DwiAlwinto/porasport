@@ -50,6 +50,7 @@ export const CheckoutPage: React.FC = () => {
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [completedBooking, setCompletedBooking] = useState<Booking | null>(null);
+  const completedBookingRef = useRef<Booking | null>(null);
   const [showCancelConfirmModal, setShowCancelConfirmModal] = useState(false);
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
 
@@ -125,11 +126,20 @@ export const CheckoutPage: React.FC = () => {
       }
 
       const updateTimer = () => {
-        const end = parseInt(sessionStorage.getItem('gelora_checkout_end_time_v1') || '0', 10);
+        // Jangan jalankan countdown timer jika pesanan sudah berhasil dibuat
+        if (completedBookingRef.current) return;
+
+        const rawEnd = sessionStorage.getItem('gelora_checkout_end_time_v1');
+        // Jika sessionStorage sudah dibersihkan karena submit selesai, jangan picu timeout!
+        if (!rawEnd) return;
+
+        const end = parseInt(rawEnd, 10);
+        if (isNaN(end) || end <= 0) return;
+
         const remaining = Math.max(0, Math.round((end - Date.now()) / 1000));
         setSecondsLeft(remaining);
 
-        if (remaining <= 0) {
+        if (remaining <= 0 && !completedBookingRef.current) {
           setShowTimeoutModal(true);
         }
       };
@@ -162,7 +172,9 @@ export const CheckoutPage: React.FC = () => {
 
   const handleTimeoutAcknowledge = () => {
     setShowTimeoutModal(false);
-    cancelActiveBookingDraft();
+    if (!completedBooking && !completedBookingRef.current) {
+      cancelActiveBookingDraft();
+    }
     setActiveView('VENUE_DETAIL');
   };
 
@@ -321,6 +333,8 @@ export const CheckoutPage: React.FC = () => {
 
       if (realBooking) {
         setCompletedBooking(realBooking);
+        completedBookingRef.current = realBooking;
+        setShowTimeoutModal(false);
         if (realBooking.ocrValidationResult) {
           setOcrResult(realBooking.ocrValidationResult);
           setOcrStatus(realBooking.status === 'PAID_SUCCESS' ? 'passed' : 'manual_review');
@@ -1181,7 +1195,7 @@ export const CheckoutPage: React.FC = () => {
         )}
 
         {/* POP-UP WAKTU PEMESANAN HABIS (TIMEOUT 10 MENIT) */}
-        {showTimeoutModal && (
+        {showTimeoutModal && !completedBooking && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-md animate-in fade-in duration-200">
             <div
               className="relative max-w-md w-full rounded-3xl bg-white shadow-2xl p-6 sm:p-7 text-center ring-1 ring-slate-900/10 overflow-hidden animate-in zoom-in-95 duration-200"

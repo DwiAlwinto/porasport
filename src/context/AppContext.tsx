@@ -531,6 +531,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const cancelActiveBookingDraft = async () => {
+    const isDraftCompleted = (activeBookingDraft as any)?.isCompleted;
     const bookingIdToCancel = activeBookingDraft?.bookingId;
     setActiveBookingDraft(null);
     try {
@@ -538,7 +539,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       sessionStorage.removeItem('gelora_checkout_end_time_v1');
     } catch {}
 
-    if (bookingIdToCancel) {
+    // Jangan pernah batalkan pesanan di server jika pesanan sudah berhasil dibuat/dibayar
+    if (bookingIdToCancel && !isDraftCompleted) {
       try {
         await cancelUserBookingAction(bookingIdToCancel);
         await refreshBookings();
@@ -550,7 +552,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const handleSetActiveView = (view: AppView) => {
     if (activeView === 'CHECKOUT' && view !== 'CHECKOUT') {
-      cancelActiveBookingDraft();
+      if (!(activeBookingDraft as any)?.isCompleted) {
+        cancelActiveBookingDraft();
+      } else {
+        setActiveBookingDraft(null);
+      }
     }
     setActiveView(view);
   };
@@ -669,8 +675,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         sessionStorage.removeItem('gelora_checkout_end_time_v1');
       } catch {}
       await refreshBookings();
-      // Draft tidak langsung diset null di sini agar CheckoutPage dan CheckoutModal
-      // tidak mengalami glitch/flash "Tidak Ada Pesanan Aktif" sebelum selesai me-render completedBooking
+      // Tandai draft sebagai selesai agar tidak pernah dibatalkan oleh cancelActiveBookingDraft
+      setActiveBookingDraft(prev => prev ? { ...prev, bookingId: null, isCompleted: true } : null);
       return mappedBooking;
     }
 
