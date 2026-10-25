@@ -35,6 +35,7 @@ export const CheckoutModal: React.FC = () => {
     venues,
     t,
     activeLang,
+    cancelActiveBookingDraft,
   } = useApp();
 
   // 60 Minutes countdown timer in seconds (60 * 60 = 3600)
@@ -886,7 +887,12 @@ export const CheckoutModal: React.FC = () => {
                 ⚠️ Jika sudah melakukan transfer QRIS, hubungi Admin DISBUDPORA untuk proses pengembalian dana.
               </div>
               <button
-                onClick={() => {
+                onClick={async () => {
+                  try {
+                    await cancelActiveBookingDraft();
+                  } catch (e) {
+                    console.error('Failed to cancel active draft:', e);
+                  }
                   setIsCheckoutModalOpen(false);
                   setShowCancelConfirm(false);
                 }}

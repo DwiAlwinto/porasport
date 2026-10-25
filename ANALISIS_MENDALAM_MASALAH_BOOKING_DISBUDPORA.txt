@@ -182,8 +182,8 @@ RINCIAN 18 MASALAH KRITIS, RISIKO OPERASIONAL & SOLUSI TEKNIS
 [DIMENSI 4: RESILIENSI JARINGAN & UX RECOVERY]
 --------------------------------------------------------------------------------
 
-2. CELAH MONOPOLI JADWAL / SLOT-HOGGING (DENIAL-OF-SERVICE OLEH 1 AKUN)
-   - Lokasi: src/actions/venueActions.ts
+2. Done : CELAH MONOPOLI JADWAL / SLOT-HOGGING (DENIAL-OF-SERVICE OLEH 1 AKUN)
+   - Lokasi: src/actions/venueActions.ts & src/components/checkout/CheckoutModal.tsx
    - Masalah: Tidak ada pembatasan jumlah transaksi PENDING_PAYMENT aktif per akun.
    - Risiko: Satu orang/bot bisa mengunci puluhan jadwal sekaligus dalam waktu 10 menit, melumpuhkan operasional
      GOR/Stadion tanpa membayar.

@@ -284,6 +284,80 @@ export async function createBooking(data: {
       };
     }
 
+    // PENTING (SOLUSI ANTI MONOPOLI / SLOT-HOGGING DoS):
+    // Batasi jumlah pesanan aktif berstatus PENDING_PAYMENT (holding slots) per akun warga.
+    // Mencegah 1 orang / bot mengunci puluhan jadwal sekaligus dalam waktu 10 menit tanpa membayar,
+    // yang dapat melumpuhkan operasional GOR/Stadion Pemda (Denial-of-Service).
+    const now = new Date();
+
+    // 1. Bersihkan booking PENDING_PAYMENT milik user ini yang sudah kedaluwarsa secara mandiri
+    const expiredUserBookings = await prisma.booking.findMany({
+      where: {
+        userId,
+        status: 'PENDING_PAYMENT',
+        expiresAt: { lte: now },
+      },
+      include: { items: true },
+    });
+
+    for (const exp of expiredUserBookings) {
+      try {
+        await prisma.$transaction(async (tx) => {
+          for (const it of exp.items) {
+            const slot = await tx.fieldSlot.findFirst({
+              where: {
+                fieldId: it.fieldId,
+                date: it.date,
+                timeStart: it.timeStart,
+              },
+            });
+            if (slot) {
+              const qty = it.quantity || 1;
+              const newBooked = Math.max(0, slot.bookedCapacity - qty);
+              const isFull = newBooked >= slot.maxCapacity;
+              const newStatus = slot.status === 'MAINTENANCE' ? 'MAINTENANCE' : (isFull ? 'BOOKED' : 'AVAILABLE');
+              await tx.fieldSlot.update({
+                where: { id: slot.id },
+                data: {
+                  bookedCapacity: newBooked,
+                  status: newStatus,
+                  bookingId: newBooked === 0 ? null : (slot.bookingId === exp.id ? null : slot.bookingId),
+                  bookedByUserId: newBooked === 0 ? null : (slot.bookedByUserId === exp.userId ? null : slot.bookedByUserId),
+                },
+              });
+            }
+          }
+          await tx.booking.update({
+            where: { id: exp.id },
+            data: {
+              status: 'CANCELLED',
+              adminNotes: 'Kedaluwarsa otomatis (Batas waktu pembayaran 10 menit berakhir)',
+            },
+          });
+        });
+      } catch (err) {
+        console.warn(`[createBooking] Gagal membersihkan pesanan kedaluwarsa ${exp.id}:`, err);
+      }
+    }
+
+    // 2. Cek jumlah pesanan aktif yang masih dalam rentang masa berlaku (expiresAt > now)
+    const activePendingBookings = await prisma.booking.findMany({
+      where: {
+        userId,
+        status: 'PENDING_PAYMENT',
+        expiresAt: { gt: now },
+      },
+      select: { id: true, grandTotal: true, expiresAt: true },
+    });
+
+    const MAX_ACTIVE_PENDING_BOOKINGS = 2; // Batas wajar: maksimal 2 pesanan aktif belum bayar
+    if (activePendingBookings.length >= MAX_ACTIVE_PENDING_BOOKINGS && session.role !== 'SUPERADMIN' && session.role !== 'ADMIN') {
+      return {
+        success: false,
+        error: `Anda masih memiliki ${activePendingBookings.length} pesanan aktif yang belum diselesaikan pembayarannya (Batas maksimal: ${MAX_ACTIVE_PENDING_BOOKINGS} pesanan). Silakan selesaikan pembayaran QRIS atau batalkan pesanan sebelumnya di Dashboard akun Anda sebelum membuat pesanan baru.`,
+      };
+    }
+
     if (!data.items.length) {
       return { success: false, error: 'Pilih minimal satu slot jadwal.' };
     }
