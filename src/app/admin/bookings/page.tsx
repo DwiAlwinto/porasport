@@ -27,8 +27,10 @@ import {
   Mail,
   DollarSign,
   Calendar,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { useAdminSession } from '@/context/AdminSessionContext';
+import { ExportBookingsModal } from '@/components/admin/ExportBookingsModal';
 import {
   getAdminPaymentStats,
   getAdminBookings,
@@ -127,7 +129,7 @@ const HOURS_LIST = [
 
 export default function AdminBookingsPage() {
   const router = useRouter();
-  const { role } = useAdminSession();
+  const { role, name, email } = useAdminSession();
   const isSuperAdmin = role === 'SUPERADMIN';
   
   // Check if user is ADMIN or SUPERADMIN
@@ -162,6 +164,7 @@ export default function AdminBookingsPage() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
 
   // Superadmin CRUD Modals & State
@@ -473,6 +476,16 @@ export default function AdminBookingsPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Export Excel Button */}
+          <button
+            onClick={() => setIsExportModalOpen(true)}
+            className="flex items-center gap-2 rounded-xl border border-emerald-600/30 bg-emerald-50 px-4 py-2.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100 hover:border-emerald-600 shadow-sm transition"
+            title="Ekspor rekapitulasi data pembayaran dan pendapatan daerah ke Excel (.xlsx) atau CSV"
+          >
+            <FileSpreadsheet className="h-4 w-4 text-emerald-700" />
+            <span>Export Excel</span>
+          </button>
+
           {/* CRUD Superadmin Button */}
           {isSuperAdmin && (
             <button
@@ -486,7 +499,6 @@ export default function AdminBookingsPage() {
               </span>
             </button>
           )}
-
         </div>
       </div>
 
@@ -1534,6 +1546,16 @@ export default function AdminBookingsPage() {
           />
         </div>
       )}
+
+      {/* MODAL EXPORT EXCEL LAPORAN PENDAPATAN */}
+      <ExportBookingsModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        adminName={name || email || 'Admin DISBUDPORA'}
+        currentSearch={search}
+        currentStatusFilter={statusFilter}
+        cachedBookings={bookings}
+      />
     </div>
   );
 }

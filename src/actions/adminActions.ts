@@ -140,6 +140,9 @@ export async function getAdminBookings(filters?: {
   status?: string;
   search?: string;
   paymentMethod?: string;
+  venueId?: string;
+  startDate?: string;
+  endDate?: string;
 }) {
   await verifyAdminOrSuperAdmin();
   try {
@@ -155,6 +158,20 @@ export async function getAdminBookings(filters?: {
 
     if (filters?.paymentMethod && filters.paymentMethod !== 'ALL') {
       whereClause.paymentMethod = filters.paymentMethod;
+    }
+
+    if (filters?.venueId && filters.venueId !== 'ALL') {
+      whereClause.venueId = filters.venueId;
+    }
+
+    if (filters?.startDate || filters?.endDate) {
+      whereClause.createdAt = {};
+      if (filters.startDate) {
+        whereClause.createdAt.gte = new Date(`${filters.startDate}T00:00:00.000Z`);
+      }
+      if (filters.endDate) {
+        whereClause.createdAt.lte = new Date(`${filters.endDate}T23:59:59.999Z`);
+      }
     }
 
     if (filters?.search && filters.search.trim() !== '') {
